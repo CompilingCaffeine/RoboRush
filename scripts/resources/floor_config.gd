@@ -35,6 +35,23 @@ extends Resource
 ## Scrap dropped by each enemy killed.
 @export var enemy_scrap_range := Vector2i(1, 2)
 
+@export_group("Items")
+
+## Items that may drop on this floor. Drawn without repetition within a run.
+@export var item_pool: Array[ItemConfig] = []
+
+## Which combat-room clears drop an item, counted from one. `[1, 3, 5]` means the first,
+## third, and fifth room the player clears.
+##
+## A list rather than "every Nth clear" because the interesting number is not the interval,
+## it is *how many items a run hands out and how early the first one lands* — and both of
+## those are legible here and invisible in a modulo.
+@export var item_clear_indices: Array[int] = [1, 3, 5]
+
+## Whether the treasure room hands over an item. Spec section 9 says a treasure room
+## contains one; this exists so a floor built around a shop instead can say otherwise.
+@export var treasure_grants_item: bool = true
+
 
 ## Templates eligible for a room type on this floor. Returns an empty array if none match,
 ## which the generator reports rather than silently producing an empty room.

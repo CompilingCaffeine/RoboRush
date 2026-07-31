@@ -13,10 +13,9 @@ extends Resource
 ## already knows what to do. Ricochet Driver plus Fork Bomb then produces "bounces
 ## once, then splits" with no code aware that those two items can co-occur.
 ##
-## Fields marked "not yet honoured" are declared because the shape of this resource
-## is the contract that milestone 4 composes over, and because a field appearing
-## later is a smaller change than a behaviour appearing later. Each one is wired up
-## as its milestone arrives; none of them are read yet.
+## Every field below is read by `projectile.gd` except `status_effects`, which waits on
+## the StatusEffectController from spec section 14. Items reach these fields by name
+## through `ProjectileModifierStack`, so no field here knows which item adjusts it.
 
 @export_group("Core")
 
@@ -44,27 +43,46 @@ extends Resource
 ## Wall rebounds before expiring. Ricochet Driver adds one.
 @export var bounce_count: int = 0
 
-@export_group("Composition (declared, not yet honoured)")
-
-## Children spawned on impact. Fork Bomb sets this. Milestone 4.
+## Children spawned when the projectile is consumed. Fork Bomb adds two.
 @export var split_count: int = 0
 
 ## Child damage as a fraction of the parent's. Fork Bomb uses 0.6.
 @export var split_damage_scale: float = 0.6
 
-## Curve strength toward nearby enemies. Magnetic Guidance sets this. Milestone 4.
+## Total arc the children are fanned across, centred on the parent's last direction.
+@export var split_spread_degrees: float = 70.0
+
+## Turn rate toward the nearest enemy, in radians per second. Magnetic Guidance adds to
+## it. Zero disables homing entirely, including the per-frame search for a target.
 @export var homing_strength: float = 0.0
 
-## Radius of an impact explosion. Volatile Kernel and Fork Bomb use this. Milestone 4.
+## How far the homing search looks. A projectile with no target in range flies straight.
+@export var homing_radius: float = 96.0
+
+## Radius of an explosion on impact. Zero means the projectile does not explode. Note
+## that Volatile Kernel's explosions are triggered by enemy deaths, not by impacts, so
+## they come from ItemEffects rather than from here.
 @export var explosion_radius: float = 0.0
 
-## Lightning jumps on hit. Capacitor Leak sets this. Milestone 4.
+## Explosion damage as a fraction of the projectile's own.
+@export var explosion_damage_scale: float = 1.0
+
+## Lightning jumps on hitting a body. Capacitor Leak adds three.
 @export var chain_count: int = 0
 
-## Whether the projectile reverses once at the end of its life. Return Protocol.
+## Damage per jump, as a fraction of the projectile's own. Spec section 12 gives 0.7.
+@export var chain_damage_scale: float = 0.7
+
+## How far each jump may reach for its next target.
+@export var chain_radius: float = 72.0
+
+## Whether the projectile reverses once at the end of its life instead of expiring.
+## Return Protocol switches this on.
 @export var return_enabled: bool = false
 
-## Status effect ids applied on hit, resolved by a StatusEffectController. Milestone 4.
+@export_group("Composition (declared, not yet honoured)")
+
+## Status effect ids applied on hit, resolved by a StatusEffectController. Milestone 5.
 @export var status_effects: Array[StringName] = []
 
 @export_group("Presentation")

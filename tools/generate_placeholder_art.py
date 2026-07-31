@@ -36,6 +36,10 @@ PALETTE = {
     "Y": (0xFF, 0xF8, 0xE0, 255),  # hot white
     "p": (0xE8, 0xE4, 0xD8, 255),  # paper
     "g": (0x2E, 0xA0, 0x62, 255),  # repair cell dim
+    "b": (0x4C, 0x8C, 0xF0, 255),  # item blue
+    "v": (0xA8, 0x6C, 0xF0, 255),  # item violet
+    "c": (0x58, 0xF0, 0xC8, 255),  # item cyan (same as screen glow, reads as "system")
+    "x": (0xE0, 0x4A, 0x4A, 255),  # item red / danger
 }
 
 
@@ -181,6 +185,124 @@ REPAIR_CELL = [
 ]
 
 
+# --- Item icons. 8x8, one recognisable silhouette each, drawn at the size they are
+# --- actually shown: the HUD item bar renders them 1:1 with no scaling, so anything that
+# --- needs more than eight pixels to read would not read in the game either.
+ITEM_ICONS = {
+    # Ricochet Driver: a shot rebounding off a wall.
+    "ricochet_driver": [
+        "oo....a.",
+        "om...a..",
+        "om..a...",
+        "oma.....",
+        "oma.....",
+        "om..a...",
+        "om...a..",
+        "oo....a.",
+    ],
+    # Fork Bomb: one shot becoming two.
+    "fork_bomb": [
+        "......aa",
+        ".....a..",
+        "....a...",
+        "aaaa....",
+        "aaaa....",
+        "....a...",
+        ".....a..",
+        "......aa",
+    ],
+    # Magnetic Guidance: a horseshoe magnet, poles down.
+    "magnetic_guidance": [
+        "..bbbb..",
+        ".b....b.",
+        "b......b",
+        "b......b",
+        "b......b",
+        "b......b",
+        "x......x",
+        "x......x",
+    ],
+    # Return Protocol: two arrows pointing opposite ways.
+    "return_protocol": [
+        "........",
+        "..c.....",
+        ".cccccc.",
+        "..c.....",
+        ".....c..",
+        ".cccccc.",
+        ".....c..",
+        "........",
+    ],
+    # Capacitor Leak: a discharge bolt.
+    "capacitor_leak": [
+        "....yy..",
+        "...yy...",
+        "..yy....",
+        ".yyyyy..",
+        "...yy...",
+        "..yy....",
+        ".yy.....",
+        "........",
+    ],
+    # Volatile Kernel: a fireball.
+    "volatile_kernel": [
+        "..x..x..",
+        "x.xaax.x",
+        ".xaYYax.",
+        "xaYYYYax",
+        "xaYYYYax",
+        ".xaYYax.",
+        "x.xaax.x",
+        "..x..x..",
+    ],
+    # Cooling Fan: a bladed wheel.
+    "cooling_fan": [
+        "..oooo..",
+        ".occcco.",
+        "occ..cco",
+        "oc.dd.co",
+        "oc.dd.co",
+        "occ..cco",
+        ".occcco.",
+        "..oooo..",
+    ],
+    # Reinforced Chassis: armour plate.
+    "reinforced_chassis": [
+        "oggggggo",
+        "gEEEEEEg",
+        "gEggggEg",
+        "gEggggEg",
+        ".gEggEg.",
+        "..gEEg..",
+        "...gg...",
+        "........",
+    ],
+    # Backup Battery: a cell with terminals.
+    "backup_battery": [
+        "..o..o..",
+        "oooooooo",
+        "oaaaaaao",
+        "oaEEEEao",
+        "oaEEEEao",
+        "oaaaaaao",
+        "oooooooo",
+        "........",
+    ],
+    # Unsafe Overclock: a hazard triangle. The only red icon that is not an explosion,
+    # because corrupted firmware should look like a warning label.
+    "unsafe_overclock": [
+        "...xx...",
+        "..xxxx..",
+        "..xYYx..",
+        ".xxYYxx.",
+        ".xxYYxx.",
+        "xxx..xxx",
+        "xxxYYxxx",
+        "xxxxxxxx",
+    ],
+}
+
+
 def door_tile() -> list[str]:
     """Amber hazard barrier, banded so a 48x32 door reads as one object."""
     rows = ["o" * 16]
@@ -231,6 +353,8 @@ def main() -> int:
     root = sys.argv[1] if len(sys.argv) > 1 else "."
     for relative, grid in SPRITES.items():
         write_png(os.path.join(root, relative), grid)
+    for item_id, grid in ITEM_ICONS.items():
+        write_png(os.path.join(root, f"art/items/{item_id}.png"), grid)
     write_png(os.path.join(root, "art/environments/wall_placeholder.png"), wall_tile())
     write_png(os.path.join(root, "art/environments/door_placeholder.png"), door_tile())
     write_png(os.path.join(root, "art/environments/floor_placeholder.png"), floor_tile())

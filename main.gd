@@ -1,5 +1,5 @@
 extends Node2D
-## Milestone 3 entry point.
+## Milestone 4 entry point.
 ##
 ## Composition only: it starts a run, builds the floor, and hands the HUDs and the feedback
 ## director the references they need. Nothing here knows how movement, shooting, damage, or
@@ -16,6 +16,7 @@ const FLOOR_SEED_OVERRIDE := 0
 @onready var _floor: FloorController = %Floor
 @onready var _player: Player = %Player
 @onready var _feedback: FeedbackDirector = %FeedbackDirector
+@onready var _item_effects: ItemEffects = %ItemEffects
 @onready var _combat_hud: CombatHUD = %CombatHUD
 @onready var _minimap: Minimap = %Minimap
 @onready var _debug_hud: DebugHUD = %DebugHUD
@@ -26,6 +27,7 @@ func _ready() -> void:
 	RunManager.begin_run(seed_value)
 
 	_feedback.setup(_player.get_camera())
+	_item_effects.bind_player(_player)
 	_combat_hud.bind_player(_player)
 	_debug_hud.bind_player(_player)
 

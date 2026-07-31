@@ -33,6 +33,7 @@ const ROWS: Array[String] = [
 	"ENEMIES",
 	"ROOM",
 	"FLOOR",
+	"ITEMS",
 ]
 
 @onready var _grid: GridContainer = %Grid
@@ -126,6 +127,19 @@ func _refresh() -> void:
 	_set_value("FLOOR", "%s  seed %d  scrap %d" % [
 		RunManager.floor_name, RunManager.floor_seed, RunManager.scrap,
 	])
+	_set_value("ITEMS", _describe_items())
+
+
+## Ids rather than display names, because the id is what a bug report needs to reproduce a
+## build and what the item's `.tres` is called on disk.
+func _describe_items() -> String:
+	var inventory := _player.get_item_inventory()
+	if inventory.size() == 0:
+		return "none"
+	var ids := PackedStringArray()
+	for item: ItemConfig in inventory.get_items():
+		ids.append(String(item.id))
+	return ", ".join(ids)
 
 
 func _describe_enemies() -> String:

@@ -7,7 +7,8 @@ extends Node2D
 ## in, and parenting per room would mean rooms had to stay alive purely to hold loot.
 ##
 ## Spec section 17: scrap drops from enemies and from room rewards. Both paths land here so
-## the floor's drop rates are one file to tune.
+## the floor's drop rates are one file to tune. Items go through the same path — an item is a
+## `Pickup` with a `PickupConfig` built at drop time, not a scene of its own.
 
 const PICKUP_SCENE := preload("res://scenes/pickups/pickup.tscn")
 const SCRAP_CONFIG := preload("res://data/pickups/scrap.tres")
@@ -35,11 +36,26 @@ func spawn_room_reward(position: Vector2, include_repair_cell: bool) -> void:
 		_spawn(REPAIR_CELL_CONFIG, position + Vector2(0.0, -14.0))
 
 
-## Drops the contents of a treasure room. Items arrive in milestone 4; until then a treasure
-## room pays out in integrity and scrap so the detour is still worth taking.
-func spawn_treasure(position: Vector2) -> void:
-	_spawn(REPAIR_CELL_CONFIG, position)
+## Drops the contents of a treasure room: the floor's item, plus scrap. The repair cell that
+## stood in for the item in milestone 3 is gone — a treasure room whose payout is an item and
+## a handful of scrap is worth the detour on its own.
+func spawn_treasure(position: Vector2) -> ItemConfig:
+	var item := spawn_item(position)
+	if item == null:
+		# Pool exhausted. Better a repair cell than an empty vault the player walked to.
+		_spawn(REPAIR_CELL_CONFIG, position)
 	_spawn_scrap(position + Vector2(0.0, 14.0), _config.clear_scrap_range.y + 2)
+	return item
+
+
+## Draws one item from the floor's pool and drops it. Returns null when the pool has nothing
+## left to offer this run.
+func spawn_item(position: Vector2) -> ItemConfig:
+	var item := RunManager.draw_item(_config.item_pool, _rng)
+	if item == null:
+		return null
+	_spawn(PickupConfig.for_item(item), position, false)
+	return item
 
 
 func _on_enemy_killed(enemy: Node, position: Vector2) -> void:
@@ -59,10 +75,16 @@ func _spawn_scrap(position: Vector2, count: int) -> void:
 ## Added deferred, because loot drops from inside a damage callback: an enemy dies while the
 ## physics server is flushing queries, and registering a new Area2D's shape at that moment is
 ## refused outright, which would mean kills silently dropped nothing.
-func _spawn(config: PickupConfig, position: Vector2) -> void:
+##
+## `scatter` is off for items. Scrap scatters so a pile of it is countable; an item is a
+## single object the player walks to deliberately, and nudging it off the reward point only
+## makes it harder to find.
+func _spawn(config: PickupConfig, position: Vector2, scatter := true) -> void:
 	var pickup: Pickup = PICKUP_SCENE.instantiate()
 	pickup.config = config
-	pickup.position = position + Vector2(
-		_rng.randf_range(-SCATTER, SCATTER), _rng.randf_range(-SCATTER, SCATTER)
-	)
+	pickup.position = position
+	if scatter:
+		pickup.position += Vector2(
+			_rng.randf_range(-SCATTER, SCATTER), _rng.randf_range(-SCATTER, SCATTER)
+		)
 	add_child.call_deferred(pickup)

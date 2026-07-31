@@ -72,6 +72,17 @@ func apply_damage(info: DamageInfo) -> bool:
 	return true
 
 
+## Changes the maximum without refilling, for items that move the ceiling.
+##
+## Current integrity is clamped down when the maximum drops (Unsafe Overclock) and left
+## exactly where it was when the maximum rises — Reinforced Chassis heals through
+## `heal()` as a separate, declared effect, so gaining maximum integrity is never a
+## silent full repair. The floor of one point means no item can be lethal on pickup.
+func set_max_health(new_max: float) -> void:
+	max_health = maxf(new_max, 1.0)
+	current = minf(current, max_health)
+
+
 func heal(amount: float) -> void:
 	if amount <= 0.0 or _is_dead or is_approx_full():
 		return

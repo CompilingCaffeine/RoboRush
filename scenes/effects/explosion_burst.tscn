@@ -1,0 +1,23 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scenes/effects/one_shot_burst.gd" id="1_burst"]
+[ext_resource type="Texture2D" path="res://art/effects/spark.png" id="2_spark"]
+
+[node name="ExplosionBurst" type="CPUParticles2D"]
+emitting = false
+amount = 30
+lifetime = 0.34
+one_shot = true
+explosiveness = 1.0
+texture = ExtResource("2_spark")
+emission_shape = 1
+emission_sphere_radius = 3.0
+spread = 180.0
+initial_velocity_min = 140.0
+initial_velocity_max = 300.0
+damping_min = 340.0
+damping_max = 520.0
+scale_amount_min = 1.2
+scale_amount_max = 2.6
+color = Color(1, 0.72, 0.32, 1)
+script = ExtResource("1_burst")

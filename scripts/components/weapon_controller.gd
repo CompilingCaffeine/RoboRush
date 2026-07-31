@@ -23,6 +23,11 @@ var fire_rate_multiplier := 1.0
 ## Scales projectile damage at spawn time.
 var damage_multiplier := 1.0
 
+## The shooter's item modifiers, rebuilt by its inventory whenever an item is collected.
+## Null for anything that cannot hold items, which is every enemy — and the reason this
+## component still has no idea what an item is.
+var modifiers: ProjectileModifierStack
+
 var team := Teams.Id.PLAYER
 
 var _cooldown_left := 0.0
@@ -61,7 +66,7 @@ func try_fire(origin: Vector2, direction: Vector2) -> bool:
 	for index: int in maxi(config.projectiles_per_shot, 1):
 		ProjectileFactory.spawn(
 			self, config, _pattern_direction(aim, index), muzzle, team, damage_multiplier,
-			get_attributed_shooter(),
+			get_attributed_shooter(), modifiers, _shots_fired,
 		)
 
 	shot_fired.emit(muzzle, aim)

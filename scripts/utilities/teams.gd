@@ -18,10 +18,23 @@ const LAYER_PLAYER_PROJECTILE := 1 << 3
 const LAYER_ENEMY_PROJECTILE := 1 << 4
 const LAYER_PICKUP := 1 << 5
 
+## Scene-tree groups every actor of a team joins. Homing, explosions, and chain lightning
+## all need "the hostile bodies near this point", and a group walk answers that from
+## anywhere — including from inside a physics callback, where the space state is being
+## flushed and a shape query is not guaranteed to be available. A room holds a handful of
+## enemies, so walking the group is cheaper than the query it replaces.
+const GROUP_PLAYER := &"player"
+const GROUP_ENEMY := &"enemy"
+
 
 ## The layer a team's bodies live on.
 static func body_layer(team: Id) -> int:
 	return LAYER_PLAYER if team == Id.PLAYER else LAYER_ENEMY
+
+
+## The scene-tree group a team's actors belong to.
+static func body_group(team: Id) -> StringName:
+	return GROUP_PLAYER if team == Id.PLAYER else GROUP_ENEMY
 
 
 ## The layer a team's projectiles live on.

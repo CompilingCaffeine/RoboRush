@@ -19,6 +19,7 @@ extends CharacterBody2D
 @onready var _dash: DashController = %Dash
 @onready var _weapon: WeaponController = %Weapon
 @onready var _health: HealthComponent = %Health
+@onready var _items: ItemInventory = %Items
 @onready var _visuals: PlayerVisuals = %Visuals
 @onready var _camera: ShakeCamera = %Camera
 
@@ -44,6 +45,7 @@ func _ready() -> void:
 	_weapon.shot_fired.connect(_on_shot_fired)
 	_health.damaged.connect(_on_damaged)
 	_health.died.connect(_on_died)
+	_items.item_added.connect(_on_item_added)
 
 
 func _physics_process(delta: float) -> void:
@@ -114,8 +116,39 @@ func get_weapon_controller() -> WeaponController:
 	return _weapon
 
 
+func get_item_inventory() -> ItemInventory:
+	return _items
+
+
 func is_dead() -> bool:
 	return _is_dead
+
+
+## Everything an item changes about the robot, recomputed from the whole inventory rather
+## than adjusted by the new item alone. Recomputing is what makes the result independent
+## of pickup order and leaves no path where an effect outlives the item that granted it.
+##
+## The one-shot parts of an item — the heal, the dash charge, the accent — are applied by
+## the handler below, because they are events rather than state.
+func _apply_item_stats() -> void:
+	_weapon.modifiers = _items.build_modifier_stack()
+	_weapon.fire_rate_multiplier = _items.get_fire_rate_multiplier()
+	_health.set_max_health(config.max_integrity + _items.get_max_integrity_delta())
+
+
+func _on_item_added(item: ItemConfig) -> void:
+	# Before the heal: Reinforced Chassis raises the ceiling and then repairs into it, so
+	# the two points it grants are not clipped off by the old maximum.
+	_apply_item_stats()
+
+	if item.heal_on_pickup > 0.0:
+		_health.heal(item.heal_on_pickup)
+	if item.dash_charges_delta > 0:
+		_dash.add_charges(item.dash_charges_delta)
+	if item.accent_color.a > 0.0:
+		_visuals.set_accent(item.accent_color)
+
+	EventBus.item_collected.emit(item)
 
 
 ## Either source of immunity flashes the robot, so the player never has to work out

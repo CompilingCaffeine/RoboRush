@@ -38,6 +38,7 @@ const DEAD_TINT := Color(0.45, 0.42, 0.5, 1.0)
 var _flash_time := 0.0
 var _muzzle_flash_left := 0.0
 var _is_dead := false
+var _accent := Color.WHITE
 
 
 func _ready() -> void:
@@ -64,6 +65,18 @@ func play_muzzle_flash() -> void:
 	_muzzle_flash.visible = true
 	# Random roll makes a repeating 8x8 sprite look like four different flashes.
 	_muzzle_flash.rotation = randf_range(-PI, PI)
+
+
+## Tints the cannon to the colour of the item just collected.
+##
+## Spec section 20 asks for visible changes from major items, and the cannon is the part
+## of an eleven-pixel robot with room to say anything: it is the largest single-colour
+## area and it is already the part the player watches. One accent rather than a stack of
+## them, because a robot tinted by six items at once is a robot tinted brown.
+func set_accent(color: Color) -> void:
+	_accent = color
+	if not _is_dead:
+		_cannon.modulate = _accent
 
 
 ## Locks the robot into a dimmed, un-flashing state. Called once on death so the

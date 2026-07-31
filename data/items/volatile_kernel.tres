@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="ItemConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/item_config.gd" id="1_item"]
+[ext_resource type="Texture2D" path="res://art/items/volatile_kernel.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"volatile_kernel"
+display_name = "Volatile Kernel"
+description = "Enemies explode when they die."
+rarity = 2
+category = 2
+tags = Array[StringName]([&"explosion", &"on_kill"])
+kill_explosion_radius = 36.0
+kill_explosion_damage = 1.0
+icon = ExtResource("2_icon")
+accent_color = Color(0.878, 0.290, 0.290, 1)
+pickup_sound = &"item_pickup"

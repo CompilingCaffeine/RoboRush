@@ -19,6 +19,10 @@ extends Area2D
 ## re-detect the surface it just left.
 const BOUNCE_CLEARANCE := 0.5
 
+## How much of the parent's lifetime a split child gets. Children are a bonus, not a
+## second volley, and full-lifetime children would spend most of it wandering the room.
+const SPLIT_LIFETIME_SCALE := 0.6
+
 var config: ProjectileConfig
 var team := Teams.Id.PLAYER
 
@@ -32,9 +36,12 @@ var _spawn_position := Vector2.ZERO
 var _lifetime_left := 0.0
 var _pierce_left := 0
 var _bounce_left := 0
+var _has_returned := false
 
 ## Bodies already damaged by this projectile, so a piercing shot cannot hit the same
-## enemy repeatedly while overlapping it.
+## enemy repeatedly while overlapping it. Split children are seeded with whatever their
+## parent just struck: a child spawned already overlapping that enemy would otherwise
+## register an entry on its first frame and let Fork Bomb double-dip on a single target.
 var _hit_bodies: Array[Node] = []
 
 @onready var _sprite: Sprite2D = $Sprite
@@ -49,12 +56,14 @@ func configure(
 	owner_node: Node,
 	spawn_position: Vector2,
 	direction: Vector2,
+	excluded_bodies: Array[Node] = [],
 ) -> void:
 	config = projectile_config
 	team = owning_team
 	shooter = owner_node
 	_spawn_position = spawn_position
 	_direction = direction.normalized() if not direction.is_zero_approx() else Vector2.RIGHT
+	_hit_bodies = excluded_bodies.duplicate()
 
 
 func _ready() -> void:
@@ -92,6 +101,8 @@ func _physics_process(delta: float) -> void:
 		_expire()
 		return
 
+	_apply_homing(delta)
+
 	var step := _direction * config.speed * delta
 	var wall := _cast_to_wall(step)
 	if wall.is_empty():
@@ -100,6 +111,32 @@ func _physics_process(delta: float) -> void:
 		_handle_wall(wall)
 
 	_update_trail()
+
+
+## Steers toward the nearest hostile body, by at most `homing_strength` radians this
+## frame. A turn *rate* rather than a snap is what makes Magnetic Guidance read as a
+## curve the player can watch instead of a homing missile they cannot dodge — and it is
+## also what keeps the item from trivialising aim, since a fast projectile can only bend
+## so far before it leaves the room.
+func _apply_homing(delta: float) -> void:
+	if config.homing_strength <= 0.0:
+		return
+
+	var target := Targeting.nearest_hostile(
+		self, global_position, config.homing_radius, team, _hit_bodies
+	)
+	if target == null:
+		return
+
+	var offset := target.global_position - global_position
+	if offset.is_zero_approx():
+		return
+
+	var turn := clampf(
+		_direction.angle_to(offset), -config.homing_strength * delta, config.homing_strength * delta
+	)
+	_direction = _direction.rotated(turn).normalized()
+	rotation = _direction.angle()
 
 
 ## Casts one radius further than the step so impacts land on the wall's face rather
@@ -157,17 +194,118 @@ func get_shooter() -> Node:
 
 ## `body` is null for wall impacts. Pierce only applies to bodies: a projectile that
 ## pierces enemies still stops at level geometry.
+##
+## Explosions and chains fire on every impact, because both are "when this hits
+## something" effects and a piercing shot legitimately hits several things. Splitting
+## fires only when the projectile is actually consumed — spec section 12 describes the
+## parent breaking apart, and a piercing splitter would otherwise shed a fresh pair at
+## every enemy it passed through.
 func _impact(body: Node, point: Vector2, normal: Vector2) -> void:
 	EventBus.projectile_hit.emit(self, body, point, normal)
+
+	# Whatever was struck directly, as a typed list the area effects can exclude. A shot
+	# that hits an enemy must not also catch that same enemy in its own blast.
+	var struck: Array[Node] = []
+	if body != null:
+		struck.append(body)
+
+	if config.explosion_radius > 0.0:
+		Explosion.detonate(
+			self,
+			point,
+			config.explosion_radius,
+			config.damage * config.explosion_damage_scale,
+			team,
+			get_shooter(),
+			struck,
+		)
+
+	if body != null and config.chain_count > 0:
+		ChainLightning.strike(
+			self,
+			point,
+			config.chain_count,
+			config.chain_radius,
+			config.damage * config.chain_damage_scale,
+			team,
+			get_shooter(),
+			struck,
+		)
+
 	if body != null and _pierce_left > 0:
 		_pierce_left -= 1
 		return
+
+	# A wall impact fans its children back out along the surface normal; a body impact
+	# fans them around the direction of travel, which is where the enemy's neighbours are.
+	_spawn_splits(point, _direction if body != null else normal, struck)
 	_despawn()
 
 
+## Reverses once at the end of its life if Return Protocol is held, then expires normally
+## the second time around.
+##
+## Handled by turning this projectile around rather than spawning a new one, so a
+## returning shot keeps its remaining bounces and its identity — and so nothing has to
+## decide who owns a projectile that outlived its own spawn.
 func _expire() -> void:
+	if config.return_enabled and not _has_returned:
+		_has_returned = true
+		_direction = -_direction
+		rotation = _direction.angle()
+		_lifetime_left = config.lifetime
+		# The way back is a fresh pass: whatever it flew through on the way out is a
+		# legitimate target again.
+		_hit_bodies.clear()
+		# Reported as a bounce because it is the same event to the player and to the
+		# effects that draw it: the shot changed direction at a point.
+		EventBus.projectile_bounced.emit(global_position, _direction)
+		return
+
 	EventBus.projectile_expired.emit(self)
 	_despawn()
+
+
+## Fans `split_count` weaker children out from the point of impact.
+##
+## Children are one generation only. A child that could split again would cascade without
+## bound the moment Fork Bomb met a wall, and "the room fills with projectiles until the
+## frame rate dies" is not a synergy.
+func _spawn_splits(origin: Vector2, base_direction: Vector2, excluded: Array[Node]) -> void:
+	if config.split_count <= 0 or base_direction.is_zero_approx():
+		return
+
+	var count := config.split_count
+	var arc := deg_to_rad(config.split_spread_degrees)
+
+	for index: int in count:
+		var offset := 0.0
+		if count > 1:
+			offset = -arc * 0.5 + arc * (float(index) / float(count - 1))
+
+		var child := config.spawn_copy()
+		child.damage *= config.split_damage_scale
+		child.split_count = 0
+		child.pierce_count = 0
+		child.return_enabled = false
+		# Ricochet Driver plus Fork Bomb: children inherit whatever bounces the parent had
+		# left, so "bounces once, then splits" carries on bouncing if it can.
+		child.bounce_count = _bounce_left
+		child.lifetime = config.lifetime * SPLIT_LIFETIME_SCALE
+
+		# Deferred: splitting happens inside an Area2D callback, and registering a new
+		# body's shape while the physics server is flushing queries is refused outright —
+		# the same reason loot drops are deferred.
+		ProjectileFactory.spawn_configured(
+			self,
+			child,
+			base_direction.rotated(offset),
+			origin,
+			team,
+			get_shooter(),
+			excluded,
+			true,
+		)
 
 
 func _despawn() -> void:

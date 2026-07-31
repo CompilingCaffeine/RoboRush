@@ -78,6 +78,16 @@ func try_start(requested_direction: Vector2) -> bool:
 	return true
 
 
+## Raises the charge ceiling and hands the new charges over ready to use. Backup Battery
+## calls this. Granted immediately rather than left to recharge, because an item that
+## does nothing for two seconds after you pick it up reads as an item that did nothing.
+func add_charges(count: int) -> void:
+	if count <= 0:
+		return
+	_max_charges += count
+	charges_available += count
+
+
 func can_dash() -> bool:
 	return not is_dashing and charges_available > 0
 

@@ -24,6 +24,9 @@ const LIBRARY := {
 	&"low_integrity": "res://audio/sfx/low_integrity.wav",
 	&"pickup": "res://audio/sfx/pickup.wav",
 	&"door": "res://audio/sfx/door.wav",
+	&"item_pickup": "res://audio/sfx/item_pickup.wav",
+	&"explosion": "res://audio/sfx/explosion.wav",
+	&"zap": "res://audio/sfx/zap.wav",
 }
 
 var _streams: Dictionary[StringName, AudioStream] = {}

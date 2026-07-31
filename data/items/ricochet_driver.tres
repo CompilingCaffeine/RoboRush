@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ItemConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/item_config.gd" id="1_item"]
+[ext_resource type="Texture2D" path="res://art/items/ricochet_driver.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"ricochet_driver"
+display_name = "Ricochet Driver"
+description = "Projectiles bounce off walls once."
+rarity = 0
+category = 1
+tags = Array[StringName]([&"projectile", &"bounce"])
+projectile_add = {
+&"bounce_count": 1.0
+}
+icon = ExtResource("2_icon")
+accent_color = Color(0.949, 0.631, 0.235, 1)
+pickup_sound = &"item_pickup"

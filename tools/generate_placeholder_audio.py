@@ -184,6 +184,47 @@ def make_door(noise: random.Random) -> list[float]:
     return render(0.18, voice)
 
 
+def make_item_pickup(noise: random.Random) -> list[float]:
+    """Four-note rising fanfare. Deliberately the longest and most musical sound in the
+    game: an item is the one pickup the player should stop and read."""
+    steps = [523.0, 784.0, 1047.0, 1319.0]
+    phase = [0.0]
+
+    def voice(_t: float, progress: float) -> float:
+        index = min(int(progress * len(steps)), len(steps) - 1)
+        phase[0] += steps[index] / SAMPLE_RATE
+        step_progress = (progress * len(steps)) % 1.0
+        return square(phase[0], 0.25) * decay(step_progress, 2.4)
+
+    return render(0.42, voice)
+
+
+def make_explosion(noise: random.Random) -> list[float]:
+    """Filtered noise over a falling square. Longer tail than a hit, shorter than death."""
+    phase = [0.0]
+    smoothed = [0.0]
+
+    def voice(_t: float, progress: float) -> float:
+        smoothed[0] += (noise.uniform(-1.0, 1.0) - smoothed[0]) * 0.12
+        phase[0] += sweep(190.0, 48.0, progress) / SAMPLE_RATE
+        return (smoothed[0] * 1.4 + square(phase[0], 0.5) * 0.5) * decay(progress, 4.5)
+
+    return render(0.30, voice)
+
+
+def make_zap(noise: random.Random) -> list[float]:
+    """Chain lightning: a very short crackle high above everything else in the mix, so
+    three of them in a row read as three jumps rather than as one noise."""
+    phase = [0.0]
+
+    def voice(_t: float, progress: float) -> float:
+        phase[0] += sweep(2600.0, 1100.0, progress) / SAMPLE_RATE
+        crackle = noise.uniform(-1.0, 1.0) * 0.5
+        return (square(phase[0], 0.15) + crackle) * decay(progress, 22.0)
+
+    return render(0.06, voice)
+
+
 SOUNDS = {
     "audio/sfx/fire.wav": (make_fire, 0.22),
     "audio/sfx/enemy_hit.wav": (make_enemy_hit, 0.26),
@@ -194,6 +235,9 @@ SOUNDS = {
     "audio/sfx/low_integrity.wav": (make_low_integrity, 0.22),
     "audio/sfx/pickup.wav": (make_pickup, 0.20),
     "audio/sfx/door.wav": (make_door, 0.26),
+    "audio/sfx/item_pickup.wav": (make_item_pickup, 0.26),
+    "audio/sfx/explosion.wav": (make_explosion, 0.30),
+    "audio/sfx/zap.wav": (make_zap, 0.20),
 }
 
 

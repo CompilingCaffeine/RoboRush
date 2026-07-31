@@ -14,6 +14,8 @@ extends Node2D
 
 const IMPACT_BURST := preload("res://scenes/effects/impact_burst.tscn")
 const DEATH_BURST := preload("res://scenes/effects/death_burst.tscn")
+const EXPLOSION_BURST := preload("res://scenes/effects/explosion_burst.tscn")
+const CHAIN_ZAP := preload("res://scenes/effects/chain_zap.tscn")
 const DAMAGE_NUMBER := preload("res://scenes/effects/damage_number.tscn")
 
 ## Trauma per event. Ordinary projectile impacts get none at all — at 4 shots per
@@ -21,6 +23,15 @@ const DAMAGE_NUMBER := preload("res://scenes/effects/damage_number.tscn")
 const SHAKE_ENEMY_KILLED := 0.34
 const SHAKE_PLAYER_DAMAGED := 0.55
 const SHAKE_PLAYER_DIED := 0.85
+
+## Explosions shake less than a kill even though they look bigger, because Volatile Kernel
+## fires one on *every* death — the kill's own shake is already playing, and adding a second
+## one would make the item feel like a screen fault rather than a payoff.
+const SHAKE_EXPLOSION := 0.16
+
+## The explosion particle scene is built around a 36px blast (Volatile Kernel's radius), so
+## this converts a requested radius into a scale for anything else.
+const EXPLOSION_REFERENCE_RADIUS := 36.0
 
 ## Fire is pitch-varied because it repeats constantly; a perfectly identical sound
 ## four times a second is what makes an arcade shooter tiring.
@@ -44,7 +55,11 @@ func _ready() -> void:
 	EventBus.player_dash_started.connect(_on_player_dash_started)
 	EventBus.room_cleared.connect(_on_room_cleared)
 	EventBus.pickup_collected.connect(_on_pickup_collected)
+	EventBus.item_collected.connect(_on_item_collected)
 	EventBus.doors_changed.connect(_on_doors_changed)
+	EventBus.projectile_bounced.connect(_on_projectile_bounced)
+	EventBus.explosion_triggered.connect(_on_explosion_triggered)
+	EventBus.chain_jumped.connect(_on_chain_jumped)
 
 
 ## Wired by main.gd, which owns scene composition.
@@ -125,8 +140,46 @@ func _on_pickup_collected(_kind: int, _amount: float, _position: Vector2) -> voi
 	AudioManager.play_sfx(&"pickup", PICKUP_PITCH_VARIATION, PICKUP_VOLUME_DB)
 
 
+## The one pickup worth interrupting for. Louder and longer than the scrap blip, with no
+## pitch variation — a fanfare that came out slightly different each time would sound
+## broken rather than varied.
+func _on_item_collected(_item: ItemConfig) -> void:
+	AudioManager.play_sfx(&"item_pickup")
+
+
 func _on_doors_changed(_are_locked: bool) -> void:
 	AudioManager.play_sfx(&"door")
+
+
+## A spark where a shot changed direction, so a bouncing or returning projectile is
+## visibly doing something rather than appearing to glitch through the wall. Silent: at a
+## bounce per shot, a ping four times a second is the fatigue spec section 22 warns about.
+func _on_projectile_bounced(point: Vector2, normal: Vector2) -> void:
+	var burst: OneShotBurst = IMPACT_BURST.instantiate()
+	burst.position = point
+	burst.aim_along(normal)
+	add_child(burst)
+
+
+func _on_explosion_triggered(position: Vector2, radius: float) -> void:
+	var burst: OneShotBurst = EXPLOSION_BURST.instantiate()
+	burst.position = position
+	# Scaled rather than re-authored per radius, so a bigger blast looks bigger without a
+	# second particle scene to keep in sync with the first.
+	burst.scale = Vector2.ONE * maxf(radius / EXPLOSION_REFERENCE_RADIUS, 0.35)
+	add_child(burst)
+
+	AudioManager.play_sfx(&"explosion", HIT_PITCH_VARIATION)
+	_add_trauma(SHAKE_EXPLOSION)
+
+
+func _on_chain_jumped(from: Vector2, to: Vector2) -> void:
+	var zap: ChainZap = CHAIN_ZAP.instantiate()
+	add_child(zap)
+	# After add_child: strike() sets top_level, which needs a parent to be meaningful.
+	zap.strike(from, to)
+
+	AudioManager.play_sfx(&"zap", HIT_PITCH_VARIATION)
 
 
 func _add_trauma(amount: float) -> void:

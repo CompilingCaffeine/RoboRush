@@ -22,6 +22,10 @@ const DOOR_SCENE := preload("res://scenes/rooms/door.tscn")
 ## bottom is the HUD strip, so the HUD never covers playable floor.
 const ROOM_TOP_MARGIN := 4
 
+## Where an item drops relative to the reward point, so it does not land underneath the
+## scrap that drops alongside it.
+const ITEM_REWARD_OFFSET := Vector2(0.0, -18.0)
+
 @export var config: FloorConfig
 
 var layout: FloorLayout
@@ -35,6 +39,12 @@ var _doors_by_room: Dictionary[int, Array] = {}
 var _cleared: Dictionary[int, bool] = {}
 var _player: Player
 var _rng := RandomNumberGenerator.new()
+
+## Combat rooms cleared on this floor, counted here rather than read from RunManager. The
+## floor is notified through the room's own `cleared` signal, which fires before the
+## EventBus one that RunManager counts — so reading that counter here would silently be
+## reading the number from *before* this clear.
+var _clears := 0
 
 @onready var _rooms_container: Node2D = %Rooms
 @onready var _doors_container: Node2D = %Doors
@@ -183,12 +193,18 @@ func _needs_clearing(id: int) -> bool:
 func _on_room_cleared(id: int) -> void:
 	_cleared[id] = true
 	_set_doors_locked(id, false)
+	_clears += 1
 
 	var room := _rooms[id]
 	# Every third room clear also drops a repair cell, so integrity is recoverable without
 	# making it so plentiful that damage stops mattering.
 	var include_repair := RunManager.rooms_cleared % 3 == 0
 	_loot.spawn_room_reward(room.get_reward_position(), include_repair)
+
+	# Items are the reason to keep fighting rather than to run for the exit, so most of a
+	# floor's items come from clearing rooms rather than from the one treasure vault.
+	if _clears in config.item_clear_indices:
+		_loot.spawn_item(room.get_reward_position() + ITEM_REWARD_OFFSET)
 
 
 ## Payout for walking into a room that needs no fighting. The treasure room is the reason to
@@ -199,8 +215,12 @@ func _award_first_visit(id: int) -> void:
 	_cleared[id] = true
 
 	var room := _rooms[id]
-	if room.plan.type == RoomTemplate.Type.TREASURE:
+	if room.plan.type != RoomTemplate.Type.TREASURE:
+		return
+	if config.treasure_grants_item:
 		_loot.spawn_treasure(room.get_reward_position())
+	else:
+		_loot.spawn_room_reward(room.get_reward_position(), true)
 
 
 ## Only reports a change when a door actually moved, so re-entering a cleared room does not

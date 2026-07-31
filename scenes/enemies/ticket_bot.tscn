@@ -11,7 +11,7 @@
 [sub_resource type="CircleShape2D" id="CircleShape2D_bot"]
 radius = 6.0
 
-[node name="TicketBot" type="CharacterBody2D"]
+[node name="TicketBot" type="CharacterBody2D" groups=["enemy"]]
 collision_layer = 4
 collision_mask = 1
 motion_mode = 1

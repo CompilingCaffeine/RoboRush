@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3]
+[gd_scene load_steps=15 format=3]
 
 [ext_resource type="Script" path="res://scenes/player/player.gd" id="1_player"]
 [ext_resource type="Resource" path="res://data/player/player_config.tres" id="2_config"]
@@ -13,6 +13,7 @@
 [ext_resource type="Resource" path="res://data/weapons/rivet_blaster.tres" id="11_blaster"]
 [ext_resource type="Script" path="res://scripts/components/health_component.gd" id="12_health"]
 [ext_resource type="Script" path="res://scripts/components/shake_camera.gd" id="13_camera"]
+[ext_resource type="Script" path="res://scripts/components/item_inventory.gd" id="14_items"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_player"]
 radius = 5.0
@@ -67,6 +68,10 @@ unique_name_in_owner = true
 script = ExtResource("12_health")
 max_health = 6.0
 invulnerability_seconds = 0.8
+
+[node name="Items" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("14_items")
 
 [node name="Camera" type="Camera2D" parent="."]
 unique_name_in_owner = true
