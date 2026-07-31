@@ -4,9 +4,9 @@ A 2D top-down roguelite shooter built to [`robo_rush_build_spec.md`](robo_rush_b
 You play an obsolete maintenance robot scavenging hardware and software upgrades
 inside a corrupted software megacorporation.
 
-**Current state: Milestone 1 — Movement Sandbox.** Per spec section 32, this
-milestone deliberately contains no enemies, items, procedural generation, menus,
-or bosses. It exists to make movement feel good before anything is built on it.
+**Current state: Milestone 2 — Basic Combat.** You can enter a room, shoot Ticket
+Bots, take damage, clear the room, die, and restart. There is no procedural
+generation, no items, no shop, and no boss yet.
 
 Engine: **Godot 4.7.1**, GDScript, GL Compatibility renderer.
 
@@ -20,13 +20,13 @@ godot --path . res://main.tscn
 
 Or open the project folder in the Godot editor and press F5.
 
-Run the headless movement tests (exits non-zero on failure):
+Run the tests (exits non-zero on failure):
 
 ```bash
-godot --headless --script res://tests/test_player_movement.gd
+godot --headless res://tests/test_runner.tscn
 ```
 
-If textures show as missing after a fresh clone, import them once:
+If assets show as missing after a fresh clone, import them once:
 
 ```bash
 godot --headless --import
@@ -38,171 +38,261 @@ godot --headless --import
 | --- | --- | --- |
 | Move | `WASD` | Left stick |
 | Aim | Mouse | Right stick |
+| Fire | Left mouse (hold) | Right trigger |
 | Dash | `Space` | A / cross |
-| Fire primary | Left mouse | Right trigger |
+| Restart after death | `R` | Y / triangle |
 | Active item | Right mouse | Left trigger |
 | Interact | `E` | X / square |
 | Run statistics | `Tab` | — |
 | Pause | `Escape` | Start |
 | Toggle debug overlay | `F1` | — |
 
-Fire, active item, interact, run statistics, and pause are bound but not yet
-wired to behaviour — the actions exist so later milestones bind names, never keys.
+Active item, interact, run statistics, and pause are bound but not yet wired to
+behaviour — the actions exist so later milestones bind names, never keys.
 
 ---
 
 ## Architecture
 
-The shape of the code matters more than its size at this stage, so the two rules
-below are worth keeping as the project grows.
+Four decisions carry the rest of the project.
 
-**The player is composed, not inherited.** `Player` (`scenes/player/player.gd`)
-does almost nothing itself. Each frame it asks `PlayerInput` for intent, asks
-either `MotionController` or `DashController` for a velocity, calls
-`move_and_slide()`, and hands presentation state to `PlayerVisuals`. Weapons,
-integrity, and item hooks become additional components rather than additions to
-this script, which is how spec section 26.5 ("avoid giant manager scripts") is
-kept true by construction.
+**Every projectile behaviour is a field in `ProjectileConfig`, never a branch in
+code.** This is the most important type in the game.
+[projectile_config.gd](scripts/resources/projectile_config.gd) holds damage, speed,
+lifetime, pierce, bounce, split, homing, chaining, explosions — and
+[projectile.gd](scenes/projectiles/projectile.gd) contains no weapon-specific or
+item-specific conditional anywhere. That single constraint is what makes spec
+section 13's synergies free rather than combinatorial: Ricochet Driver will raise
+`bounce_count`, Fork Bomb will raise `split_count`, and "bounces once, then splits"
+already works with nothing aware those two items can co-occur. The verified bounce
+and pierce tests exercise exactly that path today.
 
-**Gameplay maths is separated from the engine.** `MotionController` and
-`DashController` take a config in and return values out. They never touch the
-scene tree, a physics body, or a viewport. That is what makes
-`tests/test_player_movement.gd` possible without a running game, and it is why
-`PlayerInput.poll()` is handed the player position and cursor position rather
-than reaching for a viewport itself.
+**Actors are composed, not inherited.** [player.gd](scenes/player/player.gd) and
+[ticket_bot.gd](scenes/enemies/ticket_bot.gd) share `HealthComponent` and
+`WeaponController` unchanged, so damage is symmetric by construction: a projectile
+does not care what it hit, only whether that thing has a `HealthComponent`.
+
+**Presentation is separated from gameplay.**
+[feedback_director.gd](scripts/systems/feedback_director.gd) subscribes to the
+EventBus and owns the *entire* mapping from "what happened" to "what the player sees
+and hears". No gameplay script plays a sound, spawns a particle, or shakes the
+camera. Two things follow: milestone 6's polish pass is a change to one file, and
+"do not overuse screen shake" (spec section 7) stays enforceable because every shake
+in the game is one of five constants in that file.
+
+**Friendly fire is impossible by construction, not by a runtime check.**
+[teams.gd](scripts/utilities/teams.gd) derives every collision layer and mask, and a
+projectile's mask contains only the opposing team's bodies. No scene contains a magic
+bitmask and no `if target.team == my.team` exists anywhere.
 
 Supporting decisions:
 
-- **All tunable values live in `PlayerConfig`**, a Resource serialised to
-  `data/player/player_config.tres`. Movement feel can be tweaked in the inspector
-  mid-play, and an alternate tuning is just another `.tres`.
-- **`EventBus` is one autoload with two signals.** Dash events go through it so
-  the debug overlay can react without reaching into the player's component
-  subtree. Local signals are used inside an actor; the EventBus is only for
-  crossing system boundaries. The rest of the spec section 14 combat events land
-  here as the systems that emit them get built.
-- **Fixed 480x270 logical resolution** with `viewport` stretch mode and `keep`
-  aspect, so every pixel stays square and the framing never changes. Nearest
-  neighbour filtering is set project-wide.
-- **Scenes own their root script** (`scenes/player/player.gd`), while reusable
-  components live in `scripts/components/`.
-- **Input actions are generated**, not hand-written. `.godot`-format InputEvent
-  literals are error-prone by hand, so `tools/generate_input_map.gd` builds them
-  as real objects and prints the `[input]` section to paste into `project.godot`.
-- **Physics layers are named** in `project.godot` (`world`, `player`, `enemy`,
-  `player_projectile`, `enemy_projectile`, `pickup`) so no scene hardcodes a
-  layer number.
+- **All tuning is in resources.** `PlayerConfig`, `WeaponConfig`, `ProjectileConfig`,
+  `EnemyConfig`, `FeedbackConfig`. `FeedbackConfig` is what the milestone 6 settings
+  menu will edit, which is why no effect hardcodes its own intensity.
+- **`EventBus` is 11 signals and stays that way.** Components emit *local* signals;
+  the owning actor decides what the wider game hears. `WeaponController` therefore has
+  no autoload dependency at all, which is why it can be tested in isolation.
+- **Projectiles detect walls by ray query, not by their Area2D.** A ray returns a
+  surface *normal*; `body_entered` does not. Bounce direction and impact-spark
+  orientation both need it.
+- **Fixed 480x270 logical resolution**, `viewport` stretch, `keep` aspect, nearest
+  filtering. Every pixel stays square.
+- **Input actions are generated**, not hand-written, by
+  [generate_input_map.gd](tools/generate_input_map.gd) — `.godot` InputEvent literals
+  are how typos get shipped.
+- **Placeholder art and audio are generated** by two stdlib-only Python scripts in
+  `tools/`. Neither is needed to build or run the game; they exist so placeholders are
+  reproducible. Sound is square waves and noise — the two voices a 1990s arcade
+  cabinet actually had.
+
+### Deliberate non-abstractions
+
+Spec section 14 lists `FirePattern`, `ProjectileModifierStack`, `DamageResolver`, and
+`StatusEffectController` as components. None exist yet, because each would currently
+have exactly one implementation:
+
+- **FirePattern** — `projectiles_per_shot` + `spread_degrees` on `WeaponConfig` is the
+  whole pattern today. It earns its own resource when charge shots and beams arrive.
+- **ProjectileModifierStack** — will run over the config copy inside
+  `ProjectileFactory.spawn`, between `spawn_copy()` and instantiation. That copy exists
+  now precisely so the stack has somewhere to go.
+- **DamageResolver** — [damage_info.gd](scripts/combat/damage_info.gd) is already the
+  thing it would resolve, including an unused `is_critical` and a tag list.
+- **StatusEffectController** — `ProjectileConfig.status_effects` is declared and
+  carried; nothing reads it yet.
+
+Fields marked "not yet honoured" in `ProjectileConfig` are declared on purpose: the
+*shape* of that resource is the contract milestone 4 composes over, and adding a field
+later is a smaller change than adding a behaviour later.
 
 ### Files
 
+New in milestone 2 marked `+`.
+
 ```
-project.godot                             Config, fixed resolution, input map, layer names
-main.tscn / main.gd                       Entry point: places the player, fits the camera, binds the HUD
-.gitignore
+project.godot                             Config, resolution, input map, layers, autoloads
+main.tscn / main.gd                       Entry point: places player, fits camera, wires HUDs
 
-autoload/event_bus.gd                     Two dash signals; grows deliberately
+autoload/event_bus.gd                     11 cross-system signals
+autoload/game_manager.gd                + Feedback config, hit pause, restart
+autoload/audio_manager.gd               + Pooled one-shot SFX playback
 
-scripts/resources/player_config.gd        Every movement/dash/integrity tunable
-data/player/player_config.tres            The values from spec section 6
+scripts/resources/player_config.gd        Movement, dash, integrity tunables
+scripts/resources/projectile_config.gd  + The composition surface for every item
+scripts/resources/weapon_config.gd      + Fire rate, pattern, muzzle
+scripts/resources/enemy_config.gd       + Durability, range-keeping, telegraph
+scripts/resources/feedback_config.gd    + Shake, flash, damage numbers, hit pause
 
-scripts/components/player_input.gd        Named actions -> movement + aim intent, dash buffering
-scripts/components/motion_controller.gd   Acceleration/deceleration toward a target velocity
-scripts/components/dash_controller.gd     Dash window, charges, recharge, invulnerability
-scripts/components/player_visuals.gd      Aim rotation, dash squash, invulnerability flash
+scripts/combat/damage_info.gd           + One described damage event
+scripts/combat/projectile_factory.gd    + Builds projectiles; where modifiers will hook
 
-scenes/player/player.tscn / player.gd     The robot: body, components, camera
-scenes/rooms/wall_block.tscn / .gd        Resizable solid wall, collision and sprite in lockstep
-scenes/rooms/test_room.tscn / .gd         Sandbox arena; border generated, pillars hand-placed
-scenes/ui/debug_hud.tscn / .gd            Diagnostics overlay (F1)
+scripts/components/player_input.gd        Named actions -> movement, aim, fire intent
+scripts/components/motion_controller.gd   Acceleration/deceleration
+scripts/components/dash_controller.gd     Dash window, charges, invulnerability
+scripts/components/player_visuals.gd      Aim, dash squash, flash, muzzle flash, death
+scripts/components/weapon_controller.gd + Fire timing and shot arrangement
+scripts/components/health_component.gd  + Integrity, invulnerability, death
+scripts/components/hurt_flash.gd        + Reusable hit flash
+scripts/components/shake_camera.gd      + Trauma-based screen shake
 
-art/characters/player_placeholder.png     16x16 robot: round head, screen eye, tracked base
-art/characters/player_cannon_placeholder.png
-art/environments/wall_placeholder.png     16x16 tiling panel
-art/environments/floor_placeholder.png    16x16 tiling floor
+scripts/systems/room_combat.gd          + Counts enemies, reports room cleared
+scripts/systems/feedback_director.gd    + All event -> audiovisual mapping
+scripts/utilities/teams.gd              + Teams and every collision layer
 
-tests/test_player_movement.gd             27 headless checks on movement and dash maths
-tools/generate_input_map.gd               Regenerates the [input] section of project.godot
+scenes/player/player.tscn / .gd            The robot
+scenes/enemies/ticket_bot.tscn / .gd     + Range-keeping shooter
+scenes/projectiles/projectile.tscn / .gd + Fully config-driven projectile
+scenes/effects/impact_burst.tscn         + Hit sparks
+scenes/effects/death_burst.tscn          + Death debris
+scenes/effects/one_shot_burst.gd         + Self-freeing particle burst
+scenes/effects/damage_number.tscn / .gd  + Floating damage readout
+scenes/rooms/wall_block.tscn / .gd         Resizable solid wall
+scenes/rooms/test_room.tscn / .gd          Arena, pillars, enemies, room combat
+scenes/ui/combat_hud.tscn / .gd          + Integrity pips, dash pips, banners
+scenes/ui/debug_hud.tscn / .gd             Developer diagnostics (F1)
+
+data/player/player_config.tres             Values from spec section 6
+data/projectiles/rivet.tres              + Values from spec section 7
+data/projectiles/ticket_shot.tres        + Slow, large, hostile
+data/weapons/rivet_blaster.tres          + 1 damage, 4/sec, 420 px/s, 1.4s
+data/weapons/ticket_spitter.tres         + Enemy weapon
+data/enemies/ticket_bot.tres             + Ticket Bot tuning
+data/settings/feedback_config.tres       + Feedback intensity
+
+tests/test_runner.tscn / .gd             + Aggregating runner; fails on empty suites
+tests/test_case.gd                       + Suite base class
+tests/test_player_movement.gd              28 movement and dash checks
+tests/test_combat.gd                     + 85 data, component, and integration checks
+
+tools/generate_input_map.gd                Regenerates project.godot's [input]
+tools/generate_placeholder_art.py        + Regenerates placeholder PNGs
+tools/generate_placeholder_audio.py      + Synthesizes placeholder WAVs
 ```
-
-Empty directories from the spec's suggested layout (`scenes/enemies/`, `data/items/`,
-`shaders/`, `audio/`, ...) exist so later milestones have an obvious home.
 
 ---
 
 ## What was actually verified
 
-Executed on this machine, not assumed:
+Executed on this machine, not assumed.
 
 - **`godot --headless --import`** completes with no errors.
-- **Clean boot** (`--quit-after 240` on `main.tscn`) produces zero errors and
-  zero warnings on stdout/stderr.
-- **`tests/test_player_movement.gd`: 27 checks pass, exit 0.** Covers reaching
-  `move_speed` without overshoot, diagonals not being faster, deceleration to a
-  full stop, `dash_speed * dash_duration == dash_distance`, the dash lifecycle,
-  invulnerability closing before the dash ends, charge spend and recharge, and
-  direction reuse when no direction is held.
-- **Measured in a running instance** driven by synthetic input: spawn at
-  `(320, 320)`; top speed `160.0 px/s`; dash speed `500.0 px/s` (= 70/0.14);
-  diagonal velocity `(+113, +113)` for a `160 px/s` magnitude; velocity clamped
-  back to `160` on dash exit; charge spent and recharged.
-- **Collision robustness:** 1800 physics frames (30 s) of pseudo-random movement
-  with 27 dashes into walls, corners, and pillars produced **0 out-of-bounds
-  frames** — nothing tunnelled at dash speed, and the robot was never pinned
-  while movement was held (5 isolated frames of near-zero speed, all pressing
-  directly into a wall).
-- **Rendered frames inspected** to confirm the dash squash, the invulnerability
-  flash, cannon aim rotation, and correct texture tiling.
+- **Clean boot** (`--quit-after 300` on `main.tscn`) produces zero errors and zero
+  warnings on stdout/stderr.
+- **113 checks across 2 suites pass, exit 0**, in 2.9s.
+- **The test suite was mutation-tested.** Changing `ProjectileConfig.spawn_copy()` to
+  return `self` — the exact bug that would let one shot permanently spend a weapon's
+  bounces — made the run exit 1 with 4 named failures. Reverting restored the pass.
+  The suite catches the regression it was written for.
+- **The runner fails on a suite that runs zero checks**, so a suite that crashes before
+  asserting cannot be reported as a pass. This was not hypothetical: an earlier
+  `--script`-based harness reported "PASS 45 checks" while three suites silently did
+  nothing, because `--script` mode does not register autoloads.
+- **Integration checks fire real projectiles through real physics**: pierce carries a
+  shot through a near enemy into a far one; a `bounce_count` of 1 sends a shot back past
+  its own origin; an enemy-team projectile passed straight through an enemy does zero
+  damage; `RoomCombat` reports cleared exactly once.
+- **Full combat loop, driven end to end by synthetic input only** (no reaching past the
+  input layer): 4 Ticket Bots killed, `room_cleared` fired at frame 224, player
+  integrity fell 6 → 3 from enemy fire. Aiming used the analogue gamepad aim actions,
+  which incidentally covered the right-stick path that no controller was available to
+  test.
+- **Death and restart**: player died at frame 566 while standing still, HUD banner read
+  `SYSTEM FAILURE    PRESS R TO REBOOT`, the robot froze. After
+  `GameManager.restart_run()`: integrity 6/6, death flag cleared, 4 enemies respawned,
+  and `Engine.time_scale` back to exactly 1.00 — confirming hit pause cannot leave the
+  game stuck in slow motion.
+- **Presentation asserted, not eyeballed**: live counts of `DamageNumber` and
+  `OneShotBurst` nodes under the FeedbackDirector confirmed damage numbers and impact
+  bursts spawn during combat. Rendered frames were then inspected to confirm projectile
+  trails, hostile/friendly projectile colour separation, the death slump, and both HUD
+  banners.
 
-Not verified: how it *feels*. The spec's success condition for this milestone is
-"movement feels responsive for five minutes of continuous play", and that needs
-your hands on the keyboard. Everything above only proves it is not broken.
+### One bug found and fixed during verification
+
+Enemy dies while its projectile is still in flight → `shooter` dangles → constructing
+`DamageInfo` with a freed Object raises a type error and **that hit silently deals no
+damage**. Only the live run surfaced it; every unit test passed throughout. Fixed by
+attributing damage to the owning actor rather than the weapon component, and reading
+the reference through `Projectile.get_shooter()`, which returns null if it has been
+freed.
+
+Not verified: how it *feels*. That needs your hands on the keyboard.
 
 ---
 
 ## Known limitations
 
-1. **Feel is untested by a human.** All numbers are the spec's suggested starting
-   values. Expect to tune `acceleration`, `deceleration`, and
-   `position_smoothing_speed` on the camera once you have played it.
-2. **Placeholder art**, generated programmatically. Legible, not final. Spec
-   section 20's chunky pixel art and CRT glow are a Milestone 6 concern.
-3. **No audio at all** — no dash sound, no footsteps. Milestone 2 onward.
-4. **The test room is not a room template.** It has no doors, spawn points,
-   difficulty score, or floor tags (spec section 9). It is a walled box with
-   pillars, built from resizable `WallBlock` bodies rather than a TileMap,
-   because a Godot TileMap's cell data is a binary blob and cannot be authored
-   as text outside the editor. Milestone 3 should introduce a real TileSet.
-5. **`Escape`, `Tab`, `E`, and the fire buttons do nothing yet.** Actions are
-   bound; there is no pause state or weapon to hang off them.
-6. **Gamepad support is untested** — no controller was available. The actions and
-   right-stick aim path are implemented per spec section 5 but unexercised.
-7. **No game state machine, save system, or settings.** Spec sections 21, 23, and
-   24 are later milestones.
-8. **Camera smoothing can show sub-pixel-free motion at high refresh rates.** The
-   `viewport` stretch mode snaps rendering to the 480x270 grid, which is correct
-   for the retro look but means fast camera movement steps rather than glides.
+1. **Feel and balance are untested by a human.** Standing still, the player loses 3 of
+   6 integrity clearing four Ticket Bots in under 4 seconds. Whether that is the right
+   pressure is a judgement call for a play session, not a test.
+2. **Placeholder art and audio.** Legible and readable, not final. Spec section 20's
+   chunky pixel art and CRT glow, and section 22's music, are milestone 6.
+3. **No music at all**, and no sounds yet for door opening, item pickup, or boss phase
+   transitions — those events do not exist.
+4. **The status banner sits just below the player** and can slightly overlap the robot
+   sprite. It also sits under the debug overlay's footprint when F1 is on.
+5. **The test room is not a room template.** No doors, spawn points, difficulty score,
+   or floor tags (spec section 9). Enemies are placed by hand, not spawned. It is built
+   from resizable `WallBlock` bodies rather than a TileMap, because a Godot TileMap's
+   cell data is a binary blob and cannot be authored as text outside the editor.
+6. **`Escape`, `Tab`, and `E` do nothing.** No pause state, no run statistics screen,
+   nothing to interact with.
+7. **Gamepad buttons are untested** — no controller was available. The analogue
+   right-stick *aim* path is verified (the harness drove it), but the button and
+   trigger bindings are not.
+8. **No game state machine, save system, settings menu, or scrap economy.** Spec
+   sections 17, 21, 23, and 24 are later milestones.
+9. **Enemy variety is one type.** Pop Up Drone, Memory Leech, and Firewall Node are
+   milestone 5.
+10. **Hand-authored `NodePath` literals do not resolve into exported `Node`
+    properties.** Godot only wires those up when the editor writes them, so scenes
+    authored as text must pass node references explicitly — `RoomCombat.begin()` takes
+    its container as an argument for this reason.
 
 ---
 
 ## Next recommended task
 
-**Milestone 2: Basic Combat**, in this order:
+**Milestone 3: Room Loop.** The goal is a small multi-room run.
 
-1. `WeaponController` + `FirePattern` as components on the player, driven by the
-   already-bound `fire_primary` action, configured by a `WeaponConfig` resource
-   holding the Rivet Blaster values from spec section 7 (1 damage, 4 shots/sec,
-   420 px/s, 1.4 s lifetime).
-2. A `Projectile` scene whose behaviour comes entirely from a `ProjectileConfig`
-   passed in at spawn — `damage`, `speed`, `lifetime`, `pierce_count`,
-   `bounce_count`, `homing_strength` and the rest of the spec section 13 state.
-   **Get this data structure right before writing any item**, because Milestone 4's
-   synergies are composition over exactly these fields. Items that instead add
-   conditionals to the weapon will not compose.
-3. One enemy (Ticket Bot) with a `HealthComponent`, plus the same component on
-   the player so damage is symmetric.
-4. Hit feedback from spec section 7: hit flash, impact particle, knockback, brief
-   hit pause. Add `on_projectile_hit`, `on_enemy_damaged`, and `on_enemy_killed`
-   to the EventBus as they are needed, not before.
-5. Room clear detection, emitting `on_room_cleared`.
+1. **A real `TileSet` and room templates.** This needs the Godot editor, since
+   `TileMapLayer` cell data is not text-authorable. Define the `RoomTemplate` resource
+   from spec section 9 first (id, type, door locations, enemy spawn points, obstacles,
+   reward point, difficulty score, floor range) so templates are data from the start.
+2. **Doors and locking.** `RoomCombat` already knows when a room is clear; doors
+   subscribe to `cleared` and unlock. Add `room_entered` to the EventBus when there is
+   a second room to enter.
+3. **Enemy spawning from template spawn points**, replacing hand-placed enemies.
+   `RoomCombat.track()` already accepts enemies registered after the room starts.
+4. **Floor generation** as a connected room graph, with the spec's hard guarantees
+   asserted in tests rather than trusted: boss room reachable, no disconnected rooms,
+   no overlaps, treasure never blocking progression. This is graph code with exact
+   invariants — much cheaper to test than to debug by playing.
+5. **Minimap**, with unexplored room types hidden.
 
-Success condition: the player can enter a room, defeat enemies, and survive or die.
+Worth doing before milestone 4 regardless: a second enemy type. Ticket Bot alone
+cannot show whether `EnemyConfig` is the right shape, and one data point is a weak
+basis for the four-enemy roster in milestone 5.
+
+Success condition: the player can complete a small multi-room run.

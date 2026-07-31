@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="ProjectileConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/projectile_config.gd" id="1_projectile"]
+[ext_resource type="Texture2D" path="res://art/effects/projectile_ticket.png" id="2_ticket"]
+
+[resource]
+script = ExtResource("1_projectile")
+damage = 1.0
+speed = 125.0
+lifetime = 3.2
+radius = 3.0
+knockback = 0.0
+pierce_count = 0
+bounce_count = 0
+split_count = 0
+split_damage_scale = 0.6
+homing_strength = 0.0
+explosion_radius = 0.0
+chain_count = 0
+return_enabled = false
+status_effects = Array[StringName]([])
+texture = ExtResource("2_ticket")
+trail_color = Color(0.878431, 0.290196, 0.290196, 0.615686)
+trail_length = 6

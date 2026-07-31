@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="EnemyConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/enemy_config.gd" id="1_enemy"]
+[ext_resource type="Resource" path="res://data/weapons/ticket_spitter.tres" id="2_weapon"]
+
+[resource]
+script = ExtResource("1_enemy")
+display_name = "Ticket Bot"
+max_health = 3.0
+knockback_resistance = 0.15
+move_speed = 52.0
+acceleration = 420.0
+deceleration = 600.0
+preferred_range = 100.0
+range_tolerance = 22.0
+weapon = ExtResource("2_weapon")
+contact_damage = 0.0
+telegraph_seconds = 0.4

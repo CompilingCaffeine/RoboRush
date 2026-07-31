@@ -1,18 +1,23 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=14 format=3]
 
 [ext_resource type="Script" path="res://scenes/player/player.gd" id="1_player"]
 [ext_resource type="Resource" path="res://data/player/player_config.tres" id="2_config"]
 [ext_resource type="Script" path="res://scripts/components/player_visuals.gd" id="3_visuals"]
 [ext_resource type="Texture2D" path="res://art/characters/player_placeholder.png" id="4_body_tex"]
 [ext_resource type="Texture2D" path="res://art/characters/player_cannon_placeholder.png" id="5_cannon_tex"]
-[ext_resource type="Script" path="res://scripts/components/player_input.gd" id="6_input"]
-[ext_resource type="Script" path="res://scripts/components/motion_controller.gd" id="7_motion"]
-[ext_resource type="Script" path="res://scripts/components/dash_controller.gd" id="8_dash"]
+[ext_resource type="Texture2D" path="res://art/effects/muzzle_flash.png" id="6_muzzle_tex"]
+[ext_resource type="Script" path="res://scripts/components/player_input.gd" id="7_input"]
+[ext_resource type="Script" path="res://scripts/components/motion_controller.gd" id="8_motion"]
+[ext_resource type="Script" path="res://scripts/components/dash_controller.gd" id="9_dash"]
+[ext_resource type="Script" path="res://scripts/components/weapon_controller.gd" id="10_weapon"]
+[ext_resource type="Resource" path="res://data/weapons/rivet_blaster.tres" id="11_blaster"]
+[ext_resource type="Script" path="res://scripts/components/health_component.gd" id="12_health"]
+[ext_resource type="Script" path="res://scripts/components/shake_camera.gd" id="13_camera"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_player"]
 radius = 5.0
 
-[node name="Player" type="CharacterBody2D"]
+[node name="Player" type="CharacterBody2D" groups=["player"]]
 collision_layer = 2
 collision_mask = 1
 motion_mode = 1
@@ -35,20 +40,37 @@ texture = ExtResource("4_body_tex")
 position = Vector2(6, 0)
 texture = ExtResource("5_cannon_tex")
 
+[node name="MuzzleFlash" type="Sprite2D" parent="Visuals/AimPivot"]
+visible = false
+position = Vector2(13, 0)
+texture = ExtResource("6_muzzle_tex")
+
 [node name="Input" type="Node" parent="."]
 unique_name_in_owner = true
-script = ExtResource("6_input")
+script = ExtResource("7_input")
 
 [node name="Motion" type="Node" parent="."]
 unique_name_in_owner = true
-script = ExtResource("7_motion")
+script = ExtResource("8_motion")
 
 [node name="Dash" type="Node" parent="."]
 unique_name_in_owner = true
-script = ExtResource("8_dash")
+script = ExtResource("9_dash")
+
+[node name="Weapon" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("10_weapon")
+config = ExtResource("11_blaster")
+
+[node name="Health" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("12_health")
+max_health = 6.0
+invulnerability_seconds = 0.8
 
 [node name="Camera" type="Camera2D" parent="."]
 unique_name_in_owner = true
 position_smoothing_enabled = true
 position_smoothing_speed = 8.0
 limit_smoothed = true
+script = ExtResource("13_camera")

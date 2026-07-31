@@ -1,8 +1,10 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://scenes/rooms/test_room.gd" id="1_room"]
 [ext_resource type="Texture2D" path="res://art/environments/floor_placeholder.png" id="2_floor_tex"]
 [ext_resource type="PackedScene" path="res://scenes/rooms/wall_block.tscn" id="3_wall_block"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/ticket_bot.tscn" id="4_ticket_bot"]
+[ext_resource type="Script" path="res://scripts/systems/room_combat.gd" id="5_room_combat"]
 
 [node name="TestRoom" type="Node2D"]
 script = ExtResource("1_room")
@@ -43,6 +45,27 @@ size = Vector2i(32, 64)
 [node name="PillarSouthEast" parent="Obstacles" instance=ExtResource("3_wall_block")]
 position = Vector2(448, 288)
 size = Vector2i(96, 32)
+
+[node name="Enemies" type="Node2D" parent="."]
+unique_name_in_owner = true
+
+[node name="TicketBotWest" parent="Enemies" instance=ExtResource("4_ticket_bot")]
+position = Vector2(130, 190)
+
+[node name="TicketBotEast" parent="Enemies" instance=ExtResource("4_ticket_bot")]
+position = Vector2(560, 210)
+
+[node name="TicketBotNorth" parent="Enemies" instance=ExtResource("4_ticket_bot")]
+position = Vector2(214, 56)
+
+[node name="TicketBotSouth" parent="Enemies" instance=ExtResource("4_ticket_bot")]
+position = Vector2(396, 344)
+
+[node name="Projectiles" type="Node2D" parent="." groups=["projectile_container"]]
+
+[node name="RoomCombat" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("5_room_combat")
 
 [node name="PlayerSpawn" type="Marker2D" parent="."]
 position = Vector2(320, 320)

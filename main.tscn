@@ -1,9 +1,11 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://scenes/rooms/test_room.tscn" id="2_room"]
 [ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="3_player"]
-[ext_resource type="PackedScene" path="res://scenes/ui/debug_hud.tscn" id="4_hud"]
+[ext_resource type="Script" path="res://scripts/systems/feedback_director.gd" id="4_feedback"]
+[ext_resource type="PackedScene" path="res://scenes/ui/combat_hud.tscn" id="5_combat_hud"]
+[ext_resource type="PackedScene" path="res://scenes/ui/debug_hud.tscn" id="6_debug_hud"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -14,7 +16,15 @@ unique_name_in_owner = true
 [node name="Player" parent="." instance=ExtResource("3_player")]
 unique_name_in_owner = true
 
+[node name="FeedbackDirector" type="Node2D" parent="."]
+unique_name_in_owner = true
+z_index = 10
+script = ExtResource("4_feedback")
+
 [node name="UILayer" type="CanvasLayer" parent="."]
 
-[node name="DebugHUD" parent="UILayer" instance=ExtResource("4_hud")]
+[node name="CombatHUD" parent="UILayer" instance=ExtResource("5_combat_hud")]
+unique_name_in_owner = true
+
+[node name="DebugHUD" parent="UILayer" instance=ExtResource("6_debug_hud")]
 unique_name_in_owner = true

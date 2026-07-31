@@ -1,0 +1,42 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scenes/enemies/ticket_bot.gd" id="1_bot"]
+[ext_resource type="Resource" path="res://data/enemies/ticket_bot.tres" id="2_config"]
+[ext_resource type="Texture2D" path="res://art/enemies/ticket_bot_placeholder.png" id="3_bot_tex"]
+[ext_resource type="Script" path="res://scripts/components/health_component.gd" id="4_health"]
+[ext_resource type="Script" path="res://scripts/components/weapon_controller.gd" id="5_weapon"]
+[ext_resource type="Resource" path="res://data/weapons/ticket_spitter.tres" id="6_spitter"]
+[ext_resource type="Script" path="res://scripts/components/hurt_flash.gd" id="7_flash"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_bot"]
+radius = 6.0
+
+[node name="TicketBot" type="CharacterBody2D"]
+collision_layer = 4
+collision_mask = 1
+motion_mode = 1
+script = ExtResource("1_bot")
+config = ExtResource("2_config")
+
+[node name="Shape" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_bot")
+
+[node name="Sprite" type="Sprite2D" parent="."]
+unique_name_in_owner = true
+texture = ExtResource("3_bot_tex")
+
+[node name="Health" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("4_health")
+max_health = 3.0
+invulnerability_seconds = 0.0
+
+[node name="Weapon" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("5_weapon")
+config = ExtResource("6_spitter")
+
+[node name="HurtFlash" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("7_flash")
+target = NodePath("../Sprite")

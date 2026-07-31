@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="FeedbackConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/feedback_config.gd" id="1_feedback"]
+
+[resource]
+script = ExtResource("1_feedback")
+screen_shake_scale = 1.0
+flash_intensity = 1.0
+damage_numbers_enabled = true
+hit_pause_enabled = true
+hit_pause_seconds = 0.06
+hit_pause_time_scale = 0.06

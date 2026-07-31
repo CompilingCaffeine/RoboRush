@@ -2,35 +2,54 @@ class_name Player
 extends CharacterBody2D
 ## The obsolete maintenance robot.
 ##
-## This script is deliberately thin: it reads intent from PlayerInput, asks
-## MotionController or DashController for a velocity, moves the body, and hands
-## presentation state to PlayerVisuals. Behaviour that could belong to a component
-## should go in one, so weapons, integrity, and item hooks can be added in later
+## Deliberately thin: it reads intent from PlayerInput, asks MotionController or
+## DashController for a velocity, moves the body, fires the WeaponController, and
+## hands presentation state to PlayerVisuals. Behaviour that could belong to a
+## component goes in one, so item hooks and integrity changes can arrive in later
 ## milestones without this file growing into a manager.
 ##
-## Actor scripts live beside their scene (scenes/player/) while reusable
-## components live in scripts/components/ — a scene owns its root script, and
-## scripts/ holds the pieces that scenes compose.
+## Actor scripts live beside their scene (scenes/player/) while reusable components
+## live in scripts/components/ — a scene owns its root script, and scripts/ holds the
+## pieces that scenes compose.
 
 @export var config: PlayerConfig
 
 @onready var _input: PlayerInput = %Input
 @onready var _motion: MotionController = %Motion
 @onready var _dash: DashController = %Dash
+@onready var _weapon: WeaponController = %Weapon
+@onready var _health: HealthComponent = %Health
 @onready var _visuals: PlayerVisuals = %Visuals
-@onready var _camera: Camera2D = %Camera
+@onready var _camera: ShakeCamera = %Camera
+
+var _is_dead := false
 
 
 func _ready() -> void:
 	assert(config != null, "Player.config is unset: assign a PlayerConfig resource.")
+	collision_layer = Teams.body_layer(Teams.Id.PLAYER)
+	collision_mask = Teams.LAYER_WORLD
+
 	_input.setup(config)
 	_motion.setup(config)
 	_dash.setup(config)
+	_weapon.setup(_weapon.config, Teams.Id.PLAYER)
+
+	# Integrity comes from PlayerConfig rather than the component's own default, so
+	# all player tuning stays in one resource.
+	_health.configure(config.max_integrity, config.damage_invulnerability)
+
 	_dash.dash_started.connect(_on_dash_started)
 	_dash.dash_ended.connect(_on_dash_ended)
+	_weapon.shot_fired.connect(_on_shot_fired)
+	_health.damaged.connect(_on_damaged)
+	_health.died.connect(_on_died)
 
 
 func _physics_process(delta: float) -> void:
+	if _is_dead:
+		return
+
 	_input.poll(delta, global_position, get_global_mouse_position())
 
 	_dash.step(delta)
@@ -43,11 +62,15 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity = _motion.step(velocity, _input.move_vector, delta)
 
-	# move_and_slide with a circular shape slides along walls rather than sticking
-	# to them, which covers spec section 6.6 (never trap the player in geometry).
+	# move_and_slide with a circular shape slides along walls rather than sticking to
+	# them, which covers spec section 6.6 (never trap the player in geometry).
 	move_and_slide()
 
-	_visuals.update_visuals(_input.aim_direction, _dash.is_invulnerable(), delta)
+	_weapon.step(delta)
+	if _input.is_firing():
+		_weapon.try_fire(global_position, _input.aim_direction)
+
+	_visuals.update_visuals(_input.aim_direction, _is_invulnerable(), delta)
 
 
 ## Constrains the camera to a room's bounds so the void outside never shows.
@@ -60,8 +83,12 @@ func set_camera_limits(bounds: Rect2i) -> void:
 	_camera.reset_smoothing()
 
 
-## Read-only component access for the debug overlay. Gameplay systems should
-## prefer signals over reaching in here.
+func get_camera() -> ShakeCamera:
+	return _camera
+
+
+## Read-only component access, used by the HUD and debug overlay. Gameplay systems
+## should prefer signals over reaching in here.
 func get_dash_controller() -> DashController:
 	return _dash
 
@@ -70,9 +97,27 @@ func get_input_component() -> PlayerInput:
 	return _input
 
 
-## Dash follows the held movement direction so it never fights the player's
-## intent; with no movement held it follows the aim, letting a stationary player
-## reposition deliberately (spec section 6.3 and 6.4).
+func get_health_component() -> HealthComponent:
+	return _health
+
+
+func get_weapon_controller() -> WeaponController:
+	return _weapon
+
+
+func is_dead() -> bool:
+	return _is_dead
+
+
+## Either source of immunity flashes the robot, so the player never has to work out
+## which kind of invulnerability they currently have.
+func _is_invulnerable() -> bool:
+	return _dash.is_invulnerable() or _health.is_invulnerable()
+
+
+## Dash follows the held movement direction so it never fights the player's intent;
+## with no movement held it follows the aim, letting a stationary player reposition
+## deliberately (spec section 6.3 and 6.4).
 func _resolve_dash_direction() -> Vector2:
 	if not _input.move_vector.is_zero_approx():
 		return _input.move_vector.normalized()
@@ -85,7 +130,25 @@ func _on_dash_started(direction: Vector2) -> void:
 
 
 func _on_dash_ended() -> void:
-	# Dash speed is far above move_speed; without this the robot coasts out of
-	# every dash and control feels mushy on landing.
+	# Dash speed is far above move_speed; without this the robot coasts out of every
+	# dash and control feels mushy on landing.
 	velocity = velocity.limit_length(config.move_speed)
 	EventBus.player_dash_ended.emit()
+
+
+func _on_shot_fired(muzzle: Vector2, direction: Vector2) -> void:
+	_visuals.play_muzzle_flash()
+	EventBus.shot_fired.emit(Teams.Id.PLAYER, muzzle, direction)
+
+
+func _on_damaged(info: DamageInfo, remaining: float) -> void:
+	EventBus.player_damaged.emit(info, remaining)
+
+
+func _on_died() -> void:
+	_is_dead = true
+	velocity = Vector2.ZERO
+	_input.clear()
+	_visuals.play_death()
+	_camera.clear_shake()
+	EventBus.player_died.emit()

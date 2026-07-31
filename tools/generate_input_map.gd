@@ -44,6 +44,9 @@ func _initialize() -> void:
 		"run_stats": _action([_key(KEY_TAB)], STICK_DEADZONE),
 		"pause": _action([_key(KEY_ESCAPE), _button(JOY_BUTTON_START)], STICK_DEADZONE),
 
+		# Spec section 31.8: losing must immediately permit a new run.
+		"restart": _action([_key(KEY_R), _button(JOY_BUTTON_Y)], STICK_DEADZONE),
+
 		# --- Debug ---
 		"debug_toggle_hud": _action([_key(KEY_F1)], STICK_DEADZONE),
 	}

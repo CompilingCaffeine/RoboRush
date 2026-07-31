@@ -28,15 +28,30 @@ const WALL_THICKNESS := TILE_SIZE
 @onready var _floor: Sprite2D = $Floor
 @onready var _walls: Node2D = $Walls
 @onready var _spawn: Marker2D = $PlayerSpawn
+@onready var _room_combat: RoomCombat = %RoomCombat
+@onready var _enemies: Node2D = %Enemies
 
 
 func _ready() -> void:
 	_rebuild()
+	# @tool makes the wall ring previewable in the editor, but non-tool scripts do not
+	# run there, so RoomCombat is only a plain Node at edit time and has no begin().
+	if Engine.is_editor_hint():
+		return
+	# Safe here and nowhere earlier: Godot readies children before parents, so every
+	# enemy and its HealthComponent is initialised by the time this runs.
+	_room_combat.begin(_enemies)
 
 
 ## Where the player should start the run.
 func get_spawn_position() -> Vector2:
 	return _spawn.global_position
+
+
+## The room's combat tracker, so the HUD and debug overlay can report progress
+## without walking the tree to find it.
+func get_room_combat() -> RoomCombat:
+	return _room_combat
 
 
 ## The rectangle the camera must not scroll past: the interior plus its wall ring,

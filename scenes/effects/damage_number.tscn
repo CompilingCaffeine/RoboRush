@@ -1,0 +1,16 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scenes/effects/damage_number.gd" id="1_number"]
+
+[node name="DamageNumber" type="Node2D"]
+z_index = 20
+script = ExtResource("1_number")
+
+[node name="Label" type="Label" parent="."]
+offset_left = -12.0
+offset_top = -8.0
+offset_right = 12.0
+offset_bottom = 4.0
+theme_override_font_sizes/font_size = 8
+horizontal_alignment = 1
+vertical_alignment = 1
