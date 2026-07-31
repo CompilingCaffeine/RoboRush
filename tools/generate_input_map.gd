@@ -24,16 +24,25 @@ func _initialize() -> void:
 		"move_left": _action([_key(KEY_A), _axis(JOY_AXIS_LEFT_X, -1.0)], STICK_DEADZONE),
 		"move_right": _action([_key(KEY_D), _axis(JOY_AXIS_LEFT_X, 1.0)], STICK_DEADZONE),
 
-		# --- Aiming (right stick only; mouse aim is read from the cursor) ---
-		"aim_up": _action([_axis(JOY_AXIS_RIGHT_Y, -1.0)], STICK_DEADZONE),
-		"aim_down": _action([_axis(JOY_AXIS_RIGHT_Y, 1.0)], STICK_DEADZONE),
-		"aim_left": _action([_axis(JOY_AXIS_RIGHT_X, -1.0)], STICK_DEADZONE),
-		"aim_right": _action([_axis(JOY_AXIS_RIGHT_X, 1.0)], STICK_DEADZONE),
+		# --- Shooting: the direction is also the trigger ---
+		# Arrow keys only. The right stick is bound to aim_stick_* instead, because the
+		# two need different resolution rules: digital keys want most-recently-pressed
+		# to win, an analogue stick wants its raw deflection.
+		"shoot_up": _action([_key(KEY_UP)], STICK_DEADZONE),
+		"shoot_down": _action([_key(KEY_DOWN)], STICK_DEADZONE),
+		"shoot_left": _action([_key(KEY_LEFT)], STICK_DEADZONE),
+		"shoot_right": _action([_key(KEY_RIGHT)], STICK_DEADZONE),
 
-		# --- Combat (unused in milestone 1, declared so scenes can bind early) ---
-		"fire_primary": _action(
-			[_mouse(MOUSE_BUTTON_LEFT), _axis(JOY_AXIS_TRIGGER_RIGHT, 1.0)], TRIGGER_DEADZONE
-		),
+		# Right stick, kept separate so gamepad aiming stays analogue rather than being
+		# quantised to the eight directions a keyboard can express.
+		"aim_stick_up": _action([_axis(JOY_AXIS_RIGHT_Y, -1.0)], STICK_DEADZONE),
+		"aim_stick_down": _action([_axis(JOY_AXIS_RIGHT_Y, 1.0)], STICK_DEADZONE),
+		"aim_stick_left": _action([_axis(JOY_AXIS_RIGHT_X, -1.0)], STICK_DEADZONE),
+		"aim_stick_right": _action([_axis(JOY_AXIS_RIGHT_X, 1.0)], STICK_DEADZONE),
+
+		# No fire button. Spec section 5 maps the right trigger to fire, but once
+		# shooting is directional the direction *is* the trigger, and a separate button
+		# would only be able to fire where the player is already firing.
 		"use_active_item": _action(
 			[_mouse(MOUSE_BUTTON_RIGHT), _axis(JOY_AXIS_TRIGGER_LEFT, 1.0)], TRIGGER_DEADZONE
 		),

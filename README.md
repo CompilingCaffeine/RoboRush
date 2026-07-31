@@ -34,11 +34,10 @@ godot --headless --import
 
 ### Controls
 
-| Action | Keyboard / Mouse | Gamepad |
+| Action | Keyboard | Gamepad |
 | --- | --- | --- |
 | Move | `WASD` | Left stick |
-| Aim | Mouse | Right stick |
-| Fire | Left mouse (hold) | Right trigger |
+| Aim and fire | Arrow keys | Right stick |
 | Dash | `Space` | A / cross |
 | Restart after death | `R` | Y / triangle |
 | Active item | Right mouse | Left trigger |
@@ -46,6 +45,19 @@ godot --headless --import
 | Run statistics | `Tab` | — |
 | Pause | `Escape` | Start |
 | Toggle debug overlay | `F1` | — |
+
+**There is no fire button.** Holding an arrow key points the cannon and fires it;
+release every arrow and the weapon stops. Movement and shooting are fully independent,
+so you can run one way while firing the other. Two perpendicular arrows fire
+diagonally, and pressing the *opposite* arrow reverses fire on the same frame without
+needing the first key released.
+
+This deviates from spec section 5, which maps mouse aim, left-click fire, and a right
+trigger. Directional shooting is the scheme *The Binding of Isaac* uses — the game
+section 1 names as the inspiration — and section 7's "the player should directly aim and
+fire" still holds. Once the direction is the trigger, a separate fire button can only
+fire where the player is already firing, so `fire_primary` was removed rather than left
+as a dead binding.
 
 Active item, interact, run statistics, and pause are bound but not yet wired to
 behaviour — the actions exist so later milestones bind names, never keys.
@@ -147,7 +159,7 @@ scripts/resources/feedback_config.gd    + Shake, flash, damage numbers, hit paus
 scripts/combat/damage_info.gd           + One described damage event
 scripts/combat/projectile_factory.gd    + Builds projectiles; where modifiers will hook
 
-scripts/components/player_input.gd        Named actions -> movement, aim, fire intent
+scripts/components/player_input.gd        Named actions -> movement and directional fire
 scripts/components/motion_controller.gd   Acceleration/deceleration
 scripts/components/dash_controller.gd     Dash window, charges, invulnerability
 scripts/components/player_visuals.gd      Aim, dash squash, flash, muzzle flash, death
@@ -184,6 +196,7 @@ tests/test_runner.tscn / .gd             + Aggregating runner; fails on empty su
 tests/test_case.gd                       + Suite base class
 tests/test_player_movement.gd              28 movement and dash checks
 tests/test_combat.gd                     + 85 data, component, and integration checks
+tests/test_player_input.gd               + 38 arrow-key shooting checks
 
 tools/generate_input_map.gd                Regenerates project.godot's [input]
 tools/generate_placeholder_art.py        + Regenerates placeholder PNGs
@@ -199,7 +212,7 @@ Executed on this machine, not assumed.
 - **`godot --headless --import`** completes with no errors.
 - **Clean boot** (`--quit-after 300` on `main.tscn`) produces zero errors and zero
   warnings on stdout/stderr.
-- **113 checks across 2 suites pass, exit 0**, in 2.9s.
+- **151 checks across 3 suites pass, exit 0**, in 2.9s.
 - **The test suite was mutation-tested.** Changing `ProjectileConfig.spawn_copy()` to
   return `self` — the exact bug that would let one shot permanently spend a weapon's
   bounces — made the run exit 1 with 4 named failures. Reverting restored the pass.
@@ -212,11 +225,17 @@ Executed on this machine, not assumed.
   shot through a near enemy into a far one; a `bounce_count` of 1 sends a shot back past
   its own origin; an enemy-team projectile passed straight through an enemy does zero
   damage; `RoomCombat` reports cleared exactly once.
-- **Full combat loop, driven end to end by synthetic input only** (no reaching past the
-  input layer): 4 Ticket Bots killed, `room_cleared` fired at frame 224, player
-  integrity fell 6 → 3 from enemy fire. Aiming used the analogue gamepad aim actions,
-  which incidentally covered the right-stick path that no controller was available to
-  test.
+- **Full combat loop** — 4 Ticket Bots killed, `room_cleared` fired, player integrity
+  fell from enemy fire. **Partly human-driven:** the automated harness's aim was not
+  good enough to win the fight unaided, so the room clear was completed by hand at the
+  keyboard. The synthetic portion verified input handling, damage, and kills; it did not
+  verify that the room can be cleared without help.
+- **Arrow-key shooting verified live** by recording the heading of every player
+  projectile at spawn (filtered by team, since enemy shots share the container): right
+  arrow fires right; pressing left while right is *still held* reverses fire on the same
+  frame; releasing left resumes the still-held right; releasing every arrow fires
+  nothing at all; two perpendicular arrows fire diagonally. Worst angular error across
+  every phase was 0.0 degrees.
 - **Death and restart**: player died at frame 566 while standing still, HUD banner read
   `SYSTEM FAILURE    PRESS R TO REBOOT`, the robot froze. After
   `GameManager.restart_run()`: integrity 6/6, death flag cleared, 4 enemies respawned,
@@ -258,9 +277,9 @@ Not verified: how it *feels*. That needs your hands on the keyboard.
    cell data is a binary blob and cannot be authored as text outside the editor.
 6. **`Escape`, `Tab`, and `E` do nothing.** No pause state, no run statistics screen,
    nothing to interact with.
-7. **Gamepad buttons are untested** — no controller was available. The analogue
-   right-stick *aim* path is verified (the harness drove it), but the button and
-   trigger bindings are not.
+7. **Gamepad is untested** — no controller was available. The right stick has its own
+   `aim_stick_*` actions so it keeps analogue precision instead of being quantised to
+   the keyboard's eight directions, but nothing on a gamepad has been exercised.
 8. **No game state machine, save system, settings menu, or scrap economy.** Spec
    sections 17, 21, 23, and 24 are later milestones.
 9. **Enemy variety is one type.** Pop Up Drone, Memory Leech, and Firewall Node are

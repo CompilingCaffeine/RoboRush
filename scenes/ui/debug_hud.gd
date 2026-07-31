@@ -24,6 +24,7 @@ const ROWS: Array[String] = [
 	"SPEED",
 	"MOVE IN",
 	"AIM",
+	"SHOOT IN",
 	"DASH",
 	"RECHARGE",
 	"INTEGRITY",
@@ -47,7 +48,7 @@ func _ready() -> void:
 	_style_label(_title, TITLE_COLOR)
 	_style_label(_hint, HINT_COLOR)
 	_title.text = "ROBO RUSH // DIAGNOSTICS"
-	_hint.text = "WASD MOVE   MOUSE AIM+FIRE   SPACE DASH   F1 HIDE"
+	_hint.text = "WASD MOVE   ARROWS SHOOT   SPACE DASH   F1 HIDE"
 
 	for row_name: String in ROWS:
 		_values[row_name] = _add_row(row_name)
@@ -93,7 +94,10 @@ func _refresh() -> void:
 	])
 	_set_value("AIM", "%d deg  %s" % [
 		roundi(rad_to_deg(player_input.aim_direction.angle())),
-		"PAD" if player_input.is_aiming_with_gamepad else "MOUSE",
+		"FIRING" if player_input.is_firing() else "held",
+	])
+	_set_value("SHOOT IN", "%+.2f, %+.2f" % [
+		player_input.shoot_vector.x, player_input.shoot_vector.y,
 	])
 	_set_value("DASH", "%s  %d/%d%s" % [
 		"ACTIVE" if dash.is_dashing else "READY" if dash.can_dash() else "SPENT",

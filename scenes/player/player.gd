@@ -50,7 +50,7 @@ func _physics_process(delta: float) -> void:
 	if _is_dead:
 		return
 
-	_input.poll(delta, global_position, get_global_mouse_position())
+	_input.poll(delta)
 
 	_dash.step(delta)
 	if _input.has_dash_request() and _dash.can_dash():
