@@ -1,0 +1,39 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scenes/rooms/room.gd" id="1_room"]
+[ext_resource type="Texture2D" path="res://art/environments/floor_placeholder.png" id="2_floor_tex"]
+[ext_resource type="Script" path="res://scripts/systems/room_combat.gd" id="3_room_combat"]
+
+[node name="Room" type="Node2D"]
+script = ExtResource("1_room")
+
+[node name="Floor" type="Sprite2D" parent="."]
+unique_name_in_owner = true
+texture_repeat = 2
+z_index = -10
+centered = false
+texture = ExtResource("2_floor_tex")
+region_enabled = true
+region_rect = Rect2(0, 0, 416, 192)
+
+[node name="Walls" type="Node2D" parent="."]
+unique_name_in_owner = true
+
+[node name="Obstacles" type="Node2D" parent="."]
+unique_name_in_owner = true
+
+[node name="Enemies" type="Node2D" parent="."]
+unique_name_in_owner = true
+
+[node name="Bounds" type="Area2D" parent="."]
+unique_name_in_owner = true
+collision_layer = 0
+collision_mask = 2
+monitorable = false
+
+[node name="BoundsShape" type="CollisionShape2D" parent="Bounds"]
+unique_name_in_owner = true
+
+[node name="RoomCombat" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("3_room_combat")

@@ -38,6 +38,7 @@ const BANNER_SECONDS := 2.0
 @onready var _dash_pips: HBoxContainer = %DashPips
 @onready var _weapon_label: Label = %WeaponLabel
 @onready var _banner: Label = %Banner
+@onready var _top_label: Label = %TopLabel
 
 var _player: Player
 var _banner_left := 0.0
@@ -46,7 +47,7 @@ var _pulse_time := 0.0
 
 
 func _ready() -> void:
-	for label: Label in [_integrity_label, _dash_label, _weapon_label]:
+	for label: Label in [_integrity_label, _dash_label, _weapon_label, _top_label]:
 		label.add_theme_font_size_override("font_size", FONT_SIZE)
 		label.add_theme_color_override("font_color", LABEL_COLOR)
 	_banner.add_theme_font_size_override("font_size", FONT_SIZE)
@@ -57,6 +58,11 @@ func _ready() -> void:
 
 	EventBus.room_cleared.connect(_on_room_cleared)
 	EventBus.player_died.connect(_on_player_died)
+	# Scrap and floor progress are pushed rather than polled: unlike integrity they change
+	# rarely, so a signal is both cheaper and easier to reason about than a per-frame read.
+	RunManager.scrap_changed.connect(_on_run_state_changed.unbind(1))
+	RunManager.rooms_cleared_changed.connect(_on_run_state_changed.unbind(1))
+	_refresh_top_label()
 
 
 func bind_player(player: Player) -> void:
@@ -101,6 +107,21 @@ func _update_dash() -> void:
 	for index: int in _dash_pips.get_child_count():
 		var pip := _dash_pips.get_child(index) as ColorRect
 		pip.color = DASH_READY if index < dash.charges_available else DASH_SPENT
+
+
+func _on_run_state_changed() -> void:
+	_refresh_top_label()
+
+
+## Floor name, scrap, and rooms cleared on one line in the bottom-right of the HUD strip.
+##
+## It began at the top-left, over the room's wall tiles, and was unreadable against them —
+## spec section 21 puts legibility above the aesthetic. The strip below the room is the only
+## screen space that is not playable floor, so all persistent readouts live there.
+func _refresh_top_label() -> void:
+	_top_label.text = "%s  //  SCRAP %d  //  ROOMS %d" % [
+		RunManager.floor_name.to_upper(), RunManager.scrap, RunManager.rooms_cleared,
+	]
 
 
 func _update_banner(delta: float) -> void:

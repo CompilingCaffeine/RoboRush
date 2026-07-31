@@ -1,0 +1,24 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scenes/floors/floor_controller.gd" id="1_floor"]
+[ext_resource type="Resource" path="res://data/floors/floor_1_help_desk.tres" id="2_config"]
+[ext_resource type="Script" path="res://scripts/systems/loot_spawner.gd" id="3_loot"]
+
+[node name="Floor" type="Node2D"]
+script = ExtResource("1_floor")
+config = ExtResource("2_config")
+
+[node name="Rooms" type="Node2D" parent="."]
+unique_name_in_owner = true
+
+[node name="Doors" type="Node2D" parent="."]
+unique_name_in_owner = true
+z_index = 1
+
+[node name="LootSpawner" type="Node2D" parent="."]
+unique_name_in_owner = true
+z_index = 2
+script = ExtResource("3_loot")
+
+[node name="Projectiles" type="Node2D" parent="." groups=["projectile_container"]]
+z_index = 5

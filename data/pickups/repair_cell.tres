@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="PickupConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/pickup_config.gd" id="1_pickup"]
+[ext_resource type="Texture2D" path="res://art/ui/repair_cell_placeholder.png" id="2_cell_tex"]
+
+[resource]
+script = ExtResource("1_pickup")
+kind = 1
+amount = 1.0
+texture = ExtResource("2_cell_tex")
+pickup_sound = &"pickup"

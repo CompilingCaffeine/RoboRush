@@ -73,14 +73,23 @@ func _physics_process(delta: float) -> void:
 	_visuals.update_visuals(_input.aim_direction, _is_invulnerable(), delta)
 
 
-## Constrains the camera to a room's bounds so the void outside never shows.
-func set_camera_limits(bounds: Rect2i) -> void:
-	_camera.limit_left = bounds.position.x
-	_camera.limit_top = bounds.position.y
-	_camera.limit_right = bounds.end.x
-	_camera.limit_bottom = bounds.end.y
-	# Smoothing otherwise drifts in from wherever the camera was last frame.
-	_camera.reset_smoothing()
+## Pins the camera to exactly one room's view rectangle.
+##
+## `view` is viewport-sized, which is the trick: camera limits clamp the *view* inside the
+## given region, so a region the same size as the viewport leaves the camera nowhere to move.
+## The result is a fixed frame per room with no code following anything — and screen shake
+## still works, because Camera2D.offset is applied after limits rather than being clamped by
+## them.
+##
+## Pass `snap` on the first frame of a run so the camera starts framed instead of easing in
+## from the origin; leave it false between rooms so the camera pans across the doorway.
+func frame_room(view: Rect2i, snap: bool) -> void:
+	_camera.limit_left = view.position.x
+	_camera.limit_top = view.position.y
+	_camera.limit_right = view.end.x
+	_camera.limit_bottom = view.end.y
+	if snap:
+		_camera.reset_smoothing()
 
 
 func get_camera() -> ShakeCamera:

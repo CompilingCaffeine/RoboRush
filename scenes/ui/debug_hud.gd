@@ -31,6 +31,8 @@ const ROWS: Array[String] = [
 	"WEAPON",
 	"SHOTS",
 	"ENEMIES",
+	"ROOM",
+	"FLOOR",
 ]
 
 @onready var _grid: GridContainer = %Grid
@@ -38,7 +40,7 @@ const ROWS: Array[String] = [
 @onready var _hint: Label = %Hint
 
 var _player: Player
-var _room_combat: RoomCombat
+var _floor: FloorController
 var _values: Dictionary[String, Label] = {}
 var _dash_count := 0
 var _last_dash_direction := Vector2.ZERO
@@ -72,8 +74,8 @@ func bind_player(player: Player) -> void:
 	_player = player
 
 
-func bind_room_combat(room_combat: RoomCombat) -> void:
-	_room_combat = room_combat
+func bind_floor(floor_controller: FloorController) -> void:
+	_floor = floor_controller
 
 
 func _refresh() -> void:
@@ -119,16 +121,37 @@ func _refresh() -> void:
 		weapon.get_shots_fired(), _dash_count,
 		_last_dash_direction.x, _last_dash_direction.y,
 	])
-	_set_value("ENEMIES", _describe_room())
+	_set_value("ENEMIES", _describe_enemies())
+	_set_value("ROOM", _describe_room())
+	_set_value("FLOOR", "%s  seed %d  scrap %d" % [
+		RunManager.floor_name, RunManager.floor_seed, RunManager.scrap,
+	])
+
+
+func _describe_enemies() -> String:
+	var room := _floor.get_current_room() if _floor != null else null
+	if room == null:
+		return "no room"
+	var combat := room.get_room_combat()
+	return "%d/%d alive%s" % [
+		combat.get_alive_count(),
+		combat.get_initial_count(),
+		"  CLEARED" if combat.is_cleared() else "",
+	]
 
 
 func _describe_room() -> String:
-	if _room_combat == null:
-		return "no room"
-	return "%d/%d alive%s" % [
-		_room_combat.get_alive_count(),
-		_room_combat.get_initial_count(),
-		"  CLEARED" if _room_combat.is_cleared() else "",
+	if _floor == null or _floor.layout == null:
+		return "no floor"
+	var room := _floor.get_current_room()
+	if room == null:
+		return "outside"
+	return "#%d %s cell %v  %d/%d visited" % [
+		room.plan.id,
+		RoomTemplate.Type.keys()[room.plan.type],
+		room.plan.cell,
+		_floor.visited.size(),
+		_floor.layout.rooms.size(),
 	]
 
 

@@ -35,6 +35,7 @@ PALETTE = {
     "y": (0xFF, 0xD2, 0x3C, 255),  # player shot
     "Y": (0xFF, 0xF8, 0xE0, 255),  # hot white
     "p": (0xE8, 0xE4, 0xD8, 255),  # paper
+    "g": (0x2E, 0xA0, 0x62, 255),  # repair cell dim
 }
 
 
@@ -154,6 +155,42 @@ SPARK = [
 ]
 
 
+# --- Scrap: a hex nut. Small and bright so a floor full of them still reads.
+SCRAP = [
+    "..oooo..",
+    ".ollllo.",
+    "ollmmllo",
+    "olmoomlo",
+    "olmoomlo",
+    "ollmmllo",
+    ".ollllo.",
+    "..oooo..",
+]
+
+# --- Repair cell: a green power cell. Deliberately the only green pickup, so
+# --- "green means health" needs no explanation.
+REPAIR_CELL = [
+    "..oooo..",
+    ".oooooo.",
+    "oggEEggo",
+    "ogEEEEgo",
+    "ogEEEEgo",
+    "oggEEggo",
+    ".oooooo.",
+    "..oooo..",
+]
+
+
+def door_tile() -> list[str]:
+    """Amber hazard barrier, banded so a 48x32 door reads as one object."""
+    rows = ["o" * 16]
+    for index in range(14):
+        band = "a" if (index // 3) % 2 == 0 else "d"
+        rows.append("o" + band * 14 + "o")
+    rows.append("o" * 16)
+    return rows
+
+
 def wall_tile() -> list[str]:
     rows = ["o" * 16]
     rows.append("o" + "l" * 14 + "o")
@@ -185,6 +222,8 @@ SPRITES = {
     "art/effects/projectile_ticket.png": TICKET_SHOT,
     "art/effects/muzzle_flash.png": MUZZLE_FLASH,
     "art/effects/spark.png": SPARK,
+    "art/ui/scrap_placeholder.png": SCRAP,
+    "art/ui/repair_cell_placeholder.png": REPAIR_CELL,
 }
 
 
@@ -193,6 +232,7 @@ def main() -> int:
     for relative, grid in SPRITES.items():
         write_png(os.path.join(root, relative), grid)
     write_png(os.path.join(root, "art/environments/wall_placeholder.png"), wall_tile())
+    write_png(os.path.join(root, "art/environments/door_placeholder.png"), door_tile())
     write_png(os.path.join(root, "art/environments/floor_placeholder.png"), floor_tile())
     return 0
 

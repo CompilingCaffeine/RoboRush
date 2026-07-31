@@ -11,8 +11,8 @@ extends Node
 ## that actor instead. HealthComponent emits `damaged` locally; the actor decides
 ## whether that is worth telling the world about.
 ##
-## The remaining spec section 14 events (on_pickup_collected, on_room_entered) are
-## added as the systems that emit them are built, not in advance.
+## Spec section 14's event list is now fully represented except for the boss and shop events,
+## which arrive with the systems that emit them.
 
 # --- Player ---
 
@@ -40,6 +40,12 @@ signal projectile_expired(projectile: Node)
 
 signal projectile_bounced(point: Vector2, normal: Vector2)
 
+# --- Pickups ---
+
+## `kind` is a PickupConfig.Kind. Typed as int because GDScript cannot use another script's
+## enum in a signal signature.
+signal pickup_collected(kind: int, amount: float, position: Vector2)
+
 # --- Enemies and rooms ---
 
 signal enemy_damaged(enemy: Node, info: DamageInfo, remaining: float)
@@ -48,3 +54,9 @@ signal enemy_damaged(enemy: Node, info: DamageInfo, remaining: float)
 signal enemy_killed(enemy: Node, position: Vector2)
 
 signal room_cleared()
+
+## `type` is a RoomTemplate.Type. Fires on every entry, including re-entering a cleared room.
+signal room_entered(type: int, room_id: int)
+
+## The current room's doors sealed or opened.
+signal doors_changed(are_locked: bool)

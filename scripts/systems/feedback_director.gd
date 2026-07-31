@@ -26,6 +26,10 @@ const SHAKE_PLAYER_DIED := 0.85
 ## four times a second is what makes an arcade shooter tiring.
 const FIRE_PITCH_VARIATION := 0.12
 const HIT_PITCH_VARIATION := 0.18
+const PICKUP_PITCH_VARIATION := 0.22
+
+## Scrap drops in handfuls, so several blips overlap; this keeps the sum bearable.
+const PICKUP_VOLUME_DB := -6.0
 
 var _shake: ShakeCamera
 
@@ -39,6 +43,8 @@ func _ready() -> void:
 	EventBus.player_died.connect(_on_player_died)
 	EventBus.player_dash_started.connect(_on_player_dash_started)
 	EventBus.room_cleared.connect(_on_room_cleared)
+	EventBus.pickup_collected.connect(_on_pickup_collected)
+	EventBus.doors_changed.connect(_on_doors_changed)
 
 
 ## Wired by main.gd, which owns scene composition.
@@ -110,6 +116,17 @@ func _on_player_dash_started(_direction: Vector2) -> void:
 
 func _on_room_cleared() -> void:
 	AudioManager.play_sfx(&"room_clear")
+
+
+## Scrap is picked up constantly, so its blip is pitch-varied and quieter than the rest —
+## spec section 22 warns against fatiguing effects, and this is the one most likely to become
+## one.
+func _on_pickup_collected(_kind: int, _amount: float, _position: Vector2) -> void:
+	AudioManager.play_sfx(&"pickup", PICKUP_PITCH_VARIATION, PICKUP_VOLUME_DB)
+
+
+func _on_doors_changed(_are_locked: bool) -> void:
+	AudioManager.play_sfx(&"door")
 
 
 func _add_trauma(amount: float) -> void:

@@ -1,0 +1,15 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scenes/rooms/door.gd" id="1_door"]
+
+[node name="Door" type="StaticBody2D"]
+collision_layer = 0
+collision_mask = 0
+script = ExtResource("1_door")
+
+[node name="Sprite" type="Sprite2D" parent="."]
+visible = false
+texture_repeat = 2
+
+[node name="Shape" type="CollisionShape2D" parent="."]
+disabled = true

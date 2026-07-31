@@ -157,6 +157,33 @@ def make_low_integrity(noise: random.Random) -> list[float]:
     return render(0.22, voice)
 
 
+def make_pickup(noise: random.Random) -> list[float]:
+    """Bright two-step blip. Fires often, so it is short and sits high out of the way."""
+    phase = [0.0]
+
+    def voice(_t: float, progress: float) -> float:
+        freq = 880.0 if progress < 0.45 else 1320.0
+        phase[0] += freq / SAMPLE_RATE
+        step_progress = (progress * 2.2) % 1.0
+        return square(phase[0], 0.3) * decay(step_progress, 5.0)
+
+    return render(0.08, voice)
+
+
+def make_door(noise: random.Random) -> list[float]:
+    """Heavy servo thunk: low square slide plus a mechanical noise transient."""
+    phase = [0.0]
+    smoothed = [0.0]
+
+    def voice(_t: float, progress: float) -> float:
+        phase[0] += sweep(150.0, 62.0, progress) / SAMPLE_RATE
+        smoothed[0] += (noise.uniform(-1.0, 1.0) - smoothed[0]) * 0.2
+        clunk = smoothed[0] * 0.5 * decay(progress, 14.0)
+        return (square(phase[0], 0.5) * 0.8 + clunk) * decay(progress, 3.2)
+
+    return render(0.18, voice)
+
+
 SOUNDS = {
     "audio/sfx/fire.wav": (make_fire, 0.22),
     "audio/sfx/enemy_hit.wav": (make_enemy_hit, 0.26),
@@ -165,6 +192,8 @@ SOUNDS = {
     "audio/sfx/dash.wav": (make_dash, 0.18),
     "audio/sfx/room_clear.wav": (make_room_clear, 0.24),
     "audio/sfx/low_integrity.wav": (make_low_integrity, 0.22),
+    "audio/sfx/pickup.wav": (make_pickup, 0.20),
+    "audio/sfx/door.wav": (make_door, 0.26),
 }
 
 
