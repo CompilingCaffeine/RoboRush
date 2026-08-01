@@ -37,10 +37,19 @@ func _test_config_has_content() -> void:
 	check(not _config.start_templates.is_empty(), "the floor has a start template")
 	check(not _config.combat_templates.is_empty(), "the floor has combat templates")
 	check(not _config.treasure_templates.is_empty(), "the floor has a treasure template")
+	check(not _config.shop_templates.is_empty(), "the floor has a shop template")
+	check(not _config.boss_templates.is_empty(), "the floor has a boss template")
+	check(_config.shop != null, "the floor has shop prices")
+	# Spec section 28: milestone 5 asks for eight to twelve rooms.
+	check(
+		_config.room_count >= 8 and _config.room_count <= 12,
+		"the floor is eight to twelve rooms (is %d)" % _config.room_count,
+	)
 	check(not _config.enemy_spawns.is_empty(), "the floor has an enemy roster")
 
 	for type: RoomTemplate.Type in [
-		RoomTemplate.Type.START, RoomTemplate.Type.COMBAT, RoomTemplate.Type.TREASURE
+		RoomTemplate.Type.START, RoomTemplate.Type.COMBAT, RoomTemplate.Type.TREASURE,
+		RoomTemplate.Type.SHOP, RoomTemplate.Type.BOSS,
 	]:
 		check(
 			not _config.templates_for(type).is_empty(),
@@ -69,8 +78,9 @@ func _test_generation_is_deterministic() -> void:
 ## The four requirements from spec section 9, swept across many seeds.
 func _test_invariants_across_seeds() -> void:
 	var failures := PackedStringArray()
-	var dead_end_treasures := 0
+	var dead_end_specials := 0
 	var multi_door_rooms := 0
+	var boss_is_farthest := 0
 
 	for offset: int in SEED_COUNT:
 		var seed_value := 1000 + offset * 37
@@ -95,26 +105,45 @@ func _test_invariants_across_seeds() -> void:
 				failures.append("seed %d put two rooms in cell %v" % [seed_value, room.cell])
 			cells[room.cell] = true
 
-		# Exactly one start, exactly one treasure.
+		# Exactly one of every special room.
 		var starts := layout.find_by_type(RoomTemplate.Type.START)
-		var treasures := layout.find_by_type(RoomTemplate.Type.TREASURE)
 		if starts.size() != 1:
 			failures.append("seed %d produced %d start rooms" % [seed_value, starts.size()])
-		if treasures.size() != 1:
-			failures.append("seed %d produced %d treasure rooms" % [seed_value, treasures.size()])
 
-		if treasures.size() == 1:
-			var treasure: RoomPlan = treasures[0]
-			# 9.2: the treasure room must not block progression. A dead end cannot be on the
-			# route to anywhere, so degree 1 is a sufficient guarantee.
-			if treasure.get_degree() != 1:
-				failures.append("seed %d gave the treasure room %d doors" % [
-					seed_value, treasure.get_degree(),
+		# 9.2 generalised: none of the three special rooms may block progression, and a dead
+		# end cannot be on the route to anywhere, so degree 1 is a sufficient guarantee.
+		for type: RoomTemplate.Type in [
+			RoomTemplate.Type.TREASURE, RoomTemplate.Type.SHOP, RoomTemplate.Type.BOSS
+		]:
+			var label: String = RoomTemplate.Type.keys()[type]
+			var found := layout.find_by_type(type)
+			if found.size() != 1:
+				failures.append("seed %d produced %d %s rooms" % [seed_value, found.size(), label])
+				continue
+
+			var special: RoomPlan = found[0]
+			if special.get_degree() != 1:
+				failures.append("seed %d gave the %s room %d doors" % [
+					seed_value, label, special.get_degree(),
 				])
 			else:
-				dead_end_treasures += 1
-			if _removing_room_disconnects_floor(layout, treasure):
-				failures.append("seed %d routes progression through the treasure room" % seed_value)
+				dead_end_specials += 1
+			if _removing_room_disconnects_floor(layout, special):
+				failures.append("seed %d routes progression through the %s room" % [
+					seed_value, label,
+				])
+
+		# The boss is the end of the floor, so it must be the furthest thing from the door
+		# the player came in through — not something they stumble into on the way past.
+		var bosses := layout.find_by_type(RoomTemplate.Type.BOSS)
+		if bosses.size() == 1:
+			var distances := layout.distances_from(layout.get_start_room())
+			var boss_distance: int = distances.get(bosses[0].id, -1)
+			var furthest := 0
+			for room: RoomPlan in layout.rooms:
+				furthest = maxi(furthest, distances.get(room.id, 0))
+			if boss_distance >= furthest:
+				boss_is_farthest += 1
 
 		# Every door must be symmetric, or a player could walk somewhere they cannot leave.
 		for room: RoomPlan in layout.rooms:
@@ -140,7 +169,16 @@ func _test_invariants_across_seeds() -> void:
 	for failure: String in failures.slice(0, 6):
 		fail(failure)
 
-	check(dead_end_treasures == SEED_COUNT, "every seed's treasure room is a dead end")
+	check(
+		dead_end_specials == SEED_COUNT * 3,
+		"every seed's treasure, shop, and boss rooms are all dead ends",
+	)
+	check(
+		boss_is_farthest == SEED_COUNT,
+		"the boss room is always the furthest room from the start (%d of %d seeds)" % [
+			boss_is_farthest, SEED_COUNT,
+		],
+	)
 	# Guards against the generator degenerating into a single corridor, which would satisfy
 	# every requirement above and still be dull.
 	check(multi_door_rooms > SEED_COUNT, "floors branch rather than forming one chain")

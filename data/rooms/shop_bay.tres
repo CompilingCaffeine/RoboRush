@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="1_template"]
+
+[resource]
+script = ExtResource("1_template")
+id = &"shop_bay"
+type = 4
+obstacles = Array[Rect2i]([Rect2i(2, 2, 1, 1), Rect2i(23, 2, 1, 1), Rect2i(2, 9, 1, 1), Rect2i(23, 9, 1, 1)])
+enemy_spawns = Array[Vector2i]([])
+reward_spawn = Vector2i(13, 9)
+shop_stands = Array[Vector2i]([Vector2i(7, 4), Vector2i(13, 4), Vector2i(19, 4), Vector2i(13, 8)])
+difficulty = 0
+floor_tags = Array[StringName]([&"help_desk"])
+min_floor = 1
+max_floor = 6

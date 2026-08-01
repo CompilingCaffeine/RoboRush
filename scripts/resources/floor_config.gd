@@ -21,6 +21,8 @@ extends Resource
 @export var start_templates: Array[RoomTemplate] = []
 @export var combat_templates: Array[RoomTemplate] = []
 @export var treasure_templates: Array[RoomTemplate] = []
+@export var shop_templates: Array[RoomTemplate] = []
+@export var boss_templates: Array[RoomTemplate] = []
 
 @export_group("Population")
 
@@ -35,6 +37,12 @@ extends Resource
 
 ## Scrap dropped by each enemy killed.
 @export var enemy_scrap_range := Vector2i(1, 2)
+
+@export_group("Shop")
+
+## Spec section 17's prices. Shared across floors, so this points at one resource rather
+## than restating the numbers.
+@export var shop: ShopConfig
 
 @export_group("Items")
 
@@ -86,6 +94,10 @@ func templates_for(type: RoomTemplate.Type) -> Array[RoomTemplate]:
 			pool = start_templates
 		RoomTemplate.Type.TREASURE:
 			pool = treasure_templates
+		RoomTemplate.Type.SHOP:
+			pool = shop_templates
+		RoomTemplate.Type.BOSS:
+			pool = boss_templates
 		_:
 			pool = combat_templates
 

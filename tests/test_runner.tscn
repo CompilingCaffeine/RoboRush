@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://tests/test_runner.gd" id="1_runner"]
 [ext_resource type="Script" path="res://tests/test_player_movement.gd" id="2_movement"]
@@ -8,6 +8,7 @@
 [ext_resource type="Script" path="res://tests/test_items.gd" id="6_items"]
 [ext_resource type="Script" path="res://tests/test_enemies.gd" id="7_enemies"]
 [ext_resource type="Script" path="res://tests/test_run.gd" id="8_run"]
+[ext_resource type="Script" path="res://tests/test_shop.gd" id="9_shop"]
 
 [node name="TestRunner" type="Node"]
 script = ExtResource("1_runner")
@@ -32,3 +33,6 @@ script = ExtResource("7_enemies")
 
 [node name="Run" type="Node" parent="."]
 script = ExtResource("8_run")
+
+[node name="Shop" type="Node" parent="."]
+script = ExtResource("9_shop")

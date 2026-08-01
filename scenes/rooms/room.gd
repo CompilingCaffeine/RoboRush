@@ -117,6 +117,16 @@ func get_interior_rect() -> Rect2:
 	return Rect2(global_position, Vector2(INTERIOR_SIZE))
 
 
+## Where this room's shop stands go, in global coordinates. Empty for anything but a shop.
+func get_shop_positions() -> Array[Vector2]:
+	var positions: Array[Vector2] = []
+	if plan.template == null:
+		return positions
+	for tile: Vector2i in plan.template.shop_stands:
+		positions.append(to_global(_tile_centre(tile)))
+	return positions
+
+
 ## Where a room-clear reward or treasure appears.
 func get_reward_position() -> Vector2:
 	if plan.template == null:

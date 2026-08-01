@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="FloorConfig" load_steps=24 format=3]
+[gd_resource type="Resource" script_class="FloorConfig" load_steps=27 format=3]
 
 [ext_resource type="Script" path="res://scripts/resources/floor_config.gd" id="1_floor"]
 [ext_resource type="Resource" path="res://data/rooms/start_bay.tres" id="2_start"]
@@ -7,6 +7,9 @@
 [ext_resource type="Resource" path="res://data/rooms/combat_lanes.tres" id="5_lanes"]
 [ext_resource type="Resource" path="res://data/rooms/combat_ring.tres" id="6_ring"]
 [ext_resource type="Resource" path="res://data/rooms/treasure_vault.tres" id="7_treasure"]
+[ext_resource type="Resource" path="res://data/rooms/shop_bay.tres" id="21_shop"]
+[ext_resource type="Resource" path="res://data/rooms/boss_arena.tres" id="22_boss"]
+[ext_resource type="Resource" path="res://data/settings/shop_config.tres" id="23_shop_cfg"]
 [ext_resource type="Resource" path="res://data/spawns/ticket_bot.tres" id="8_ticket_bot"]
 [ext_resource type="Resource" path="res://data/spawns/pop_up_drone.tres" id="8_pop_up_drone"]
 [ext_resource type="Resource" path="res://data/spawns/memory_leech.tres" id="8_memory_leech"]
@@ -29,13 +32,16 @@ script = ExtResource("1_floor")
 display_name = "Help Desk"
 floor_number = 1
 floor_tags = Array[StringName]([&"help_desk"])
-room_count = 7
+room_count = 10
 start_templates = Array[RoomTemplate]([ExtResource("2_start")])
 combat_templates = Array[RoomTemplate]([ExtResource("3_open"), ExtResource("4_pillars"), ExtResource("5_lanes"), ExtResource("6_ring")])
 treasure_templates = Array[RoomTemplate]([ExtResource("7_treasure")])
+shop_templates = Array[RoomTemplate]([ExtResource("21_shop")])
+boss_templates = Array[RoomTemplate]([ExtResource("22_boss")])
 enemy_spawns = Array[EnemySpawn]([ExtResource("8_ticket_bot"), ExtResource("8_pop_up_drone"), ExtResource("8_memory_leech"), ExtResource("8_firewall_node")])
-clear_scrap_range = Vector2i(2, 4)
-enemy_scrap_range = Vector2i(1, 2)
+clear_scrap_range = Vector2i(1, 3)
+enemy_scrap_range = Vector2i(0, 2)
 item_pool = Array[ItemConfig]([ExtResource("9_ricochet_driver"), ExtResource("10_fork_bomb"), ExtResource("11_magnetic_guidance"), ExtResource("12_return_protocol"), ExtResource("13_capacitor_leak"), ExtResource("14_volatile_kernel"), ExtResource("15_cooling_fan"), ExtResource("16_reinforced_chassis"), ExtResource("17_backup_battery"), ExtResource("18_unsafe_overclock"), ExtResource("19_scrap_magnet"), ExtResource("20_debug_drone")])
 item_clear_indices = Array[int]([1, 3, 5])
+shop = ExtResource("23_shop_cfg")
 treasure_grants_item = true

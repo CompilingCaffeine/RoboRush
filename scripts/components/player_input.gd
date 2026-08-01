@@ -49,6 +49,10 @@ var aim_direction := Vector2.RIGHT
 var _config: PlayerConfig
 var _dash_buffer_left := 0.0
 
+## Buffered the same way a dash is, and for the same reason: the player presses E as they
+## arrive at a shop stand, not once they have finished arriving.
+var _interact_buffer_left := 0.0
+
 ## Arrow actions currently held, oldest first. Order is what makes the newest press win.
 var _held_shoot_actions: Array[StringName] = []
 
@@ -76,6 +80,10 @@ func poll(delta: float) -> void:
 	if Input.is_action_just_pressed("dash"):
 		_dash_buffer_left = _config.dash_input_buffer
 
+	_interact_buffer_left = maxf(_interact_buffer_left - delta, 0.0)
+	if Input.is_action_just_pressed("interact"):
+		_interact_buffer_left = _config.dash_input_buffer
+
 
 ## Firing is exactly "a shoot direction is held". There is no separate fire button, so
 ## releasing every arrow stops the weapon on the next frame.
@@ -94,6 +102,17 @@ func consume_dash_request() -> void:
 	_dash_buffer_left = 0.0
 
 
+## True while a recent interact press is still waiting to be honoured.
+func has_interact_request() -> bool:
+	return _interact_buffer_left > 0.0
+
+
+## Clears the queued press. Called whether or not there was anything to interact with, so
+## a press aimed at nothing cannot buy the next thing the player walks past.
+func consume_interact_request() -> void:
+	_interact_buffer_left = 0.0
+
+
 ## Drops any queued intent. Used on death so a buffered dash cannot fire from a corpse
 ## and a held arrow key cannot keep shooting.
 func clear() -> void:
@@ -102,6 +121,7 @@ func clear() -> void:
 	_held_shoot_actions.clear()
 	_previously_held.clear()
 	_dash_buffer_left = 0.0
+	_interact_buffer_left = 0.0
 
 
 ## Maintains the held-arrow list in press order: a newly pressed arrow is moved to the

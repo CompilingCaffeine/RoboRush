@@ -14,6 +14,11 @@ extends CharacterBody2D
 
 const DRONE_SCENE := preload("res://scenes/player/player_drone.tscn")
 
+## How close the robot must be to use something. Generous: the frustration of a shop stand
+## that will not take your money is worse than the risk of buying the wrong one, and the
+## stands are far enough apart that the nearest is never ambiguous.
+const INTERACT_RANGE := 26.0
+
 @export var config: PlayerConfig
 
 @onready var _input: PlayerInput = %Input
@@ -82,6 +87,10 @@ func _physics_process(delta: float) -> void:
 	_weapon.step(delta)
 	if _input.is_firing():
 		_weapon.try_fire(global_position, _input.aim_direction)
+
+	if _input.has_interact_request():
+		_input.consume_interact_request()
+		use_nearest_interactable()
 
 	_visuals.update_visuals(_input.aim_direction, _is_invulnerable(), delta)
 
@@ -182,6 +191,27 @@ func _on_item_added(item: ItemConfig) -> void:
 		_visuals.set_accent(item.accent_color)
 
 	EventBus.item_collected.emit(item)
+
+
+## Uses the closest thing in reach, if anything is in reach at all.
+##
+## The robot goes looking rather than being told, so a shop stand is a plain object in a
+## group with an `interact` method and nothing has to register itself with the player. The
+## press is consumed either way: a press aimed at nothing must not buy the next thing the
+## player walks past.
+func use_nearest_interactable() -> bool:
+	var best: Node = null
+	var best_distance := INTERACT_RANGE
+	for node: Node in get_tree().get_nodes_in_group(ShopStand.GROUP):
+		var target := node as Node2D
+		if target == null or not target.has_method(&"interact"):
+			continue
+		var distance := target.global_position.distance_to(global_position)
+		if distance <= best_distance:
+			best_distance = distance
+			best = target
+
+	return best != null and best.call(&"interact", self)
 
 
 ## Either source of immunity flashes the robot, so the player never has to work out

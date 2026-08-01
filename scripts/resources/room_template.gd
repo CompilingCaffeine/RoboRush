@@ -45,6 +45,10 @@ enum Type {
 ## Where a room-clear reward or treasure appears, in tile coordinates.
 @export var reward_spawn := Vector2i(13, 6)
 
+## Where shop stands go, in tile coordinates. Only read for SHOP rooms. How many there are
+## is the shop's size: the first few sell items, then a repair stand, then a reroll stand.
+@export var shop_stands: Array[Vector2i] = []
+
 @export_group("Selection")
 
 ## Rough difficulty, for weighting which rooms appear on which floor.

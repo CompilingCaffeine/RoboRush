@@ -209,6 +209,27 @@ PLAYER_DRONE = [
     "........",
 ]
 
+# --- Shop stand: a lit pedestal with a display plate. Amber like every other "you may
+# --- act here" cue in the game.
+SHOP_STAND = [
+    "................",
+    "................",
+    "................",
+    "....oooooooo....",
+    "...oaaaaaaaao...",
+    "...oaddddddao...",
+    "...oaaaaaaaao...",
+    "....oooooooo....",
+    ".....oddddo.....",
+    ".....odmmdo.....",
+    ".....odmmdo.....",
+    "....oddmmddo....",
+    "...ollllllllo...",
+    "...oooooooooo...",
+    "................",
+    "................",
+]
+
 # --- Player projectile: hot rivet.
 RIVET = [
     ".oooo.",
@@ -454,6 +475,7 @@ SPRITES = {
     "art/enemies/firewall_node_placeholder.png": FIREWALL_NODE,
     "art/effects/projectile_drone.png": DRONE_SHOT,
     "art/characters/player_drone_placeholder.png": PLAYER_DRONE,
+    "art/environments/shop_stand_placeholder.png": SHOP_STAND,
     "art/effects/projectile_rivet.png": RIVET,
     "art/effects/projectile_ticket.png": TICKET_SHOT,
     "art/effects/muzzle_flash.png": MUZZLE_FLASH,

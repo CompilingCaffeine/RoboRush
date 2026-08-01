@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="1_template"]
+
+[resource]
+script = ExtResource("1_template")
+id = &"boss_arena"
+type = 6
+obstacles = Array[Rect2i]([])
+enemy_spawns = Array[Vector2i]([])
+reward_spawn = Vector2i(13, 9)
+difficulty = 4
+floor_tags = Array[StringName]([&"help_desk"])
+min_floor = 1
+max_floor = 1

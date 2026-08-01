@@ -17,6 +17,7 @@ signal room_entered(plan: RoomPlan)
 
 const ROOM_SCENE := preload("res://scenes/rooms/room.tscn")
 const DOOR_SCENE := preload("res://scenes/rooms/door.tscn")
+const SHOP_ROOM_SCENE := preload("res://scenes/shop/shop_room.tscn")
 
 ## How far below the top of the screen a room's outer wall sits. The remaining space at the
 ## bottom is the HUD strip, so the HUD never covers playable floor.
@@ -110,6 +111,19 @@ func _instantiate_rooms() -> void:
 		room.player_entered.connect(_on_player_entered_room)
 		room.get_room_combat().cleared.connect(_on_room_cleared.bind(plan.id))
 		_rooms[plan.id] = room
+
+
+## Builds the shop's stands. Stocked at floor build time rather than on entry, so the
+## items it holds are drawn from the pool before any room reward can take them — a shop
+## whose stock depended on when the player happened to walk in would be a shop that got
+## worse the longer they explored.
+func _stock_shop(room: Room) -> void:
+	var positions := room.get_shop_positions()
+	if config.shop == null or positions.is_empty():
+		return
+	var shop: ShopRoom = SHOP_ROOM_SCENE.instantiate()
+	room.add_child(shop)
+	shop.stock(config.shop, config.item_pool, positions, _rng.randi())
 
 
 ## One door per link, filling the passage between two rooms. Each link is visited once — the

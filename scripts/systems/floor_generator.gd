@@ -14,17 +14,35 @@ extends RefCounted
 ##    to a single existing room, which makes it a dead end. A dead end can never be a
 ##    cut vertex, so no path to anything else can run through it.
 ##
+## The shop and the boss room are attached the same way and for the same reason: three
+## special rooms, all dead ends, none of them on the route to anything. The boss takes the
+## cell furthest from the start, because the end of a floor should be somewhere the player
+## walked *to* rather than somewhere they passed on the way.
+##
 ## Generation is seeded and deterministic: the same seed always produces the same floor,
 ## which is what makes the layout testable at all.
 
 const MAX_PLACEMENT_ATTEMPTS := 400
 
 
+## The special rooms every floor gets exactly one of, in the order they are attached. The
+## boss goes first so it can claim the furthest cell before the others take it.
+const SPECIAL_TYPES: Array[RoomTemplate.Type] = [
+	RoomTemplate.Type.BOSS,
+	RoomTemplate.Type.TREASURE,
+	RoomTemplate.Type.SHOP,
+]
+
+
 ## Returns null and pushes an error if the config cannot produce a valid floor, rather than
 ## handing back a half-built layout.
 static func generate(config: FloorConfig, seed_value: int) -> FloorLayout:
-	if config.room_count < 2:
-		push_error("FloorGenerator: room_count must be at least 2 (a start and a treasure).")
+	var minimum := SPECIAL_TYPES.size() + 1
+	if config.room_count < minimum:
+		push_error(
+			"FloorGenerator: room_count must be at least %d (a start, a boss, a treasure, and a shop)."
+			% minimum
+		)
 		return null
 
 	var rng := RandomNumberGenerator.new()
@@ -35,15 +53,19 @@ static func generate(config: FloorConfig, seed_value: int) -> FloorLayout:
 
 	layout.add_room(Vector2i.ZERO, RoomTemplate.Type.START)
 
-	# Grow combat rooms, leaving one slot for the treasure room added afterwards.
-	var combat_target := config.room_count - 1
+	# Grow combat rooms, leaving a slot for each special room attached afterwards.
+	var combat_target := config.room_count - SPECIAL_TYPES.size()
 	if not _grow(layout, combat_target, rng):
 		push_error("FloorGenerator: ran out of room to place %d rooms." % combat_target)
 		return null
 
-	if not _attach_treasure(layout, rng):
-		push_error("FloorGenerator: could not attach a treasure room.")
-		return null
+	for type: RoomTemplate.Type in SPECIAL_TYPES:
+		# Only the boss insists on the furthest cell. Letting the treasure and the shop take
+		# whichever dead end is going keeps them from always landing in the same corner.
+		var farthest := type == RoomTemplate.Type.BOSS
+		if not _attach_dead_end(layout, type, rng, farthest):
+			push_error("FloorGenerator: could not attach a %s room." % RoomTemplate.Type.keys()[type])
+			return null
 
 	if not _assign_templates(layout, config, rng):
 		return null
@@ -88,17 +110,30 @@ static func _grow(layout: FloorLayout, target_count: int, rng: RandomNumberGener
 	return true
 
 
-## The treasure room goes as far from the start as possible, attached to exactly one room so
-## it is a guaranteed dead end. Extra adjacent links are deliberately NOT added here — that
-## is the whole point, and adding them could put a route through the treasure.
-static func _attach_treasure(layout: FloorLayout, rng: RandomNumberGenerator) -> bool:
+## Attaches one room of `type` to exactly one existing room, which makes it a guaranteed
+## dead end. Extra adjacent links are deliberately NOT added here — that is the whole point,
+## and adding them could put a route to somewhere else through a special room.
+##
+## `farthest` picks the anchor furthest from the start; otherwise any room with a free
+## neighbouring cell will do. Combat rooms are preferred as anchors either way, so the
+## special rooms hang off the floor rather than off each other — a shop reachable only
+## through the treasure vault is a worse floor than one where both are their own detour.
+static func _attach_dead_end(
+	layout: FloorLayout, type: RoomTemplate.Type, rng: RandomNumberGenerator, farthest: bool
+) -> bool:
 	var distances := layout.distances_from(layout.get_start_room())
 
 	var candidates: Array[RoomPlan] = []
 	var best_distance := -1
 	for room: RoomPlan in layout.rooms:
+		if room.type != RoomTemplate.Type.COMBAT and room.type != RoomTemplate.Type.START:
+			continue
 		if _free_neighbour_cells(layout, room).is_empty():
 			continue
+		if not farthest:
+			candidates.append(room)
+			continue
+
 		var distance: int = distances.get(room.id, -1)
 		if distance > best_distance:
 			best_distance = distance
@@ -112,8 +147,8 @@ static func _attach_treasure(layout: FloorLayout, rng: RandomNumberGenerator) ->
 	var anchor: RoomPlan = candidates[rng.randi_range(0, candidates.size() - 1)]
 	var free := _free_neighbour_cells(layout, anchor)
 	var cell: Vector2i = free[rng.randi_range(0, free.size() - 1)]
-	var treasure := layout.add_room(cell, RoomTemplate.Type.TREASURE)
-	layout.link(anchor, treasure)
+	var room := layout.add_room(cell, type)
+	layout.link(anchor, room)
 	return true
 
 
