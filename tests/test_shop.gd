@@ -41,6 +41,7 @@ func run() -> void:
 	await _test_reroll_replaces_unsold_stock()
 	await _test_the_player_uses_the_nearest_stand()
 	await _test_a_floor_cannot_afford_the_whole_shop()
+	await _test_stands_land_where_they_were_asked_to()
 
 
 # --- Prices -------------------------------------------------------------------
@@ -247,6 +248,42 @@ func _typical_floor_scrap() -> int:
 	var from_enemies := float(combat_rooms) * enemies_per_room * enemy_average
 	var from_treasure := clear_average + 2.0
 	return int(from_clears + from_enemies + from_treasure)
+
+
+## Shops live under a room that is itself offset onto the floor grid, so a stand positioned
+## in local space when global was meant lands somewhere else entirely — outside the room,
+## in practice. Checked with the shop deliberately off the origin, because at the origin
+## local and global agree and the mistake is invisible.
+func _test_stands_land_where_they_were_asked_to() -> void:
+	RunManager.begin_run(777)
+	_arena = Node2D.new()
+	add_child(_arena)
+
+	var holder := Node2D.new()
+	holder.position = Vector2(1408.0, 704.0)
+	_arena.add_child(holder)
+
+	_shop = SHOP_ROOM_SCENE.instantiate()
+	holder.add_child(_shop)
+
+	var wanted: Array[Vector2] = [
+		holder.global_position + Vector2(30.0, 20.0),
+		holder.global_position + Vector2(90.0, 20.0),
+		holder.global_position + Vector2(150.0, 20.0),
+	]
+	_shop.stock(_shop_config, _floor_config.item_pool, wanted, 99)
+	await advance_physics(2)
+
+	var stands := _shop.get_stands()
+	check(stands.size() == wanted.size(), "a stand per requested position")
+	for index: int in mini(stands.size(), wanted.size()):
+		check(
+			stands[index].global_position.is_equal_approx(wanted[index]),
+			"stand %d stands where it was put (at %v, wanted %v)" % [
+				index, stands[index].global_position, wanted[index],
+			],
+		)
+	await _teardown()
 
 
 # --- Fixtures -----------------------------------------------------------------

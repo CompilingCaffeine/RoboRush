@@ -28,7 +28,8 @@ var _pool: Array[ItemConfig] = []
 var _rerolls_used := 0
 
 
-## Builds the shop. `positions` are local to this node's parent room.
+## Builds the shop. `positions` are in *global* space, because that is what a Room reports
+## and because this node sits under a room that is itself offset onto the floor grid.
 func stock(
 	shop_config: ShopConfig,
 	item_pool: Array[ItemConfig],
@@ -44,9 +45,10 @@ func stock(
 
 	for index: int in positions.size():
 		var stand: ShopStand = STAND_SCENE.instantiate()
-		stand.position = positions[index]
 		stand.shop = self
 		add_child(stand)
+		# After add_child: global_position is meaningless until the node is in the tree.
+		stand.global_position = positions[index]
 		_stands.append(stand)
 		_assign_kind(stand, index)
 
@@ -66,9 +68,9 @@ func stock_choice(
 
 	for index: int in mini(items.size(), positions.size()):
 		var stand: ShopStand = STAND_SCENE.instantiate()
-		stand.position = positions[index]
 		stand.shop = self
 		add_child(stand)
+		stand.global_position = positions[index]
 		_stands.append(stand)
 		stand.stock_item(items[index], 0)
 

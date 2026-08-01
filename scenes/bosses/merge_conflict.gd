@@ -355,8 +355,11 @@ func _mirror_of(point: Vector2) -> Vector2:
 
 func _spawn_part(at: Vector2, tint: Color) -> BossPart:
 	var part: BossPart = PART_SCENE.instantiate()
-	part.global_position = at
 	add_child(part)
+	# After add_child, always. `global_position` on a node with no parent is just its local
+	# position, so setting it first lands the part at that offset *from this controller* —
+	# which is itself offset onto the floor grid, putting the boss outside its own arena.
+	part.global_position = at
 	part.set_tint(tint)
 	part.took_damage.connect(_on_part_damaged)
 	return part
@@ -373,8 +376,8 @@ func _spawn_terminals() -> void:
 	]
 	for index: int in mini(config.terminal_count, corners.size()):
 		var terminal: BossTerminal = TERMINAL_SCENE.instantiate()
-		terminal.global_position = corners[index]
 		add_child(terminal)
+		terminal.global_position = corners[index]
 		terminal.configure(config.terminal_health)
 		terminal.destroyed.connect(_on_terminal_destroyed)
 		_terminals.append(terminal)

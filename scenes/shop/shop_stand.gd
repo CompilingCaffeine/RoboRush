@@ -96,13 +96,17 @@ func _buy_item(player: Player) -> bool:
 	var inventory := player.get_item_inventory()
 	if item == null or inventory == null or inventory.has(item.id):
 		return false
-	if not RunManager.try_spend_scrap(price):
+	# A free stand takes no payment. `try_spend_scrap` refuses a zero charge — correctly,
+	# since spending nothing is not a transaction — so the boss reward would have been
+	# unclaimable if the purchase were gated on it.
+	if price > 0 and not RunManager.try_spend_scrap(price):
 		return false
 
 	# Spent first, then handed over: a failed add after a successful spend would take the
 	# player's scrap and give them nothing.
 	if not inventory.add(item):
-		RunManager.add_scrap(price)
+		if price > 0:
+			RunManager.add_scrap(price)
 		return false
 
 	is_sold = true

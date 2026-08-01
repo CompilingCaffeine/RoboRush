@@ -117,6 +117,8 @@ func _instantiate_rooms() -> void:
 		room.build(plan)
 		if plan.type == RoomTemplate.Type.COMBAT:
 			room.populate(config, _rng)
+		elif plan.type == RoomTemplate.Type.SHOP:
+			_stock_shop(room)
 		room.set_active(false)
 		room.player_entered.connect(_on_player_entered_room)
 		room.get_room_combat().cleared.connect(_on_room_cleared.bind(plan.id))
@@ -218,7 +220,10 @@ func _needs_clearing(id: int) -> bool:
 	if is_room_cleared(id):
 		return false
 	if _rooms[id].plan.type == RoomTemplate.Type.BOSS:
-		return _boss != null and is_instance_valid(_boss)
+		# Not "is the boss alive": the boss is added a frame late (see below), and a boss
+		# room whose doors stayed open for that frame is a boss room the player can walk
+		# straight back out of. A boss room is sealed until it is cleared, full stop.
+		return true
 	return _rooms[id].has_living_enemies()
 
 
@@ -227,9 +232,18 @@ func _needs_clearing(id: int) -> bool:
 ## room it is in.
 func _spawn_boss(room: Room) -> void:
 	_boss = BOSS_SCENE.instantiate()
+	EventBus.boss_defeated.connect(_on_boss_defeated.bind(room))
+	# Deferred, for the fourth time in this project and the same reason every time: rooms
+	# are entered through an Area2D trigger, and registering the boss's collision bodies
+	# while the physics server is flushing queries is refused outright.
+	_add_boss.call_deferred(room)
+
+
+func _add_boss(room: Room) -> void:
+	if not is_instance_valid(_boss) or not is_instance_valid(room):
+		return
 	room.add_child(_boss)
 	_boss.begin(room.get_interior_rect())
-	EventBus.boss_defeated.connect(_on_boss_defeated.bind(room))
 
 
 ## Spec section 16's reward: three rare items on stands, and taking one closes the others.

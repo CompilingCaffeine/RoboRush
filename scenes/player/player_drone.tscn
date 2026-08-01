@@ -9,10 +9,8 @@
 script = ExtResource("1_drone")
 
 [node name="Sprite" type="Sprite2D" parent="."]
-unique_name_in_owner = true
 texture = ExtResource("2_tex")
 
 [node name="Weapon" type="Node" parent="."]
-unique_name_in_owner = true
 script = ExtResource("3_weapon")
 config = ExtResource("4_blaster")

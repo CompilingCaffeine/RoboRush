@@ -37,6 +37,7 @@ func run() -> void:
 	await _test_the_fight_ends_once()
 	await _test_the_boss_actually_attacks()
 	await _test_health_is_announced()
+	await _test_the_boss_fights_inside_its_arena()
 
 
 func _test_config_matches_the_spec() -> void:
@@ -198,6 +199,54 @@ func _test_health_is_announced() -> void:
 	check(ratios[ratios.size() - 1] < 1.0, "and the announced ratio has gone down")
 
 	EventBus.boss_health_changed.disconnect(handler)
+	await _teardown()
+
+
+## The boss is a child of the room it fights in, and that room is offset onto the floor
+## grid. A body positioned in local space when global was meant fights outside its own
+## arena, with its terminals somewhere in the wall. Checked with the controller off the
+## origin, because at the origin the mistake is invisible.
+func _test_the_boss_fights_inside_its_arena() -> void:
+	RunManager.begin_run(555)
+	_arena = Node2D.new()
+	var container := Node2D.new()
+	container.name = "Projectiles"
+	container.add_to_group(ProjectileFactory.CONTAINER_GROUP)
+	_arena.add_child(container)
+	add_child(_arena)
+
+	var holder := Node2D.new()
+	holder.position = Vector2(1408.0, 704.0)
+	_arena.add_child(holder)
+
+	var arena_rect := Rect2(holder.global_position, ARENA.size)
+	_boss = BOSS_SCENE.instantiate()
+	holder.add_child(_boss)
+	_boss.begin(arena_rect)
+	await advance_physics(2)
+
+	for part: BossPart in _boss.get_parts():
+		check(
+			arena_rect.has_point(part.global_position),
+			"the boss stands inside its arena (at %v, arena %v)" % [
+				part.global_position, arena_rect,
+			],
+		)
+
+	_hurt(_config.max_health * 0.35)
+	await advance_physics(2)
+
+	var terminals := 0
+	for node: Node in get_tree().get_nodes_in_group(Teams.GROUP_ENEMY):
+		var terminal := node as BossTerminal
+		if terminal == null or not is_instance_valid(terminal):
+			continue
+		terminals += 1
+		check(
+			arena_rect.has_point(terminal.global_position),
+			"a terminal stands inside the arena (at %v)" % terminal.global_position,
+		)
+	check(terminals == 4, "all four terminals were placed")
 	await _teardown()
 
 

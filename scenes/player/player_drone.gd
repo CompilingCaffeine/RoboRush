@@ -22,8 +22,11 @@ extends Node2D
 ## Radians per second. Slow — a fast orbit is a distraction in a bullet-dodging game.
 @export var orbit_speed: float = 1.5
 
-@onready var _weapon: WeaponController = %Weapon
-@onready var _sprite: Sprite2D = %Sprite
+## Plain child paths rather than unique names. A drone is instantiated *into* the player
+## at runtime, so it has no owner of its own and its `%Weapon` would be claimed in the
+## player's scene scope — taking the name away from the player's own weapon.
+@onready var _weapon: WeaponController = $Weapon
+@onready var _sprite: Sprite2D = $Sprite
 
 var _angle := 0.0
 
