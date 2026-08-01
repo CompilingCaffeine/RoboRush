@@ -105,7 +105,7 @@ func _instantiate_rooms() -> void:
 
 		room.build(plan)
 		if plan.type == RoomTemplate.Type.COMBAT:
-			room.populate(config.enemy_scenes, _rng)
+			room.populate(config, _rng)
 		room.set_active(false)
 		room.player_entered.connect(_on_player_entered_room)
 		room.get_room_combat().cleared.connect(_on_room_cleared.bind(plan.id))

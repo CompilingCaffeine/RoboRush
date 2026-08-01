@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ProjectileConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/projectile_config.gd" id="1_projectile"]
+[ext_resource type="Texture2D" path="res://art/effects/projectile_drone.png" id="2_drone"]
+
+[resource]
+script = ExtResource("1_projectile")
+damage = 1.0
+speed = 165.0
+lifetime = 2.4
+radius = 2.5
+knockback = 0.0
+texture = ExtResource("2_drone")
+trail_color = Color(1, 0.6, 0.35, 0.55)
+trail_length = 5

@@ -37,6 +37,16 @@ extends Resource
 ## Contact damage per hit. Zero for enemies that only shoot.
 @export var contact_damage: float = 0.0
 
+## How close the player must be to take contact damage. Sized for the two bodies' radii.
+@export var contact_radius: float = 12.0
+
+## Seconds between contact hits, so touching an enemy is a series of hits rather than a
+## drain. Longer than the player's own damage invulnerability would make this moot.
+@export var contact_interval: float = 0.6
+
+## Impulse a contact hit shoves the player with. Being touched should move you.
+@export var contact_knockback: float = 130.0
+
 ## Seconds the enemy telegraphs before firing. Spec section 15 wants readable
 ## attacks, and an unannounced shot from an approaching enemy is not readable.
 @export var telegraph_seconds: float = 0.35

@@ -464,7 +464,7 @@ func _test_dormant_rooms_cannot_be_shot_into() -> void:
 
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7
-	room.populate([TICKET_BOT_SCENE] as Array[PackedScene], rng)
+	room.populate(_floor_with_ticket_bots(), rng)
 	room.set_active(false)
 	# The collision change is deferred, for the same reason every other physics change in
 	# this project is: rooms are activated from inside an entry trigger.
@@ -583,6 +583,16 @@ func _add_wall(arena: Node2D, at: Vector2, size: Vector2i) -> void:
 	wall.size = size
 	wall.position = at
 	arena.add_child(wall)
+
+
+## The smallest floor that can populate a room: one enemy, always eligible.
+func _floor_with_ticket_bots() -> FloorConfig:
+	var spawn := EnemySpawn.new()
+	spawn.scene = TICKET_BOT_SCENE
+	spawn.min_difficulty = 0
+	var floor_config := FloorConfig.new()
+	floor_config.enemy_spawns = [spawn]
+	return floor_config
 
 
 ## A standalone rivet config so a check can mutate pierce/bounce without touching the

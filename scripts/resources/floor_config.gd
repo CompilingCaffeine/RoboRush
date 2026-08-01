@@ -24,8 +24,9 @@ extends Resource
 
 @export_group("Population")
 
-## Enemies that may appear on this floor. One is chosen per spawn point in the template.
-@export var enemy_scenes: Array[PackedScene] = []
+## Enemies that may appear on this floor, with their weights and how early they unlock.
+## One is chosen per spawn point in the template.
+@export var enemy_spawns: Array[EnemySpawn] = []
 
 @export_group("Rewards")
 
@@ -51,6 +52,29 @@ extends Resource
 ## Whether the treasure room hands over an item. Spec section 9 says a treasure room
 ## contains one; this exists so a floor built around a shop instead can say otherwise.
 @export var treasure_grants_item: bool = true
+
+
+## Picks one enemy scene for a room of the given difficulty, or null when the roster has
+## nothing that early. Weighted, so a floor can lean on its signature enemy without
+## excluding the rest.
+func pick_enemy(difficulty: int, rng: RandomNumberGenerator) -> PackedScene:
+	var eligible: Array[EnemySpawn] = []
+	var total := 0.0
+	for spawn: EnemySpawn in enemy_spawns:
+		if spawn != null and spawn.is_eligible(difficulty) and spawn.weight > 0.0:
+			eligible.append(spawn)
+			total += spawn.weight
+
+	if eligible.is_empty():
+		return null
+
+	var roll := rng.randf() * total
+	for spawn: EnemySpawn in eligible:
+		roll -= spawn.weight
+		if roll <= 0.0:
+			return spawn.scene
+	# Float error only; the last eligible entry is the correct answer.
+	return eligible[eligible.size() - 1].scene
 
 
 ## Templates eligible for a room type on this floor. Returns an empty array if none match,

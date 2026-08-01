@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="PopUpDroneConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/pop_up_drone_config.gd" id="1_config"]
+[ext_resource type="Resource" path="res://data/weapons/drone_spread.tres" id="2_weapon"]
+
+[resource]
+script = ExtResource("1_config")
+display_name = "Pop Up Drone"
+max_health = 2.0
+knockback_resistance = 1.0
+move_speed = 0.0
+acceleration = 0.0
+deceleration = 900.0
+preferred_range = 0.0
+range_tolerance = 0.0
+weapon = ExtResource("2_weapon")
+contact_damage = 0.0
+telegraph_seconds = 0.45
+teleport_interval = 2.6
+arrival_fade = 0.2
+arrival_pause = 0.45
+edge_inset = 26.0
+min_teleport_distance = 96.0
+placement_attempts = 12

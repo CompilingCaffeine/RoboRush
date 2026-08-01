@@ -40,6 +40,7 @@ PALETTE = {
     "v": (0xA8, 0x6C, 0xF0, 255),  # item violet
     "c": (0x58, 0xF0, 0xC8, 255),  # item cyan (same as screen glow, reads as "system")
     "x": (0xE0, 0x4A, 0x4A, 255),  # item red / danger
+    "V": (0xC8, 0x8C, 0xFF, 255),  # leech highlight
 }
 
 
@@ -120,6 +121,79 @@ TICKET_BOT = [
     "..oooooooooooo..",
     "...oo......oo...",
     "................",
+]
+
+# --- Pop Up Drone: a hovering eye. Round where the Ticket Bot is square, so the two
+# --- read apart at a glance even before either of them does anything.
+POP_UP_DRONE = [
+    "................",
+    "................",
+    ".....oooooo.....",
+    "...ooWWWWWWoo...",
+    "..oWWwwwwwwWWo..",
+    "..oWwrrrrrrwWo..",
+    ".oWwrrRRRRrrwWo.",
+    ".oWwrRRYYRRrwWo.",
+    ".oWwrRRYYRRrwWo.",
+    ".oWwrrRRRRrrwWo.",
+    "..oWwrrrrrrwWo..",
+    "..oWWwwwwwwWWo..",
+    "...ooWWWWWWoo...",
+    ".....oooooo.....",
+    "......o..o......",
+    "................",
+]
+
+# --- Memory Leech: a blob with a bite. Violet, because nothing else hostile is, and it
+# --- is the one enemy the player must never confuse for something they can ignore.
+MEMORY_LEECH = [
+    "................",
+    "................",
+    "....o......o....",
+    "...ovo....ovo...",
+    "..ovvvoooovvvo..",
+    "..ovvvvvvvvvvo..",
+    ".ovvvVVvvVVvvvo.",
+    ".ovvVVYYVVYYvvo.",
+    ".ovvvVVvvVVvvvo.",
+    ".ovvvvvvvvvvvvo.",
+    "..ovvYvvvvYvvo..",
+    "..ovvvYYYYvvvo..",
+    "...ovvvvvvvvo...",
+    "....oovvvvoo....",
+    "......oooo......",
+    "................",
+]
+
+# --- Firewall Node: a bolted-down emitter core. Deliberately the only enemy with a wide
+# --- flat base, so "this one does not move" is legible before it does anything.
+FIREWALL_NODE = [
+    "................",
+    "................",
+    "....oooooooo....",
+    "...oddddddddo...",
+    "..oddmmmmmmddo..",
+    "..odmmaaaammdo..",
+    ".oddmaaYYaammdo.",
+    ".odmaaYYYYaamdo.",
+    ".odmaaYYYYaamdo.",
+    ".oddmaaYYaammdo.",
+    "..odmmaaaammdo..",
+    "..oddmmmmmmddo..",
+    "...oddddddddo...",
+    "..oooooooooooo..",
+    "..ollllllllllo..",
+    "..oooooooooooo..",
+]
+
+# --- Pop Up Drone's spread shot. Smaller and faster-reading than a ticket.
+DRONE_SHOT = [
+    "..oo..",
+    ".oRRo.",
+    "oRYYRo",
+    "oRYYRo",
+    ".oRRo.",
+    "..oo..",
 ]
 
 # --- Player projectile: hot rivet.
@@ -340,6 +414,10 @@ SPRITES = {
     "art/characters/player_placeholder.png": PLAYER,
     "art/characters/player_cannon_placeholder.png": CANNON,
     "art/enemies/ticket_bot_placeholder.png": TICKET_BOT,
+    "art/enemies/pop_up_drone_placeholder.png": POP_UP_DRONE,
+    "art/enemies/memory_leech_placeholder.png": MEMORY_LEECH,
+    "art/enemies/firewall_node_placeholder.png": FIREWALL_NODE,
+    "art/effects/projectile_drone.png": DRONE_SHOT,
     "art/effects/projectile_rivet.png": RIVET,
     "art/effects/projectile_ticket.png": TICKET_SHOT,
     "art/effects/muzzle_flash.png": MUZZLE_FLASH,

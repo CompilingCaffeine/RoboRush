@@ -37,7 +37,7 @@ func _test_config_has_content() -> void:
 	check(not _config.start_templates.is_empty(), "the floor has a start template")
 	check(not _config.combat_templates.is_empty(), "the floor has combat templates")
 	check(not _config.treasure_templates.is_empty(), "the floor has a treasure template")
-	check(not _config.enemy_scenes.is_empty(), "the floor has an enemy to spawn")
+	check(not _config.enemy_spawns.is_empty(), "the floor has an enemy roster")
 
 	for type: RoomTemplate.Type in [
 		RoomTemplate.Type.START, RoomTemplate.Type.COMBAT, RoomTemplate.Type.TREASURE

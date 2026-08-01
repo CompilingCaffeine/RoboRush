@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="FloorConfig" load_steps=19 format=3]
+[gd_resource type="Resource" script_class="FloorConfig" load_steps=22 format=3]
 
 [ext_resource type="Script" path="res://scripts/resources/floor_config.gd" id="1_floor"]
 [ext_resource type="Resource" path="res://data/rooms/start_bay.tres" id="2_start"]
@@ -7,7 +7,10 @@
 [ext_resource type="Resource" path="res://data/rooms/combat_lanes.tres" id="5_lanes"]
 [ext_resource type="Resource" path="res://data/rooms/combat_ring.tres" id="6_ring"]
 [ext_resource type="Resource" path="res://data/rooms/treasure_vault.tres" id="7_treasure"]
-[ext_resource type="PackedScene" path="res://scenes/enemies/ticket_bot.tscn" id="8_ticket_bot"]
+[ext_resource type="Resource" path="res://data/spawns/ticket_bot.tres" id="8_ticket_bot"]
+[ext_resource type="Resource" path="res://data/spawns/pop_up_drone.tres" id="8_pop_up_drone"]
+[ext_resource type="Resource" path="res://data/spawns/memory_leech.tres" id="8_memory_leech"]
+[ext_resource type="Resource" path="res://data/spawns/firewall_node.tres" id="8_firewall_node"]
 [ext_resource type="Resource" path="res://data/items/ricochet_driver.tres" id="9_ricochet_driver"]
 [ext_resource type="Resource" path="res://data/items/fork_bomb.tres" id="10_fork_bomb"]
 [ext_resource type="Resource" path="res://data/items/magnetic_guidance.tres" id="11_magnetic_guidance"]
@@ -28,7 +31,7 @@ room_count = 7
 start_templates = Array[RoomTemplate]([ExtResource("2_start")])
 combat_templates = Array[RoomTemplate]([ExtResource("3_open"), ExtResource("4_pillars"), ExtResource("5_lanes"), ExtResource("6_ring")])
 treasure_templates = Array[RoomTemplate]([ExtResource("7_treasure")])
-enemy_scenes = Array[PackedScene]([ExtResource("8_ticket_bot")])
+enemy_spawns = Array[EnemySpawn]([ExtResource("8_ticket_bot"), ExtResource("8_pop_up_drone"), ExtResource("8_memory_leech"), ExtResource("8_firewall_node")])
 clear_scrap_range = Vector2i(2, 4)
 enemy_scrap_range = Vector2i(1, 2)
 item_pool = Array[ItemConfig]([ExtResource("9_ricochet_driver"), ExtResource("10_fork_bomb"), ExtResource("11_magnetic_guidance"), ExtResource("12_return_protocol"), ExtResource("13_capacitor_leak"), ExtResource("14_volatile_kernel"), ExtResource("15_cooling_fan"), ExtResource("16_reinforced_chassis"), ExtResource("17_backup_battery"), ExtResource("18_unsafe_overclock")])

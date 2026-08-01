@@ -14,16 +14,23 @@ const TIMEOUT_SECONDS := 120.0
 func _ready() -> void:
 	var start := Time.get_ticks_msec()
 	var suites: Array[TestCase] = []
+	var failures: PackedStringArray = []
+
 	for child: Node in get_children():
 		if child is TestCase:
 			suites.append(child as TestCase)
+			continue
+		# A suite whose script fails to compile is attached to its node as nothing at all,
+		# so it silently stops being a TestCase and the run reports PASS with that entire
+		# suite missing. Every child of this node is declared in the scene precisely
+		# because it is meant to run.
+		failures.append("%s did not load as a TestCase (compile error in its script?)" % child.name)
 
 	if suites.is_empty():
 		printerr("FAIL  test_runner has no TestCase children.")
 		get_tree().quit(1)
 		return
 
-	var failures: PackedStringArray = []
 	var total_checks := 0
 	var timeout := Time.get_ticks_msec() + int(TIMEOUT_SECONDS * 1000.0)
 

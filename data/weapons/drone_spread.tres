@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="WeaponConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/weapon_config.gd" id="1_weapon"]
+[ext_resource type="Resource" path="res://data/projectiles/drone_shot.tres" id="2_shot"]
+
+[resource]
+script = ExtResource("1_weapon")
+display_name = "Spread Emitter"
+projectile = ExtResource("2_shot")
+shots_per_second = 1.4
+projectiles_per_shot = 3
+spread_degrees = 34.0
+muzzle_offset = 9.0
+fire_sound = &"fire"
+screen_shake = 0.0

@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="MemoryLeechConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/memory_leech_config.gd" id="1_config"]
+
+[resource]
+script = ExtResource("1_config")
+display_name = "Memory Leech"
+max_health = 4.0
+knockback_resistance = 0.35
+move_speed = 96.0
+acceleration = 2400.0
+deceleration = 1100.0
+preferred_range = 0.0
+range_tolerance = 0.0
+contact_damage = 1.0
+contact_radius = 13.0
+contact_interval = 0.7
+contact_knockback = 150.0
+telegraph_seconds = 0.42
+charge_trigger_range = 118.0
+windup_seconds = 0.42
+charge_speed = 265.0
+charge_seconds = 0.3
+recover_seconds = 0.65

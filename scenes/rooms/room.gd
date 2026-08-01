@@ -65,13 +65,18 @@ func build(room_plan: RoomPlan) -> void:
 	_bounds.body_entered.connect(_on_body_entered)
 
 
-## Fills the template's spawn points with enemies drawn from the floor's pool.
-func populate(enemy_scenes: Array[PackedScene], rng: RandomNumberGenerator) -> void:
-	if plan.template == null or enemy_scenes.is_empty():
+## Fills the template's spawn points with enemies drawn from the floor's roster.
+##
+## The template's own `difficulty` decides which enemies are eligible, so a harder layout
+## gets a harder encounter without the generator having to know what either means.
+func populate(floor_config: FloorConfig, rng: RandomNumberGenerator) -> void:
+	if plan.template == null or floor_config == null:
 		return
 
 	for tile: Vector2i in plan.template.enemy_spawns:
-		var scene: PackedScene = enemy_scenes[rng.randi_range(0, enemy_scenes.size() - 1)]
+		var scene := floor_config.pick_enemy(plan.template.difficulty, rng)
+		if scene == null:
+			continue
 		var enemy: Node2D = scene.instantiate()
 		enemy.position = _tile_centre(tile)
 		_enemies.add_child(enemy)
@@ -104,6 +109,12 @@ func get_outer_rect() -> Rect2i:
 
 func get_interior_centre() -> Vector2:
 	return global_position + Vector2(INTERIOR_SIZE) * 0.5
+
+
+## The playable floor, in global coordinates — the outer rect without its wall ring. What
+## anything that needs to place itself "somewhere in this room" should ask for.
+func get_interior_rect() -> Rect2:
+	return Rect2(global_position, Vector2(INTERIOR_SIZE))
 
 
 ## Where a room-clear reward or treasure appears.
