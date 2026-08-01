@@ -38,6 +38,12 @@ var _pierce_left := 0
 var _bounce_left := 0
 var _has_returned := false
 
+## Set the moment the projectile is used up. `queue_free` does not take effect until the
+## end of the frame, so a spent projectile keeps receiving `body_entered` for every other
+## body it is already overlapping — two enemies standing on each other took a rivet each
+## from one shot, and with items on, a full set of splits, chains, and explosions each.
+var _is_spent := false
+
 ## Bodies already damaged by this projectile, so a piercing shot cannot hit the same
 ## enemy repeatedly while overlapping it. Split children are seeded with whatever their
 ## parent just struck: a child spawned already overlapping that enemy would otherwise
@@ -172,7 +178,7 @@ func _handle_wall(hit: Dictionary) -> void:
 
 
 func _on_body_entered(body: Node2D) -> void:
-	if body in _hit_bodies:
+	if _is_spent or body in _hit_bodies:
 		return
 	_hit_bodies.append(body)
 
@@ -308,7 +314,13 @@ func _spawn_splits(origin: Vector2, base_direction: Vector2, excluded: Array[Nod
 		)
 
 
+## Marks the projectile spent before freeing it. The flag, not `queue_free`, is what stops
+## a second hit: the free does not happen until the end of the frame, and every remaining
+## overlap is reported before then.
 func _despawn() -> void:
+	if _is_spent:
+		return
+	_is_spent = true
 	set_physics_process(false)
 	queue_free()
 

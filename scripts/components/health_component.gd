@@ -30,6 +30,13 @@ var current: float
 var _invulnerable_left := 0.0
 var _is_dead := false
 
+## Immunity granted by something other than this component. The dash owns its own window,
+## and copying that window into a second timer here is how the two came to disagree — the
+## robot flashed as invulnerable while damage went straight through. Asking the owner
+## instead means there is exactly one dash window and both the visuals and the damage path
+## read it.
+var _immunity_sources: Array[Callable] = []
+
 
 func _ready() -> void:
 	current = max_health
@@ -90,8 +97,21 @@ func heal(amount: float) -> void:
 	healed.emit(amount, current)
 
 
+## Registers something else that can grant immunity — a dash, and later an emergency
+## barrier or a defence module. A list rather than one slot so a second source never has to
+## argue with the first about who owns it.
+func add_immunity_source(source: Callable) -> void:
+	if source.is_valid() and source not in _immunity_sources:
+		_immunity_sources.append(source)
+
+
 func is_invulnerable() -> bool:
-	return _invulnerable_left > 0.0
+	if _invulnerable_left > 0.0:
+		return true
+	for source: Callable in _immunity_sources:
+		if source.is_valid() and source.call():
+			return true
+	return false
 
 
 func is_alive() -> bool:

@@ -17,6 +17,9 @@ const BLASTER_PATH := "res://data/weapons/rivet_blaster.tres"
 const TICKET_BOT_CONFIG_PATH := "res://data/enemies/ticket_bot.tres"
 const TICKET_BOT_SCENE := preload("res://scenes/enemies/ticket_bot.tscn")
 const WALL_BLOCK_SCENE := preload("res://scenes/rooms/wall_block.tscn")
+const ROOM_SCENE := preload("res://scenes/rooms/room.tscn")
+const PLAYER_SCENE := preload("res://scenes/player/player.tscn")
+const COMBAT_TEMPLATE_PATH := "res://data/rooms/combat_open.tres"
 
 
 func run() -> void:
@@ -37,6 +40,9 @@ func run() -> void:
 	await _test_projectile_stops_at_a_wall()
 	await _test_projectile_bounces_when_configured()
 	await _test_projectile_pierces_when_configured()
+	await _test_one_shot_damages_one_enemy()
+	await _test_dash_invulnerability_refuses_damage()
+	await _test_dormant_rooms_cannot_be_shot_into()
 	await _test_room_combat_reports_cleared_once()
 
 
@@ -371,6 +377,134 @@ func _test_projectile_pierces_when_configured() -> void:
 	check_near(
 		far_bot.get_health_component().current, 2.0, "the piercing shot carried on to the far bot"
 	)
+	await _teardown(arena)
+
+
+## A projectile with no pierce must be spent by the first thing it hits, not by the first
+## thing it hits *plus everything else overlapping it that frame*.
+##
+## `queue_free` is deferred, so a spent projectile survives to the end of the frame and
+## keeps receiving `body_entered` for every other body it is already touching. Two enemies
+## standing on top of each other were taking one rivet each from one shot — and with items
+## on, one shot's worth of splits, chains, and explosions each as well.
+func _test_one_shot_damages_one_enemy() -> void:
+	var arena := _make_arena()
+	# Overlapping, so both report entry on the same physics frame.
+	var upper := _add_bot(arena, Vector2(100.0, -3.0))
+	var lower := _add_bot(arena, Vector2(100.0, 3.0))
+	await advance_physics(2)
+
+	_fire_at(arena, Vector2.ZERO, Vector2.RIGHT, _rivet_variant())
+	await advance_physics(30)
+
+	var dealt := (
+		(3.0 - upper.get_health_component().current)
+		+ (3.0 - lower.get_health_component().current)
+	)
+	check_near(dealt, 1.0, "one rivet deals one rivet's damage in total, not one per body")
+	await _teardown(arena)
+
+
+## Spec section 6.4: the dash grants brief invulnerability. It flashed the robot but did
+## not stop damage, because HealthComponent had no way to hear about immunity it did not
+## own itself — so the visual and the damage path disagreed, which is the worst possible
+## version of this bug: the player is told they are safe while they are not.
+func _test_dash_invulnerability_refuses_damage() -> void:
+	var arena := _make_arena()
+	var player: Player = PLAYER_SCENE.instantiate()
+	arena.add_child(player)
+	await advance_physics(2)
+
+	var health := player.get_health_component()
+	var dash := player.get_dash_controller()
+	var starting := health.current
+
+	check(dash.try_start(Vector2.RIGHT), "the dash starts")
+	check(dash.is_invulnerable(), "the dash grants invulnerability")
+	check(health.is_invulnerable(), "the health component honours the dash's immunity")
+	check(
+		not health.apply_damage(DamageInfo.new(1.0)),
+		"damage is declined during the dash",
+	)
+	check_near(health.current, starting, "integrity is untouched by the declined hit")
+
+	# And it is a window, not a permanent shield.
+	for _frame: int in 20:
+		dash.step(1.0 / 60.0)
+		health.step(1.0 / 60.0)
+	check(not health.is_invulnerable(), "the dash window closes")
+	check(health.apply_damage(DamageInfo.new(1.0)), "damage lands once the dash ends")
+
+	await _teardown(arena)
+
+
+## A room the player has not entered must be inert, and it has two doors to close.
+##
+## Projectiles were never the way in: Godot pulls a disabled node's collision body out of
+## the physics space outright, so a rivet passes through a dormant enemy. Area effects
+## were, because they find targets by walking a scene-tree group and a group does not care
+## whether a node is processing. A rivet outranges the gap between two rooms and doors stay
+## open until entry, so chain lightning or a Volatile Kernel blast fired near a shared wall
+## reached into the next room — and enough of them empty a room the player never walked
+## into, unlocking its doors and dropping its reward from outside. Both paths are checked
+## here so neither can regress into the other's blind spot.
+func _test_dormant_rooms_cannot_be_shot_into() -> void:
+	var arena := _make_arena()
+	var template := load(COMBAT_TEMPLATE_PATH) as RoomTemplate
+	if not require(template, "combat_open.tres loads as a RoomTemplate"):
+		await _teardown(arena)
+		return
+
+	var plan := RoomPlan.new(0, Vector2i.ZERO, RoomTemplate.Type.COMBAT)
+	plan.template = template
+
+	var room: Room = ROOM_SCENE.instantiate()
+	arena.add_child(room)
+	room.build(plan)
+
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	room.populate([TICKET_BOT_SCENE] as Array[PackedScene], rng)
+	room.set_active(false)
+	# The collision change is deferred, for the same reason every other physics change in
+	# this project is: rooms are activated from inside an entry trigger.
+	await advance_physics(2)
+
+	var enemies := room.get_node("%Enemies")
+	var target := enemies.get_child(0) as TicketBot
+	if not require(target, "the room populated with an enemy"):
+		await _teardown(arena)
+		return
+
+	var health := target.get_health_component()
+	var origin := target.global_position - Vector2(40.0, 0.0)
+
+	_fire_at(arena, origin, Vector2.RIGHT, _rivet_variant())
+	await advance_physics(20)
+	check_near(health.current, 3.0, "a shot into a dormant room hits nothing")
+
+	# The area effects, which reach targets without touching the physics server at all.
+	check(
+		Targeting.hostiles_near(room, target.global_position, 90.0, Teams.Id.PLAYER).is_empty(),
+		"targeting sees no hostiles in a dormant room",
+	)
+	Explosion.detonate(room, target.global_position, 90.0, 1.0, Teams.Id.PLAYER)
+	ChainLightning.strike(room, target.global_position, 3, 90.0, 0.7, Teams.Id.PLAYER)
+	await advance_physics(2)
+	check_near(health.current, 3.0, "a blast and a chain into a dormant room hit nothing")
+	check(room.has_living_enemies(), "and so the room cannot be cleared from outside it")
+
+	room.set_active(true)
+	await advance_physics(2)
+
+	_fire_at(arena, origin, Vector2.RIGHT, _rivet_variant())
+	await advance_physics(20)
+	check_near(health.current, 2.0, "the same shot lands once the player is in the room")
+	check(
+		not Targeting.hostiles_near(room, target.global_position, 90.0, Teams.Id.PLAYER).is_empty(),
+		"and targeting sees the room's enemies again",
+	)
+
 	await _teardown(arena)
 
 

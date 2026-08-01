@@ -119,6 +119,12 @@ rather than one.
 `WeaponController` unchanged, so damage is symmetric by construction: a projectile
 does not care what it hit, only whether that thing has a `HealthComponent`.
 
+Immunity that a component does not own is *registered* with it rather than copied into it.
+`HealthComponent.add_immunity_source` takes a `Callable`, and the player hands it
+`DashController.is_invulnerable` — so there is exactly one dash window, read by both the
+damage path and the flash that tells the player they are safe. The alternative, a second
+timer here mirroring the dash's, is how those two came to disagree in the first place.
+
 **Presentation is separated from gameplay.**
 [feedback_director.gd](scripts/systems/feedback_director.gd) subscribes to the
 EventBus and owns the *entire* mapping from "what happened" to "what the player sees
@@ -157,8 +163,13 @@ Supporting decisions:
   two of the three ask it from inside an `Area2D` callback while the physics server is
   flushing. A group walk is legal from anywhere and, at a handful of enemies per room,
   cheaper than the query it replaces. [targeting.gd](scripts/combat/targeting.gd) is the
-  one place that answers it, and it filters the dead out — a chain that jumped into a
-  corpse would waste a jump the player paid for.
+  one place that answers it, and it filters on two things that a group membership does not
+  imply. The dead: an enemy is freed a frame or two after reaching zero, and a chain that
+  jumped into a corpse would waste a jump the player paid for. And the *dormant*: Godot
+  pulls a disabled node's collision body out of the physics space, so a projectile cannot
+  touch an enemy in a room the player has not entered, and neither may a blast or a chain.
+  Testing `can_process()` is what keeps group targeting and physics targeting agreeing by
+  construction rather than by coincidence.
 - **An item's inventory holds state and nothing else.**
   [item_inventory.gd](scripts/components/item_inventory.gd) never touches a weapon, a
   health component, or a sprite; the player reads its aggregates and pushes them into its
@@ -323,7 +334,7 @@ data/items/*.tres                       + Ten items from spec section 12
 tests/test_runner.tscn / .gd              Aggregating runner; fails on empty suites
 tests/test_case.gd                        Suite base class
 tests/test_player_movement.gd             28 movement and dash checks
-tests/test_combat.gd                      85 data, component, and integration checks
+tests/test_combat.gd                      101 data, component, and integration checks
 tests/test_player_input.gd                38 arrow-key shooting checks
 tests/test_floor.gd                       128 generation, invariant, and template checks
 tests/test_items.gd                     + 153 item, stack, inventory, and synergy checks
@@ -342,7 +353,7 @@ Executed on this machine, not assumed.
 - **`godot --headless --import`** completes with no errors.
 - **Clean boot** (`--quit-after 300` on `main.tscn`) produces zero errors and zero
   warnings on stdout/stderr.
-- **432 checks across 5 suites pass, exit 0**, in 8.3s.
+- **448 checks across 5 suites pass, exit 0**, in 9.7s.
 - **The floor generator is swept across 120 seeds per run**, asserting every spec section 9
   requirement on each: exactly the requested room count, no disconnected rooms, no two rooms
   in one cell, exactly one start and one treasure room, every door symmetric and between
@@ -462,6 +473,38 @@ paid for:
    cannot spend a jump on a corpse. None of these cost a debugging session; they are listed
    because "we already know this trap exists" is the return on milestone 3 having documented
    it, and because each is now covered by a test that would catch a regression.
+
+### Three bugs found by review after milestone 4
+
+All three were reported as review findings, reproduced here as failing checks first, then
+fixed. Each now has a regression check in the combat suite.
+
+6. **Dash invulnerability was cosmetic.** `PlayerVisuals` flashed the robot from
+   `DashController.is_invulnerable()`, but `HealthComponent.apply_damage` consulted only
+   its own timer and had no way to hear about immunity it did not own — so a projectile
+   took the robot from 6 integrity to 5 while it was mid-dash and visibly flashing. The
+   worst shape a bug can have: the game telling the player they are safe while they are
+   not. `HealthComponent` now takes registered `Callable` immunity sources and the player
+   hands it the dash's own predicate, so there is one window rather than two that agree by
+   luck. `Player._is_invulnerable` reads the same call the damage path does.
+
+7. **A spent projectile kept hitting things.** `queue_free` does not take effect until the
+   end of the frame, so a zero-pierce rivet that had already been consumed still received
+   `body_entered` for every other body it was overlapping. Two Ticket Bots standing on each
+   other took a full rivet each from one shot — and with items on, a full set of splits,
+   chains, and explosions each. A `_is_spent` flag set in `_despawn` now closes the window;
+   `queue_free` was never going to, because the free is the thing that is late.
+
+8. **Area effects reached into rooms the player had never entered.** The finding named
+   collision shapes on dormant enemies, but that half does not reproduce: Godot pulls a
+   disabled node's body out of the physics space, so a rivet already passes straight
+   through. What did reproduce was milestone 4's own group-based targeting, which walks a
+   scene-tree group and never consults the physics server at all — a chain lightning
+   discharge (76px) or a Volatile Kernel blast near a shared wall damaged enemies across
+   it, and enough of them would empty a room the player never walked into, unlock its
+   doors, and drop its reward. `Targeting` now skips bodies that cannot process, which is
+   the same condition Godot uses to remove them from the space. The regression check covers
+   both halves, so neither can drift into the other's blind spot.
 
 ---
 

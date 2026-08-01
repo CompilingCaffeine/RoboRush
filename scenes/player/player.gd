@@ -40,6 +40,11 @@ func _ready() -> void:
 	# all player tuning stays in one resource.
 	_health.configure(config.max_integrity, config.damage_invulnerability)
 
+	# Spec section 6.4's dash immunity, made real. The dash window lives on DashController
+	# and the health component asks it, rather than being handed a copy — one window, so
+	# the flash the player sees and the damage they take cannot disagree.
+	_health.add_immunity_source(_dash.is_invulnerable)
+
 	_dash.dash_started.connect(_on_dash_started)
 	_dash.dash_ended.connect(_on_dash_ended)
 	_weapon.shot_fired.connect(_on_shot_fired)
@@ -152,9 +157,12 @@ func _on_item_added(item: ItemConfig) -> void:
 
 
 ## Either source of immunity flashes the robot, so the player never has to work out
-## which kind of invulnerability they currently have.
+## which kind of invulnerability they currently have. Reads the health component alone,
+## because the dash is registered with it — the flash is now driven by the exact predicate
+## that decides whether a hit lands, rather than by a second expression that happened to
+## agree.
 func _is_invulnerable() -> bool:
-	return _dash.is_invulnerable() or _health.is_invulnerable()
+	return _health.is_invulnerable()
 
 
 ## Dash follows the held movement direction so it never fights the player's intent;

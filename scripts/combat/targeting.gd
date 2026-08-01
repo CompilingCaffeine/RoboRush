@@ -8,9 +8,20 @@ extends RefCounted
 ## group is legal from anywhere and, at a handful of enemies per room, cheaper than the
 ## query it replaces.
 ##
-## Everything returned is alive. A dying enemy is freed a frame or two after its health
-## reaches zero, so "is in the tree" is not the same question as "is a target", and
-## chaining into a corpse would waste jumps the player paid for.
+## Everything returned is alive *and awake*. Two separate filters, and both are load-bearing.
+##
+## A dying enemy is freed a frame or two after its health reaches zero, so "is in the tree"
+## is not the same question as "is a target", and chaining into a corpse would waste jumps
+## the player paid for.
+##
+## A dormant enemy — one in a room the player has not entered — is in the group but not in
+## the physics space, because Godot removes a disabled node's collision body outright. A
+## projectile therefore cannot touch it, and neither may anything here: without this filter
+## a chain or a blast near a shared wall reaches through it into the next room, and enough
+## of them empty a room the player never walked into, unlocking its doors and dropping its
+## reward from outside. `can_process()` is exactly the condition Godot itself uses to pull
+## the body out of the space, so testing it is what keeps group targeting and physics
+## targeting agreeing rather than approximately agreeing.
 
 ## Returns the hostile bodies within `radius` of `centre`, nearest first.
 static func hostiles_near(
@@ -29,7 +40,7 @@ static func hostiles_near(
 
 	for node: Node in source.get_tree().get_nodes_in_group(group):
 		var body := node as Node2D
-		if body == null or body in excluded:
+		if body == null or body in excluded or not body.can_process():
 			continue
 		if body.global_position.distance_squared_to(centre) > radius_squared:
 			continue
