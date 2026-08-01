@@ -196,6 +196,19 @@ DRONE_SHOT = [
     "..oo..",
 ]
 
+# --- Debug Drone: a small companion core. Reads as the player's kit, not as a threat:
+# --- same chassis greys and screen green as the robot, at half the size.
+PLAYER_DRONE = [
+    "..oooo..",
+    ".ollllo.",
+    "olmEEmlo",
+    "olmEEmlo",
+    "olmmmmlo",
+    ".ollllo.",
+    "..oooo..",
+    "........",
+]
+
 # --- Player projectile: hot rivet.
 RIVET = [
     ".oooo.",
@@ -362,6 +375,28 @@ ITEM_ICONS = {
         "oooooooo",
         "........",
     ],
+    # Scrap Magnet: the horseshoe again but in item colours, poles inward.
+    "scrap_magnet": [
+        "..cccc..",
+        ".c....c.",
+        "c......c",
+        "c..oo..c",
+        "c.o..o.c",
+        "c......c",
+        "a......a",
+        "a......a",
+    ],
+    # Debug Drone: a small core with an orbit ring around it.
+    "debug_drone": [
+        "..cccc..",
+        ".c.oo.c.",
+        "c.oEEo.c",
+        "c.oEEo.c",
+        "c.oooo.c",
+        ".c....c.",
+        "..cccc..",
+        "...cc...",
+    ],
     # Unsafe Overclock: a hazard triangle. The only red icon that is not an explosion,
     # because corrupted firmware should look like a warning label.
     "unsafe_overclock": [
@@ -418,6 +453,7 @@ SPRITES = {
     "art/enemies/memory_leech_placeholder.png": MEMORY_LEECH,
     "art/enemies/firewall_node_placeholder.png": FIREWALL_NODE,
     "art/effects/projectile_drone.png": DRONE_SHOT,
+    "art/characters/player_drone_placeholder.png": PLAYER_DRONE,
     "art/effects/projectile_rivet.png": RIVET,
     "art/effects/projectile_ticket.png": TICKET_SHOT,
     "art/effects/muzzle_flash.png": MUZZLE_FLASH,

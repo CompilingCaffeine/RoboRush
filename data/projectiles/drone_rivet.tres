@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ProjectileConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/projectile_config.gd" id="1_projectile"]
+[ext_resource type="Texture2D" path="res://art/effects/projectile_rivet.png" id="2_rivet"]
+
+[resource]
+script = ExtResource("1_projectile")
+damage = 1.0
+speed = 400.0
+lifetime = 1.2
+radius = 2.0
+knockback = 30.0
+texture = ExtResource("2_rivet")
+trail_color = Color(0.6, 0.94, 1, 0.6)
+trail_length = 6

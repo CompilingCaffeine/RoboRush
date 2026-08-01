@@ -84,6 +84,31 @@ func get_dash_charges_delta() -> int:
 	return total
 
 
+## The furthest any held item reaches for pickups. The best magnet wins rather than the
+## magnets summing: two of them should not reach across the room.
+func get_pickup_magnet_radius() -> float:
+	var best := 0.0
+	for item: ItemConfig in _items:
+		best = maxf(best, item.pickup_magnet_radius)
+	return best
+
+
+func get_pickup_magnet_speed() -> float:
+	var best := 0.0
+	for item: ItemConfig in _items:
+		if item.pickup_magnet_radius > 0.0:
+			best = maxf(best, item.pickup_magnet_speed)
+	return best
+
+
+## Summed, unlike the magnet: two drone items should be two drones.
+func get_drone_count() -> int:
+	var total := 0
+	for item: ItemConfig in _items:
+		total += item.drone_count
+	return total
+
+
 ## Items that detonate when an enemy dies. Read by ItemEffects rather than acted on here,
 ## because a blast needs a world and this component deliberately has no idea it is in one.
 func get_kill_explosions() -> Array[ItemConfig]:

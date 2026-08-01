@@ -21,6 +21,32 @@ func _ready() -> void:
 	EventBus.enemy_killed.connect(_on_enemy_killed)
 
 
+## Scrap Magnet. Pickups are dragged rather than teleported, so the player can see what is
+## coming to them and the effect reads as a magnet rather than as loot vanishing.
+##
+## Driven from here rather than from `Pickup`, so a pickup stays a dumb object that knows
+## what it grants and nothing about who is carrying what. The pickups are found by group,
+## which means nothing has to keep a list of what is currently on the floor.
+func _physics_process(delta: float) -> void:
+	if _inventory == null or _owner_body == null:
+		return
+
+	var radius := _inventory.get_pickup_magnet_radius()
+	if radius <= 0.0:
+		return
+
+	var speed := _inventory.get_pickup_magnet_speed()
+	var centre := _owner_body.global_position
+	for node: Node in get_tree().get_nodes_in_group(Pickup.GROUP):
+		var pickup := node as Node2D
+		if pickup == null:
+			continue
+		var offset := centre - pickup.global_position
+		if offset.length() > radius:
+			continue
+		pickup.global_position = pickup.global_position.move_toward(centre, speed * delta)
+
+
 ## Wired by main.gd, which owns scene composition.
 func bind_player(player: Player) -> void:
 	_owner_body = player

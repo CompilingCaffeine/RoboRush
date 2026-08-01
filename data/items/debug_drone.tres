@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="ItemConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/item_config.gd" id="1_item"]
+[ext_resource type="Texture2D" path="res://art/items/debug_drone.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"debug_drone"
+display_name = "Debug Drone"
+description = "An orbiting drone fires whenever you do."
+rarity = 2
+category = 0
+tags = Array[StringName]([&"drone", &"projectile"])
+drone_count = 1
+icon = ExtResource("2_icon")
+accent_color = Color(0.345, 0.941, 0.784, 1)
+pickup_sound = &"item_pickup"

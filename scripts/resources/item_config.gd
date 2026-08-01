@@ -97,6 +97,15 @@ enum Category {
 ## Damage that explosion deals to everything else in range.
 @export var kill_explosion_damage: float = 0.0
 
+## How far pickups are dragged toward the player from. Scrap Magnet. Zero disables it.
+@export var pickup_magnet_radius: float = 0.0
+
+## How fast they are dragged, in pixels per second.
+@export var pickup_magnet_speed: float = 130.0
+
+## Orbiting drones that fire when the player fires. Debug Drone adds one.
+@export var drone_count: int = 0
+
 @export_group("Presentation")
 
 @export var icon: Texture2D
@@ -133,4 +142,6 @@ func is_stat_only() -> bool:
 		projectile_set.is_empty()
 		and projectile_add.is_empty()
 		and kill_explosion_radius <= 0.0
+		and pickup_magnet_radius <= 0.0
+		and drone_count <= 0
 	)

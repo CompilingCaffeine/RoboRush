@@ -32,9 +32,11 @@ var team := Teams.Id.PLAYER
 
 var _cooldown_left := 0.0
 
-## Lifetime shot count. Capacitor Leak's "every fifth shot" reads this rather than
-## keeping its own tally, so drone shots can be made to count toward it.
-var _shots_fired := 0
+## Lifetime shot count, in an object rather than an int so several weapons can share one.
+## Capacitor Leak's "every fifth shot" reads this, and the player hands its drones this
+## same counter — which is how spec section 13's one explicit synergy works without any
+## code knowing that drones and chain lightning have anything to do with each other.
+var shots := ShotCounter.new()
 
 
 func setup(weapon: WeaponConfig, owning_team: Teams.Id) -> void:
@@ -59,14 +61,14 @@ func try_fire(origin: Vector2, direction: Vector2) -> bool:
 		return false
 
 	_cooldown_left = get_fire_interval()
-	_shots_fired += 1
+	var shot_index := shots.next()
 
 	var aim := direction.normalized()
 	var muzzle := origin + aim * config.muzzle_offset
 	for index: int in maxi(config.projectiles_per_shot, 1):
 		ProjectileFactory.spawn(
 			self, config, _pattern_direction(aim, index), muzzle, team, damage_multiplier,
-			get_attributed_shooter(), modifiers, _shots_fired,
+			get_attributed_shooter(), modifiers, shot_index,
 		)
 
 	shot_fired.emit(muzzle, aim)
@@ -86,7 +88,7 @@ func get_attributed_shooter() -> Node:
 
 
 func get_shots_fired() -> int:
-	return _shots_fired
+	return shots.count
 
 
 func get_cooldown_remaining() -> float:

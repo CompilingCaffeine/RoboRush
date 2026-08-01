@@ -7,6 +7,10 @@ extends Area2D
 ## token, keycard) and only the first two are needed now, so the shape that matters is "add a
 ## .tres", not "add a scene".
 
+## Every pickup joins this, so Scrap Magnet can find them all without anything holding a
+## list of what is currently on the floor.
+const GROUP := &"pickup"
+
 const BOB_HEIGHT := 1.5
 const BOB_HZ := 2.2
 
@@ -24,6 +28,7 @@ var _base_y := 0.0
 
 func _ready() -> void:
 	assert(config != null, "Pickup.config is unset: assign a PickupConfig resource.")
+	add_to_group(GROUP)
 	collision_layer = Teams.LAYER_PICKUP
 	collision_mask = Teams.LAYER_PLAYER
 	_sprite.texture = config.texture

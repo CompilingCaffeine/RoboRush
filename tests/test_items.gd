@@ -60,6 +60,9 @@ func run() -> void:
 	await _test_impact_explosion_catches_a_neighbour()
 	await _test_chain_lightning_jumps_twice()
 	await _test_volatile_kernel_detonates_on_a_kill()
+	await _test_scrap_magnet_pulls_nearby_pickups()
+	await _test_debug_drone_fires_with_the_player()
+	await _test_drone_shots_advance_the_chain_trigger()
 
 
 # --- Data ---------------------------------------------------------------------
@@ -730,7 +733,150 @@ func _test_volatile_kernel_detonates_on_a_kill() -> void:
 	await _teardown(arena)
 
 
+func _test_scrap_magnet_pulls_nearby_pickups() -> void:
+	var arena := _make_arena()
+	var player := _add_player(arena)
+	var magnet := _require_item(&"scrap_magnet")
+	if magnet == null:
+		await _teardown(arena)
+		return
+
+	var effects := ItemEffects.new()
+	arena.add_child(effects)
+	effects.bind_player(player)
+
+	var near := _add_pickup(arena, player.global_position + Vector2(50.0, 0.0))
+	var far := _add_pickup(arena, player.global_position + Vector2(240.0, 0.0))
+	await advance_physics(2)
+
+	var near_before := near.global_position.distance_to(player.global_position)
+	var far_before := far.global_position.distance_to(player.global_position)
+
+	player.get_item_inventory().add(magnet)
+	await advance_physics(10)
+
+	check(
+		near.global_position.distance_to(player.global_position) < near_before - 5.0,
+		"a pickup inside the magnet's reach is pulled in",
+	)
+	check_near(
+		far.global_position.distance_to(player.global_position),
+		far_before,
+		"one outside it is left alone",
+		1.0,
+	)
+	await _teardown(arena)
+
+
+func _test_debug_drone_fires_with_the_player() -> void:
+	var arena := _make_arena()
+	var player := _add_player(arena)
+	var drone_item := _require_item(&"debug_drone")
+	if drone_item == null:
+		await _teardown(arena)
+		return
+	await advance_physics(2)
+
+	var weapon := player.get_weapon_controller()
+
+	# Baseline: one trigger pull is one projectile and one shot on the counter.
+	var solo := _count_spawns(arena)
+	_pull_trigger(weapon, player)
+	await advance_physics(2)
+	check(solo[0] == 1, "without a drone, one pull fires one projectile")
+	check(weapon.get_shots_fired() == 1, "and counts one shot")
+
+	player.get_item_inventory().add(drone_item)
+	await advance_physics(2)
+	check(_count_drones(player) == 1, "Debug Drone adds exactly one drone")
+
+	var escorted := _count_spawns(arena)
+	_pull_trigger(weapon, player)
+	await advance_physics(2)
+
+	check(escorted[0] == 2, "with a drone, one pull fires two projectiles")
+	check(
+		weapon.get_shots_fired() == 3,
+		"and both advance one shared counter (got %d)" % weapon.get_shots_fired(),
+	)
+	await _teardown(arena)
+
+
+## Spec section 13 names exactly one *explicit* synergy: drone shots must count toward
+## Capacitor Leak's fifth-shot trigger. Measured rather than asserted — the chain arrives
+## after five shots either way, so with a drone doubling the rate it must arrive after
+## three trigger pulls instead of five.
+func _test_drone_shots_advance_the_chain_trigger() -> void:
+	var without := await _pulls_until_a_chaining_shot([&"capacitor_leak"])
+	var with_drone := await _pulls_until_a_chaining_shot([&"capacitor_leak", &"debug_drone"])
+
+	check(without == 5, "alone, the chain arrives on the fifth trigger pull (got %d)" % without)
+	check(
+		with_drone == 3,
+		"with a drone, it arrives on the third — drone shots count (got %d)" % with_drone,
+	)
+
+
+## Fires until a projectile carrying a chain is spawned, and returns how many trigger pulls
+## that took. Returns 0 if it never happens.
+func _pulls_until_a_chaining_shot(ids: Array[StringName]) -> int:
+	var arena := _make_arena()
+	var player := _add_player(arena)
+	for id: StringName in ids:
+		var item := _require_item(id)
+		if item != null:
+			player.get_item_inventory().add(item)
+	await advance_physics(2)
+
+	var chained := [0]
+	var container := arena.get_node("Projectiles")
+	container.child_entered_tree.connect(func(child: Node) -> void:
+		var projectile := child as Projectile
+		if projectile != null and projectile.config.chain_count > 0 and chained[0] == 0:
+			chained[0] = -1)
+
+	var weapon := player.get_weapon_controller()
+	var pulls := 0
+	for _pull: int in 12:
+		pulls += 1
+		_pull_trigger(weapon, player)
+		# A full fire interval between pulls, because that is the rate the game actually
+		# fires at and the drone has a cooldown of its own. Firing faster than the weapon
+		# can makes the drone skip shots, which is a property of the test rather than of
+		# the game.
+		await advance_physics(16)
+		if chained[0] == -1:
+			await _teardown(arena)
+			return pulls
+
+	await _teardown(arena)
+	return 0
+
+
 # --- Fixtures -----------------------------------------------------------------
+
+
+## One trigger pull, off cooldown. Goes through the weapon rather than through input so the
+## check is about firing rather than about key handling.
+func _pull_trigger(weapon: WeaponController, player: Player) -> void:
+	weapon.step(10.0)
+	weapon.try_fire(player.global_position, Vector2.RIGHT)
+
+
+func _count_drones(player: Player) -> int:
+	var total := 0
+	for child: Node in player.get_children():
+		if child is PlayerDrone:
+			total += 1
+	return total
+
+
+func _add_pickup(arena: Node2D, at: Vector2) -> Pickup:
+	var pickup: Pickup = PICKUP_SCENE.instantiate()
+	pickup.config = load("res://data/pickups/scrap.tres") as PickupConfig
+	pickup.position = at
+	arena.add_child(pickup)
+	return pickup
 
 
 func _require_item(id: StringName) -> ItemConfig:

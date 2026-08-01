@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="WeaponConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/weapon_config.gd" id="1_weapon"]
+[ext_resource type="Resource" path="res://data/projectiles/drone_rivet.tres" id="2_rivet"]
+
+[resource]
+script = ExtResource("1_weapon")
+display_name = "Drone Blaster"
+projectile = ExtResource("2_rivet")
+shots_per_second = 4.0
+projectiles_per_shot = 1
+spread_degrees = 0.0
+muzzle_offset = 5.0
+fire_sound = &"fire"
+screen_shake = 0.0

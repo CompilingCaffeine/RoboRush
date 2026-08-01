@@ -12,6 +12,8 @@ extends CharacterBody2D
 ## live in scripts/components/ — a scene owns its root script, and scripts/ holds the
 ## pieces that scenes compose.
 
+const DRONE_SCENE := preload("res://scenes/player/player_drone.tscn")
+
 @export var config: PlayerConfig
 
 @onready var _input: PlayerInput = %Input
@@ -24,6 +26,10 @@ extends CharacterBody2D
 @onready var _camera: ShakeCamera = %Camera
 
 var _is_dead := false
+
+## Debug Drone's escort. Owned here rather than by ItemEffects because a drone is a child
+## of the robot — it orbits and travels with it, and parenting is the whole mechanism.
+var _drones: Array[PlayerDrone] = []
 
 
 func _ready() -> void:
@@ -139,6 +145,28 @@ func _apply_item_stats() -> void:
 	_weapon.modifiers = _items.build_modifier_stack()
 	_weapon.fire_rate_multiplier = _items.get_fire_rate_multiplier()
 	_health.set_max_health(config.max_integrity + _items.get_max_integrity_delta())
+	_sync_drones()
+
+
+## Rebuilds the drone escort to match the inventory, and re-hands every drone the things
+## that make its shots the player's shots — the modifier stack, the shared shot counter,
+## and the fire rate. Re-handed on every item change rather than only on creation, because
+## picking up Cooling Fan after a drone must speed the drone up too.
+func _sync_drones() -> void:
+	var wanted := _items.get_drone_count()
+	while _drones.size() > wanted:
+		var retired: PlayerDrone = _drones.pop_back()
+		retired.queue_free()
+	while _drones.size() < wanted:
+		var drone: PlayerDrone = DRONE_SCENE.instantiate()
+		add_child(drone)
+		_drones.append(drone)
+
+	for index: int in _drones.size():
+		_drones[index].set_orbit_phase(index, _drones.size())
+		_drones[index].adopt(
+			_weapon.modifiers, _weapon.shots, _weapon.fire_rate_multiplier, self
+		)
 
 
 func _on_item_added(item: ItemConfig) -> void:
@@ -186,8 +214,13 @@ func _on_dash_ended() -> void:
 	EventBus.player_dash_ended.emit()
 
 
+## The drones fire from the same signal that flashes the muzzle, which is what makes
+## "fires when the player fires" exactly true. They deliberately do not announce their own
+## shots on the EventBus: one trigger pull should be one firing sound, not three.
 func _on_shot_fired(muzzle: Vector2, direction: Vector2) -> void:
 	_visuals.play_muzzle_flash()
+	for drone: PlayerDrone in _drones:
+		drone.fire(direction)
 	EventBus.shot_fired.emit(Teams.Id.PLAYER, muzzle, direction)
 
 

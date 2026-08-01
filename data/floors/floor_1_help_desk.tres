@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="FloorConfig" load_steps=22 format=3]
+[gd_resource type="Resource" script_class="FloorConfig" load_steps=24 format=3]
 
 [ext_resource type="Script" path="res://scripts/resources/floor_config.gd" id="1_floor"]
 [ext_resource type="Resource" path="res://data/rooms/start_bay.tres" id="2_start"]
@@ -21,6 +21,8 @@
 [ext_resource type="Resource" path="res://data/items/reinforced_chassis.tres" id="16_reinforced_chassis"]
 [ext_resource type="Resource" path="res://data/items/backup_battery.tres" id="17_backup_battery"]
 [ext_resource type="Resource" path="res://data/items/unsafe_overclock.tres" id="18_unsafe_overclock"]
+[ext_resource type="Resource" path="res://data/items/scrap_magnet.tres" id="19_scrap_magnet"]
+[ext_resource type="Resource" path="res://data/items/debug_drone.tres" id="20_debug_drone"]
 
 [resource]
 script = ExtResource("1_floor")
@@ -34,6 +36,6 @@ treasure_templates = Array[RoomTemplate]([ExtResource("7_treasure")])
 enemy_spawns = Array[EnemySpawn]([ExtResource("8_ticket_bot"), ExtResource("8_pop_up_drone"), ExtResource("8_memory_leech"), ExtResource("8_firewall_node")])
 clear_scrap_range = Vector2i(2, 4)
 enemy_scrap_range = Vector2i(1, 2)
-item_pool = Array[ItemConfig]([ExtResource("9_ricochet_driver"), ExtResource("10_fork_bomb"), ExtResource("11_magnetic_guidance"), ExtResource("12_return_protocol"), ExtResource("13_capacitor_leak"), ExtResource("14_volatile_kernel"), ExtResource("15_cooling_fan"), ExtResource("16_reinforced_chassis"), ExtResource("17_backup_battery"), ExtResource("18_unsafe_overclock")])
+item_pool = Array[ItemConfig]([ExtResource("9_ricochet_driver"), ExtResource("10_fork_bomb"), ExtResource("11_magnetic_guidance"), ExtResource("12_return_protocol"), ExtResource("13_capacitor_leak"), ExtResource("14_volatile_kernel"), ExtResource("15_cooling_fan"), ExtResource("16_reinforced_chassis"), ExtResource("17_backup_battery"), ExtResource("18_unsafe_overclock"), ExtResource("19_scrap_magnet"), ExtResource("20_debug_drone")])
 item_clear_indices = Array[int]([1, 3, 5])
 treasure_grants_item = true
