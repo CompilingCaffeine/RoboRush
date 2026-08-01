@@ -230,6 +230,78 @@ SHOP_STAND = [
     "................",
 ]
 
+# --- Merge Conflict: a 24x24 integration machine. Two halves that do not line up, with a
+# --- conflict marker down the seam — the silhouette states the whole fight.
+MERGE_CONFLICT = [
+    "........................",
+    "..oooooooooooooooooooo..",
+    ".oWWWWWWWWWWooddddddddo.",
+    ".oWrrrrrrrrWoodEEEEEEdo.",
+    ".oWrrrrrrrrWoodEEEEEEdo.",
+    ".oWrRRRRRRrWoodEeeeeeEdo",
+    ".oWrRYYYYRrWoodEeggeeEdo",
+    ".oWrRYYYYRrWoodEeggeeEdo",
+    ".oWrRRRRRRrWoodEeeeeeEdo",
+    ".oWrrrrrrrrWoodEEEEEEdo.",
+    ".oWWWWWWWWWWooddddddddo.",
+    "..oooooooooooooooooooo..",
+    "..oooooooooooooooooooo..",
+    ".oWWWWWWWWWWooddddddddo.",
+    ".oWrrrrrrrrWoodEEEEEEdo.",
+    ".oWrRRRRRRrWoodEeeeeeEdo",
+    ".oWrRYYYYRrWoodEeggeeEdo",
+    ".oWrRRRRRRrWoodEeeeeeEdo",
+    ".oWrrrrrrrrWoodEEEEEEdo.",
+    ".oWWWWWWWWWWooddddddddo.",
+    "..oooooooooooooooooooo..",
+    "...oo..oo....oo..oo.....",
+    "........................",
+    "........................",
+]
+
+# --- Synchronization terminal: a squat server box with a status light.
+BOSS_TERMINAL = [
+    "................",
+    "................",
+    "..oooooooooooo..",
+    "..odddddddddo...",
+    "..odmmmmmmmdo...",
+    "..odmEEEEEmdo...",
+    "..odmEaaaEmdo...",
+    "..odmEEEEEmdo...",
+    "..odmmmmmmmdo...",
+    "..odddddddddo...",
+    "..ollllllllllo..",
+    "..odddddddddo...",
+    "..ollllllllllo..",
+    "..oooooooooooo..",
+    "...oo......oo...",
+    "................",
+]
+
+# --- Boss projectiles: the two incompatible versions.
+BOSS_RED = [
+    "..oooo..",
+    ".orrrro.",
+    "orRRRRro",
+    "orRYYRro",
+    "orRYYRro",
+    "orRRRRro",
+    ".orrrro.",
+    "..oooo..",
+]
+
+BOSS_GREEN = [
+    "..oooo..",
+    ".oggggo.",
+    "ogEEEEgo",
+    "ogEYYEgo",
+    "ogEYYEgo",
+    "ogEEEEgo",
+    ".oggggo.",
+    "..oooo..",
+]
+
 # --- Player projectile: hot rivet.
 RIVET = [
     ".oooo.",
@@ -476,6 +548,10 @@ SPRITES = {
     "art/effects/projectile_drone.png": DRONE_SHOT,
     "art/characters/player_drone_placeholder.png": PLAYER_DRONE,
     "art/environments/shop_stand_placeholder.png": SHOP_STAND,
+    "art/bosses/merge_conflict_placeholder.png": MERGE_CONFLICT,
+    "art/bosses/boss_terminal_placeholder.png": BOSS_TERMINAL,
+    "art/effects/projectile_boss_red.png": BOSS_RED,
+    "art/effects/projectile_boss_green.png": BOSS_GREEN,
     "art/effects/projectile_rivet.png": RIVET,
     "art/effects/projectile_ticket.png": TICKET_SHOT,
     "art/effects/muzzle_flash.png": MUZZLE_FLASH,

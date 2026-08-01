@@ -45,6 +45,39 @@ alignment = 1
 [node name="WeaponLabel" type="Label" parent="Status"]
 unique_name_in_owner = true
 
+[node name="BossBar" type="Control" parent="."]
+unique_name_in_owner = true
+anchor_right = 1.0
+offset_left = 90.0
+offset_top = 6.0
+offset_right = -90.0
+offset_bottom = 20.0
+grow_horizontal = 2
+mouse_filter = 2
+
+[node name="Back" type="ColorRect" parent="BossBar"]
+anchor_right = 1.0
+offset_top = 8.0
+offset_bottom = 13.0
+grow_horizontal = 2
+mouse_filter = 2
+
+[node name="BossFill" type="ColorRect" parent="BossBar"]
+unique_name_in_owner = true
+anchor_right = 1.0
+offset_top = 8.0
+offset_bottom = 13.0
+grow_horizontal = 2
+mouse_filter = 2
+
+[node name="BossLabel" type="Label" parent="BossBar"]
+unique_name_in_owner = true
+anchor_right = 1.0
+offset_bottom = 8.0
+grow_horizontal = 2
+mouse_filter = 2
+horizontal_alignment = 1
+
 [node name="ItemBar" type="HBoxContainer" parent="."]
 unique_name_in_owner = true
 anchor_top = 1.0

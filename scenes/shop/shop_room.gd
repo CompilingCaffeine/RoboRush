@@ -11,9 +11,16 @@ extends Node2D
 ## offering the same item twice. It also means a reroll genuinely costs the player
 ## something beyond scrap: rerolled items are gone from the pool for the rest of the run.
 
+## Emitted when an exclusive choice is taken. The boss reward is the only user.
+signal choice_taken(item: ItemConfig)
+
 const STAND_SCENE := preload("res://scenes/shop/shop_stand.tscn")
 
 var config: ShopConfig
+
+## When true, taking one item closes the others. Spec section 16's boss reward is "choose
+## one of three rare items", and a choice you can take all of is not a choice.
+var exclusive := false
 
 var _stands: Array[ShopStand] = []
 var _rng := RandomNumberGenerator.new()
@@ -46,6 +53,35 @@ func stock(
 	# The HUD is not the only thing that needs to know the player's scrap changed: a stand
 	# the player can now afford should say so without them walking away and back.
 	RunManager.scrap_changed.connect(_on_scrap_changed)
+
+
+## Spec section 16's boss reward: a few items, free, and only one of them is yours. Reuses
+## the shop's stands because the interaction is identical — walk up, press the key, take the
+## thing — and a second almost-identical pedestal would be a second thing to keep working.
+func stock_choice(
+	shop_config: ShopConfig, items: Array[ItemConfig], positions: Array[Vector2]
+) -> void:
+	config = shop_config
+	exclusive = true
+
+	for index: int in mini(items.size(), positions.size()):
+		var stand: ShopStand = STAND_SCENE.instantiate()
+		stand.position = positions[index]
+		stand.shop = self
+		add_child(stand)
+		_stands.append(stand)
+		stand.stock_item(items[index], 0)
+
+
+## Called by a stand once its item has been handed over.
+func on_item_taken(taken: ShopStand) -> void:
+	if not exclusive:
+		return
+	for stand: ShopStand in _stands:
+		if stand != taken:
+			stand.is_sold = true
+			stand.refresh()
+	choice_taken.emit(taken.item)
 
 
 ## Replaces every unsold item on the shelves. Sold stands stay sold — a reroll is a second

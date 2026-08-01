@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="BossConfig" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/boss_config.gd" id="1_boss"]
+[ext_resource type="Resource" path="res://data/projectiles/boss_red.tres" id="2_red"]
+[ext_resource type="Resource" path="res://data/projectiles/boss_green.tres" id="3_green"]
+
+[resource]
+script = ExtResource("1_boss")
+display_name = "Merge Conflict"
+max_health = 60.0
+duplicate_at = 0.7
+merge_at = 0.35
+desync_heal_fraction = 0.6
+terminal_count = 4
+terminal_health = 6.0
+red_shot = ExtResource("2_red")
+green_shot = ExtResource("3_green")
+phase_one_interval = 1.9
+phase_two_interval = 2.2
+phase_three_interval = 1.5
+telegraph_seconds = 0.5
+ring_count = 12
+spread_count = 5
+spread_degrees = 46.0
+wall_count = 13
+wall_gap = 3
+charge_speed = 240.0
+charge_seconds = 0.75
+charge_damage = 1.0
+charge_radius = 20.0
+move_speed = 34.0

@@ -18,6 +18,12 @@ signal room_entered(plan: RoomPlan)
 const ROOM_SCENE := preload("res://scenes/rooms/room.tscn")
 const DOOR_SCENE := preload("res://scenes/rooms/door.tscn")
 const SHOP_ROOM_SCENE := preload("res://scenes/shop/shop_room.tscn")
+const BOSS_SCENE := preload("res://scenes/bosses/merge_conflict.tscn")
+
+## How many rare items the boss offers, and where they stand relative to the reward point.
+## Spec section 16: choose one of three.
+const BOSS_REWARD_COUNT := 3
+const BOSS_REWARD_SPACING := 56.0
 
 ## How far below the top of the screen a room's outer wall sits. The remaining space at the
 ## bottom is the HUD strip, so the HUD never covers playable floor.
@@ -46,6 +52,10 @@ var _rng := RandomNumberGenerator.new()
 ## EventBus one that RunManager counts — so reading that counter here would silently be
 ## reading the number from *before* this clear.
 var _clears := 0
+
+## The boss, once the player has walked into its arena. Null until then — a boss that
+## existed from the moment the floor was built would be a boss firing at an empty room.
+var _boss: MergeConflict
 
 @onready var _rooms_container: Node2D = %Rooms
 @onready var _doors_container: Node2D = %Doors
@@ -188,6 +198,9 @@ func _enter_room(id: int) -> void:
 		_rooms[previous_id].set_active(false)
 	room.set_active(true)
 
+	if room.plan.type == RoomTemplate.Type.BOSS and _boss == null:
+		_spawn_boss(room)
+
 	if _needs_clearing(id):
 		_set_doors_locked(id, true)
 	else:
@@ -198,10 +211,75 @@ func _enter_room(id: int) -> void:
 	room_entered.emit(room.plan)
 
 
-## A room needs clearing if it is a combat room with enemies still alive and has not already
-## been cleared, which is also exactly when its doors should be shut.
+## A room needs clearing if something in it is still alive and it has not already been
+## cleared, which is also exactly when its doors should be shut. The boss counts: sealing
+## the player in with it is the point of a boss room.
 func _needs_clearing(id: int) -> bool:
-	return not is_room_cleared(id) and _rooms[id].has_living_enemies()
+	if is_room_cleared(id):
+		return false
+	if _rooms[id].plan.type == RoomTemplate.Type.BOSS:
+		return _boss != null and is_instance_valid(_boss)
+	return _rooms[id].has_living_enemies()
+
+
+## Wakes the boss when the player walks in. The arena it is handed is the room's interior,
+## so the boss lays out its terminals and clamps its own movement without ever asking what
+## room it is in.
+func _spawn_boss(room: Room) -> void:
+	_boss = BOSS_SCENE.instantiate()
+	room.add_child(_boss)
+	_boss.begin(room.get_interior_rect())
+	EventBus.boss_defeated.connect(_on_boss_defeated.bind(room))
+
+
+## Spec section 16's reward: three rare items on stands, and taking one closes the others.
+## Winning the run waits on that choice rather than on the killing blow, so the player is
+## never shown a victory screen with an unclaimed prize behind it.
+func _on_boss_defeated(_boss_node: Node, room: Room) -> void:
+	_cleared[room.plan.id] = true
+	_set_doors_locked(room.plan.id, false)
+
+	var reward: ShopRoom = SHOP_ROOM_SCENE.instantiate()
+	room.add_child(reward)
+	reward.choice_taken.connect(_on_boss_reward_taken)
+	reward.stock_choice(config.shop, _draw_boss_reward(), _boss_reward_positions(room))
+
+
+func _on_boss_reward_taken(_item: ItemConfig) -> void:
+	GameManager.win_run()
+
+
+## Rare items by preference, because that is what spec section 16 promises. Falls back to
+## whatever the pool has left rather than offering fewer than three — a floor generous
+## enough to have exhausted its rares has earned the choice anyway.
+func _draw_boss_reward() -> Array[ItemConfig]:
+	var rares: Array[ItemConfig] = []
+	var rest: Array[ItemConfig] = []
+	for item: ItemConfig in config.item_pool:
+		if item == null or item.id in RunManager.offered_item_ids:
+			continue
+		if item.rarity >= ItemConfig.Rarity.RARE:
+			rares.append(item)
+		else:
+			rest.append(item)
+
+	var chosen: Array[ItemConfig] = []
+	for pool: Array in [rares, rest]:
+		for item: ItemConfig in pool:
+			if chosen.size() >= BOSS_REWARD_COUNT:
+				break
+			chosen.append(item)
+			RunManager.offered_item_ids.append(item.id)
+	return chosen
+
+
+func _boss_reward_positions(room: Room) -> Array[Vector2]:
+	var centre := room.get_reward_position()
+	var positions: Array[Vector2] = []
+	for index: int in BOSS_REWARD_COUNT:
+		var offset := (float(index) - float(BOSS_REWARD_COUNT - 1) * 0.5) * BOSS_REWARD_SPACING
+		positions.append(centre + Vector2(offset, 0.0))
+	return positions
 
 
 func _on_room_cleared(id: int) -> void:

@@ -30,6 +30,10 @@ const DASH_SPENT := Color("342a1a")
 const LABEL_COLOR := Color("7c8a99")
 const BANNER_CLEAR := Color("58f0c8")
 const BANNER_ITEM := Color("f2a13c")
+const BANNER_BOSS := Color("ff6b5a")
+
+const BOSS_BAR_BACK := Color("2a1a1e")
+const BOSS_BAR_FILL := Color("ff6b5a")
 
 ## Gap between item icons in the bar, in pixels.
 const ITEM_SEPARATION := 2
@@ -50,6 +54,9 @@ const BANNER_SECONDS := 2.0
 @onready var _banner: Label = %Banner
 @onready var _top_label: Label = %TopLabel
 @onready var _item_bar: HBoxContainer = %ItemBar
+@onready var _boss_bar: Control = %BossBar
+@onready var _boss_fill: ColorRect = %BossFill
+@onready var _boss_label: Label = %BossLabel
 
 var _player: Player
 var _banner_left := 0.0
@@ -68,8 +75,17 @@ func _ready() -> void:
 
 	_item_bar.add_theme_constant_override("separation", ITEM_SEPARATION)
 
+	_boss_bar.visible = false
+	_boss_fill.color = BOSS_BAR_FILL
+	(_boss_bar.get_node("Back") as ColorRect).color = BOSS_BAR_BACK
+	_boss_label.add_theme_font_size_override("font_size", FONT_SIZE)
+	_boss_label.add_theme_color_override("font_color", LABEL_COLOR)
+
 	EventBus.room_cleared.connect(_on_room_cleared)
 	EventBus.item_collected.connect(_on_item_collected)
+	EventBus.boss_health_changed.connect(_on_boss_health_changed)
+	EventBus.boss_phase_changed.connect(_on_boss_phase_changed)
+	EventBus.boss_defeated.connect(_on_boss_defeated)
 	# Scrap and floor progress are pushed rather than polled: unlike integrity they change
 	# rarely, so a signal is both cheaper and easier to reason about than a per-frame read.
 	RunManager.scrap_changed.connect(_on_run_state_changed.unbind(1))
@@ -175,6 +191,24 @@ func _build_pips(container: HBoxContainer, count: int) -> void:
 
 func _on_room_cleared() -> void:
 	_show_banner("SECTOR CLEAR", BANNER_CLEAR)
+
+
+## Spec section 21 lists boss health as a HUD element. Along the top, where it cannot be
+## confused with the player's own integrity along the bottom, and only while there is a boss.
+func _on_boss_health_changed(ratio: float) -> void:
+	_boss_bar.visible = ratio > 0.0
+	_boss_fill.anchor_right = clampf(ratio, 0.0, 1.0)
+
+
+func _on_boss_phase_changed(phase: int) -> void:
+	_boss_label.text = "MERGE CONFLICT    PHASE %d" % phase
+	if phase > 1:
+		_show_banner("MERGE CONFLICT  //  PHASE %d" % phase, BANNER_BOSS)
+
+
+func _on_boss_defeated(_boss: Node) -> void:
+	_boss_bar.visible = false
+	_show_banner("CONFLICT RESOLVED  //  CHOOSE ONE REWARD", BANNER_CLEAR)
 
 
 ## Name and effect together, because an item the player cannot read is an item they cannot

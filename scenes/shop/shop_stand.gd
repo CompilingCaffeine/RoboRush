@@ -59,7 +59,8 @@ func refresh() -> void:
 		_label.add_theme_color_override("font_color", SOLD)
 		return
 
-	_label.text = "%s  %d" % [_describe(), price]
+	# A free choice shows no price at all: "0" reads as broken, not as a gift.
+	_label.text = _describe() if price <= 0 else "%s  %d" % [_describe(), price]
 	_label.add_theme_color_override(
 		"font_color", AFFORDABLE if RunManager.scrap >= price else TOO_EXPENSIVE
 	)
@@ -106,6 +107,8 @@ func _buy_item(player: Player) -> bool:
 
 	is_sold = true
 	refresh()
+	if shop != null:
+		shop.on_item_taken(self)
 	return true
 
 

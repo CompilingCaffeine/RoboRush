@@ -1,0 +1,73 @@
+class_name BossConfig
+extends Resource
+## Tuning for the Merge Conflict, spec section 16's Floor 1 boss.
+##
+## One resource for a fight with three phases, because the phases are the same machine at
+## different settings — the same two projectile colours, the same arena, the same health
+## pool. What changes between them is which attacks are in rotation and how fast they come,
+## and both of those are here.
+
+@export var display_name: String = "Merge Conflict"
+
+@export_group("Durability")
+
+## One pool for the whole fight, including phase two's two bodies. Spec section 16 describes
+## the boss *duplicating*, not doubling: two versions of one thing share what it has left.
+@export var max_health: float = 60.0
+
+## Health fraction at which the boss duplicates. Spec section 16: 70 percent.
+@export_range(0.0, 1.0) var duplicate_at: float = 0.7
+
+## Health fraction at which the two versions merge. Spec section 16: 35 percent.
+@export_range(0.0, 1.0) var merge_at: float = 0.35
+
+## Fraction of damage refunded while the versions are still synchronised. This is spec
+## section 16's "damage to one partially heals the other", and destroying a terminal is how
+## the player turns it off.
+@export_range(0.0, 1.0) var desync_heal_fraction: float = 0.6
+
+@export_group("Terminals")
+
+## Spec section 16: four destructible synchronization terminals.
+@export var terminal_count: int = 4
+
+@export var terminal_health: float = 6.0
+
+@export_group("Attacks")
+
+## The two incompatible versions, as projectiles. Everything the boss fires is one of these.
+@export var red_shot: ProjectileConfig
+@export var green_shot: ProjectileConfig
+
+## Seconds between attacks, per phase. Phase three is fastest because it is the last one.
+@export var phase_one_interval: float = 1.9
+@export var phase_two_interval: float = 2.2
+@export var phase_three_interval: float = 1.5
+
+## Seconds of visible windup before an attack lands. The boss is readable or it is unfair.
+@export var telegraph_seconds: float = 0.5
+
+## Projectiles in a radial ring.
+@export var ring_count: int = 12
+
+## Projectiles in an aimed spread, and how wide it opens.
+@export var spread_count: int = 5
+@export var spread_degrees: float = 46.0
+
+## Projectiles in a wall, and how many adjacent ones are missing to make the gap the player
+## runs through. A wall with no gap is a wall the player cannot answer.
+@export var wall_count: int = 13
+@export var wall_gap: int = 3
+
+@export_group("Charge")
+
+@export var charge_speed: float = 240.0
+@export var charge_seconds: float = 0.75
+@export var charge_damage: float = 1.0
+@export var charge_radius: float = 20.0
+
+@export_group("Movement")
+
+## Drift speed while not charging. The boss repositions slowly; it is an arena hazard, not
+## a chaser.
+@export var move_speed: float = 34.0
