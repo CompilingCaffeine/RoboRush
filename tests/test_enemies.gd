@@ -322,6 +322,10 @@ func _test_firewall_node_holds_still_and_sweeps() -> void:
 	var arena := _make_arena()
 	var target := _add_target(arena, Vector2(34.0, 0.0))
 	var health := HealthComponent.find_on(target)
+	# Settled before the node exists: a body added this frame is not in the physics space
+	# until the next step, and a node that starts sweeping first would cast its rays into
+	# an empty world. See the wall check below, which this caught.
+	await advance_physics(2)
 	var node := _add_enemy(arena, FIREWALL_NODE_SCENE, Vector2.ZERO, _fast_firewall()) as FirewallNode
 	await advance_physics(2)
 
@@ -345,6 +349,10 @@ func _test_firewall_beams_stop_at_walls() -> void:
 	_add_wall(arena, Vector2(14.0, -40.0), Vector2i(10, 80))
 	var target := _add_target(arena, Vector2(40.0, 0.0))
 	var health := HealthComponent.find_on(target)
+	# The wall must be in the physics space before anything casts a ray at it. Without
+	# these frames the node's first sweep sees no wall at all, and whether that first
+	# frame happened to point a beam at the player decided whether this check passed.
+	await advance_physics(2)
 	_add_enemy(arena, FIREWALL_NODE_SCENE, Vector2.ZERO, _fast_firewall())
 
 	# Long enough for every beam to sweep the sheltered player several times over.

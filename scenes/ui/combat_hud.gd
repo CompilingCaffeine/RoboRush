@@ -29,7 +29,6 @@ const DASH_READY := Color("f2a13c")
 const DASH_SPENT := Color("342a1a")
 const LABEL_COLOR := Color("7c8a99")
 const BANNER_CLEAR := Color("58f0c8")
-const BANNER_DEAD := Color("ff6b5a")
 const BANNER_ITEM := Color("f2a13c")
 
 ## Gap between item icons in the bar, in pixels.
@@ -39,7 +38,8 @@ const ITEM_SEPARATION := 2
 const LOW_INTEGRITY_THRESHOLD := 1.0
 const LOW_INTEGRITY_PULSE_HZ := 3.0
 
-## How long a transient banner stays up. The death banner ignores this.
+## How long a banner stays up. Every banner is transient now that the end of a run has a
+## screen of its own.
 const BANNER_SECONDS := 2.0
 
 @onready var _integrity_label: Label = %IntegrityLabel
@@ -53,7 +53,6 @@ const BANNER_SECONDS := 2.0
 
 var _player: Player
 var _banner_left := 0.0
-var _banner_is_permanent := false
 var _pulse_time := 0.0
 
 
@@ -70,7 +69,6 @@ func _ready() -> void:
 	_item_bar.add_theme_constant_override("separation", ITEM_SEPARATION)
 
 	EventBus.room_cleared.connect(_on_room_cleared)
-	EventBus.player_died.connect(_on_player_died)
 	EventBus.item_collected.connect(_on_item_collected)
 	# Scrap and floor progress are pushed rather than polled: unlike integrity they change
 	# rarely, so a signal is both cheaper and easier to reason about than a per-frame read.
@@ -146,18 +144,17 @@ func _refresh_top_label() -> void:
 
 
 func _update_banner(delta: float) -> void:
-	if _banner_is_permanent or _banner_left <= 0.0:
+	if _banner_left <= 0.0:
 		return
 	_banner_left -= delta
 	if _banner_left <= 0.0:
 		_banner.visible = false
 
 
-func _show_banner(text: String, color: Color, permanent := false) -> void:
+func _show_banner(text: String, color: Color) -> void:
 	_banner.text = text
 	_banner.add_theme_color_override("font_color", color)
 	_banner.visible = true
-	_banner_is_permanent = permanent
 	_banner_left = BANNER_SECONDS
 
 
@@ -178,10 +175,6 @@ func _build_pips(container: HBoxContainer, count: int) -> void:
 
 func _on_room_cleared() -> void:
 	_show_banner("SECTOR CLEAR", BANNER_CLEAR)
-
-
-func _on_player_died() -> void:
-	_show_banner("SYSTEM FAILURE    PRESS R TO REBOOT", BANNER_DEAD, true)
 
 
 ## Name and effect together, because an item the player cannot read is an item they cannot

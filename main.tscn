@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://scenes/floors/floor.tscn" id="2_floor"]
@@ -8,6 +8,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/combat_hud.tscn" id="5_combat_hud"]
 [ext_resource type="PackedScene" path="res://scenes/ui/minimap.tscn" id="6_minimap"]
 [ext_resource type="PackedScene" path="res://scenes/ui/debug_hud.tscn" id="7_debug_hud"]
+[ext_resource type="PackedScene" path="res://scenes/ui/run_summary.tscn" id="9_summary"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -34,6 +35,9 @@ script = ExtResource("8_item_effects")
 unique_name_in_owner = true
 
 [node name="Minimap" parent="UILayer" instance=ExtResource("6_minimap")]
+unique_name_in_owner = true
+
+[node name="RunSummary" parent="UILayer" instance=ExtResource("9_summary")]
 unique_name_in_owner = true
 
 [node name="DebugHUD" parent="UILayer" instance=ExtResource("7_debug_hud")]

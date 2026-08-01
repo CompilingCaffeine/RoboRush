@@ -24,6 +24,9 @@ const FLOOR_SEED_OVERRIDE := 0
 
 func _ready() -> void:
 	var seed_value := _resolve_seed()
+	# Order matters: the state must be playing before anything reads it, and the run's
+	# clock only ticks while it is.
+	GameManager.start_run()
 	RunManager.begin_run(seed_value)
 
 	_feedback.setup(_player.get_camera())

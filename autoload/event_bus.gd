@@ -73,6 +73,16 @@ signal enemy_killed(enemy: Node, position: Vector2)
 
 signal room_cleared()
 
+## The floor's boss was destroyed. Distinct from `enemy_killed`, which a boss also emits:
+## one of them means "a thing died", the other means "the run is over".
+signal boss_defeated(boss: Node)
+
+## Boss health changed, for the boss bar. `ratio` is 0..1.
+signal boss_health_changed(ratio: float)
+
+## The boss entered a new phase. `phase` is a one-based index.
+signal boss_phase_changed(phase: int)
+
 ## `type` is a RoomTemplate.Type. Fires on every entry, including re-entering a cleared room.
 signal room_entered(type: int, room_id: int)
 
