@@ -826,7 +826,14 @@ resulting frames, and by nothing else. The suite was green for all of them.
     boss then created zero reward stands, and victory only ever happened when a reward was
     taken — so the player was left in a cleared arena with a dead boss and no way to win.
     Rerolled items now return to the pool, and victory no longer depends on a prize existing.
-12. **The boss's central mechanic was very nearly a trap.** Destroying all four
+12. **Settings and the controls card passed clicks straight through.** Reported. Both modal
+    panels were `MOUSE_FILTER_IGNORE` on their root — copied from the HUD, where ignoring the
+    mouse is correct — so a click anywhere on them landed on whatever was underneath. With
+    settings open over the pause menu that meant Abandon Run and Quit were live, and hovering
+    handed keyboard focus back to a button the player could not see. The keyboard half of this
+    had already been reported and fixed a week earlier; the mouse half was the same mistake in
+    the other input device.
+13. **The boss's central mechanic was very nearly a trap.** Destroying all four
    synchronisation terminals saved two seconds out of thirteen — an eighteen percent return
    for crossing the arena four times under fire. Found by the balance suite computing what
    the numbers mean rather than asserting they are unchanged; the refund is now 0.75 and
@@ -883,7 +890,12 @@ resulting frames, and by nothing else. The suite was green for all of them.
     adds a body should assume it is inside a callback until it has checked.
 15. **Hand-authored `NodePath` literals do not resolve into exported `Node` properties**, so
     text-authored scenes pass node references explicitly.
-16. **Quitting within a second of a sound starting can still print leak warnings at exit**,
+16. **The settings list cannot be operated with a mouse.** It is a keyboard and gamepad list —
+    up and down choose, left and right adjust — and now that it correctly blocks clicks rather
+    than passing them through, a mouse user can open it and click nothing. Escape closes it and
+    the hint line along the bottom says so, but a player who reaches for the mouse gets no
+    response at all.
+17. **Quitting within a second of a sound starting can still print leak warnings at exit**,
     roughly one run in four when quitting during the 1.1-second victory fanfare. The specific
     reported case — a menu button that played a sound and quit on the same frame — is fixed,
     and `AudioManager.stop_all()` is confirmed to run and to find nothing playing. Adding

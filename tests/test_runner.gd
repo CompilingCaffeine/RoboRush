@@ -10,6 +10,10 @@ extends Node
 ## Guards against a suite that awaits something that never arrives.
 const TIMEOUT_SECONDS := 120.0
 
+## Set once the run has reported. Anything that ends the process before then is a failure,
+## however cleanly it did it — see _exit_tree.
+var _finished := false
+
 
 func _ready() -> void:
 	# The suites begin and end real runs, which would otherwise fold made-up statistics into
@@ -60,6 +64,7 @@ func _ready() -> void:
 			break
 
 	var elapsed := (Time.get_ticks_msec() - start) / 1000.0
+	_finished = true
 	if failures.is_empty():
 		print("PASS  %d suites, %d checks in %.1fs" % [suites.size(), total_checks, elapsed])
 		get_tree().quit(0)
@@ -68,4 +73,22 @@ func _ready() -> void:
 	printerr("FAIL  %d problems across %d checks:" % [failures.size(), total_checks])
 	for failure: String in failures:
 		printerr("  - %s" % failure)
+	get_tree().quit(1)
+
+
+## Catches the run being ended by something other than this function.
+##
+## A suite once clicked a real QUIT button, which called SceneRouter.quit_game and stopped the
+## process with exit code 0 — three suites never ran, nothing was reported, and the shell saw
+## success. A test harness that can exit silently is worse than no harness, because every
+## failure after the exit point becomes invisible.
+func _exit_tree() -> void:
+	if _finished:
+		return
+	printerr(
+		"FAIL  the run ended before reporting. Something quit the tree — a suite that "
+		+ "pressed a button wired to SceneRouter.quit_game is the way this has happened."
+	)
+	# Best effort: a later quit() may not override an exit code already set by whoever ended
+	# the run, so the message above is the part that must not be missed.
 	get_tree().quit(1)

@@ -78,11 +78,22 @@ func _unhandled_input(event: InputEvent) -> void:
 	var is_press := (
 		(event is InputEventKey and event.is_pressed() and not event.is_echo())
 		or (event is InputEventJoypadButton and event.is_pressed())
-		or (event is InputEventMouseButton and event.is_pressed())
 	)
 	if is_press:
 		close()
 	get_viewport().set_input_as_handled()
+
+
+## Mouse clicks arrive here rather than in `_unhandled_input`, because the root blocks the
+## mouse to stop clicks reaching the menu underneath — and a Control that consumes a click has
+## already handled it by the time unhandled input is offered. Without this, "press any button"
+## would quietly stop being true for the mouse.
+func _gui_input(event: InputEvent) -> void:
+	if not visible:
+		return
+	if event is InputEventMouseButton and event.is_pressed():
+		close()
+		accept_event()
 
 
 func _build_grid() -> void:

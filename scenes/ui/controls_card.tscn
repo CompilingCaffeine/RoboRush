@@ -8,7 +8,10 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-mouse_filter = 2
+; STOP, not IGNORE. This is a modal: it covers the screen, and every other Control in
+; the game is IGNORE so the HUD never eats a click. Copying that here let clicks fall
+; straight through to the menu underneath, where Abandon Run and Quit were waiting.
+mouse_filter = 0
 script = ExtResource("1_controls")
 
 [node name="Backdrop" type="ColorRect" parent="."]
