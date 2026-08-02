@@ -858,7 +858,14 @@ resulting frames, and by nothing else. The suite was green for all of them.
     first room paid out a repair cell to a player still on full integrity who could not use it.
     The line immediately below it already used the controller's own `_clears`; two counters for
     one idea sat next to each other, one of them wrong.
-16. **The boss's central mechanic was very nearly a trap.** Destroying all four
+16. **Return Protocol did nothing in a locked room.** Reported. It reversed the shot at the end
+    of its lifetime, which for a rivet is 588 pixels of travel — and a room's interior is 416 by
+    192, so a missed shot always died on a wall long before it was due to turn around. The item
+    was a rare that did nothing in the only place the game has rooms. It now reverses when the
+    shot has definitively *missed*: on a wall, once its bounces are spent. A first attempt
+    capped how far it flew before turning, which its own test rejected — a shot that turns at
+    140 pixels can never reach an enemy at 300, making the item a range downgrade.
+17. **The boss's central mechanic was very nearly a trap.** Destroying all four
    synchronisation terminals saved two seconds out of thirteen — an eighteen percent return
    for crossing the arena four times under fire. Found by the balance suite computing what
    the numbers mean rather than asserting they are unchanged; the refund is now 0.75 and

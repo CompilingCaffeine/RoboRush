@@ -173,6 +173,15 @@ func _handle_wall(hit: Dictionary) -> void:
 		EventBus.projectile_bounced.emit(point, normal)
 		return
 
+	# Bounces are spent, so this wall is where the shot has definitively missed — which is the
+	# moment Return Protocol exists for. Checked after the bounce branch so Ricochet Driver plus
+	# Return Protocol reads as "bounce off the first wall, come back off the second" rather than
+	# the two items fighting over the same collision.
+	if config.return_enabled and not _has_returned and not normal.is_zero_approx():
+		global_position = point + normal * (config.radius + BOUNCE_CLEARANCE)
+		_reverse()
+		return
+
 	global_position = point
 	_impact(null, point, normal if not normal.is_zero_approx() else -_direction)
 
@@ -256,20 +265,26 @@ func _impact(body: Node, point: Vector2, normal: Vector2) -> void:
 ## decide who owns a projectile that outlived its own spawn.
 func _expire() -> void:
 	if config.return_enabled and not _has_returned:
-		_has_returned = true
-		_direction = -_direction
-		rotation = _direction.angle()
-		_lifetime_left = config.lifetime
-		# The way back is a fresh pass: whatever it flew through on the way out is a
-		# legitimate target again.
-		_hit_bodies.clear()
-		# Reported as a bounce because it is the same event to the player and to the
-		# effects that draw it: the shot changed direction at a point.
-		EventBus.projectile_bounced.emit(global_position, _direction)
+		_reverse()
 		return
 
 	EventBus.projectile_expired.emit(self)
 	_despawn()
+
+
+## Turns the projectile around. Reached either because it flew its `return_after_distance` or
+## because its lifetime ran out with a return still owed.
+func _reverse() -> void:
+	_has_returned = true
+	_direction = -_direction
+	rotation = _direction.angle()
+	_lifetime_left = config.lifetime
+	# The way back is a fresh pass: whatever it flew through on the way out is a
+	# legitimate target again.
+	_hit_bodies.clear()
+	# Reported as a bounce because it is the same event to the player and to the
+	# effects that draw it: the shot changed direction at a point.
+	EventBus.projectile_bounced.emit(global_position, _direction)
 
 
 ## Fans `split_count` weaker children out from the point of impact.

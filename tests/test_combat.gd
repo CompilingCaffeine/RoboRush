@@ -46,6 +46,9 @@ func run() -> void:
 	await _test_room_combat_reports_cleared_once()
 	await _test_damage_shoves_the_player()
 	await _test_the_player_shove_decays_and_does_not_compound()
+	await _test_return_protocol_turns_around_inside_a_room()
+	await _test_return_protocol_leaves_ordinary_range_alone()
+	await _test_ricochet_and_return_stack()
 
 
 # --- Data ---------------------------------------------------------------------
@@ -702,5 +705,141 @@ func _test_the_player_shove_decays_and_does_not_compound() -> void:
 			% [travelled, ceiling, impulse],
 	)
 	check(travelled > ceiling * 0.4, "and it is not a token nudge (%.1f px)" % travelled)
+
+	await _teardown(arena)
+
+
+## Reported: "Return Protocol is effectively nonfunctional in locked rooms."
+##
+## The reversal was triggered by the end of the projectile's lifetime, and a rivet's lifetime is
+## 420 px/s for 1.4 s — 588 pixels of travel. A room's interior is 416 by 192, so a missed shot
+## always reached a wall and died there long before it was due to turn around. The item did
+## nothing whatsoever in the only place the game has rooms.
+##
+## The wall here sits 208 pixels out, which is the distance from the middle of a room to its
+## side wall. That is the reported condition, and it is what makes this check fail against the
+## old lifetime-based trigger rather than merely exercising the new one.
+func _test_return_protocol_turns_around_inside_a_room() -> void:
+	var arena := _make_arena()
+	var wall_distance := 208.0
+	_add_wall(arena, Vector2(wall_distance, -40.0), Vector2i(16, 80))
+	await advance_physics(2)
+
+	# Return Protocol's entire implementation, read from the shipped item so the numbers under
+	# test are the ones that ship.
+	var item := load("res://data/items/return_protocol.tres") as ItemConfig
+	if not require(item, "return_protocol.tres loads"):
+		await _teardown(arena)
+		return
+
+	var config := _rivet_variant()
+	for key: StringName in item.projectile_set:
+		config.set(key, item.projectile_set[key])
+	check(config.return_enabled, "the item switches the return on")
+
+	var projectile := _fire_at(arena, Vector2.ZERO, Vector2.RIGHT, config)
+	var furthest := 0.0
+	var came_back := false
+	for _frame: int in 40:
+		await advance_physics(1)
+		if not is_instance_valid(projectile):
+			break
+		furthest = maxf(furthest, projectile.global_position.x)
+		if projectile.global_position.x < furthest - 8.0:
+			came_back = true
+
+	check(came_back, "the shot turns around and flies back (reached %.0f px)" % furthest)
+	check(
+		furthest >= wall_distance - 16.0,
+		"and it flies its full distance first, turning at the wall rather than short of it "
+			+ "(%.0f px of %.0f)" % [furthest, wall_distance],
+	)
+
+	await _teardown(arena)
+
+
+## The fix had one way to go badly wrong: shortening the projectile's lifetime to make the
+## return happen sooner would also have shortened the weapon's reach, so the player could no
+## longer hit anything far away. That would be a worse bug than the one being fixed, so the
+## outbound leg is capped by distance and `lifetime` is left alone.
+func _test_return_protocol_leaves_ordinary_range_alone() -> void:
+	var rivet := load(RIVET_PATH) as ProjectileConfig
+	var item := load("res://data/items/return_protocol.tres") as ItemConfig
+	if not (require(rivet, "rivet.tres loads") and require(item, "the item loads")):
+		return
+
+	check(
+		not item.projectile_set.has(&"lifetime"),
+		"Return Protocol does not touch lifetime, which is also the weapon's range",
+	)
+	check(
+		not item.projectile_scale.has(&"lifetime")
+			and not item.projectile_add.has(&"lifetime"),
+		"and does not scale or offset it either",
+	)
+
+	var arena := _make_arena()
+	var far_bot := _add_bot(arena, Vector2(300.0, 0.0))
+	await advance_physics(2)
+
+	var config := _rivet_variant()
+	for key: StringName in item.projectile_set:
+		config.set(key, item.projectile_set[key])
+	var health := HealthComponent.find_on(far_bot)
+	var before := health.current
+
+	# 60 frames, not 40: at 420 px/s a frame is seven pixels, so forty of them only cover 280
+	# and the shot had not arrived yet. The first version of this check failed for that reason
+	# and not because of anything in the game.
+	_fire_at(arena, Vector2.ZERO, Vector2.RIGHT, config)
+	await advance_physics(60)
+
+	check(
+		health.current < before,
+		"a shot carrying Return Protocol still reaches an enemy 300 px away",
+	)
+
+	await _teardown(arena)
+
+
+## The claim the fix makes in a comment, so it should not go unchecked: putting the return on
+## wall impact must not fight Ricochet Driver over the same collision. Bounces are spent first,
+## so the pair reads as "bounce off the first wall, come back off the second".
+##
+## Geometry chosen so the trajectory is one axis: a shot fired right at a wall reflects straight
+## back, crosses the origin, and meets the far wall with no bounces left.
+func _test_ricochet_and_return_stack() -> void:
+	var arena := _make_arena()
+	_add_wall(arena, Vector2(208.0, -40.0), Vector2i(16, 80))
+	_add_wall(arena, Vector2(-224.0, -40.0), Vector2i(16, 80))
+	await advance_physics(2)
+
+	var config := _rivet_variant()
+	config.bounce_count = 1
+	config.return_enabled = true
+	config.lifetime = 4.0
+
+	var projectile := _fire_at(arena, Vector2.ZERO, Vector2.RIGHT, config)
+	var went_right := false
+	var came_left := false
+	var went_right_again := false
+	for _frame: int in 120:
+		await advance_physics(1)
+		if not is_instance_valid(projectile):
+			break
+		var x := projectile.global_position.x
+		if x > 150.0:
+			went_right = true
+		if went_right and x < -150.0:
+			came_left = true
+		if came_left and x > -100.0:
+			went_right_again = true
+
+	check(went_right, "the shot flies out to the first wall")
+	check(came_left, "bounces off it and crosses back past the origin")
+	check(
+		went_right_again,
+		"and returns off the second wall, so the two items take one collision each",
+	)
 
 	await _teardown(arena)

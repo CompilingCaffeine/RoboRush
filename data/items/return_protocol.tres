@@ -7,7 +7,7 @@
 script = ExtResource("1_item")
 id = &"return_protocol"
 display_name = "Return Protocol"
-description = "Missed projectiles reverse direction once at the end of their lifetime."
+description = "Missed projectiles turn around and fly back once."
 rarity = 1
 category = 1
 tags = Array[StringName]([&"projectile", &"return"])

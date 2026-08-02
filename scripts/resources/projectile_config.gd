@@ -76,9 +76,19 @@ extends Resource
 ## How far each jump may reach for its next target.
 @export var chain_radius: float = 72.0
 
-## Whether the projectile reverses once at the end of its life instead of expiring.
-## Return Protocol switches this on.
+## Whether the projectile turns around once instead of dying. Return Protocol switches this on.
+##
+## It reverses when it has definitively *missed*: on hitting a wall once its bounces are spent,
+## or on running out of lifetime in open air. Triggering only on lifetime — which is what the
+## spec's wording literally describes — meant it never fired at all, because a rivet's lifetime
+## is 588 pixels of travel and a room's interior is 416 by 192, so a missed shot always died on
+## a wall first.
+##
+## Capping how far it flies before turning was tried and is worse: it would turn the item into a
+## range *downgrade*, since a shot that turns around at 140 pixels can never reach an enemy at
+## 300. "Missed" is the whole point — a shot that is still going has not missed yet.
 @export var return_enabled: bool = false
+
 
 @export_group("Composition (declared, not yet honoured)")
 
