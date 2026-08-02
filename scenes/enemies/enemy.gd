@@ -69,17 +69,31 @@ func _physics_process(delta: float) -> void:
 	var rate := config.acceleration if not desired.is_zero_approx() else config.deceleration
 	velocity = velocity.move_toward(desired, rate * delta)
 
-	# Knockback is applied outside the acceleration model so it is not instantly
-	# cancelled by the enemy's own steering.
-	velocity += _knockback
-	_knockback = _knockback.move_toward(Vector2.ZERO, config.deceleration * delta)
-
 	move_and_slide()
+	_apply_knockback(delta)
 
 	_step_contact_damage(delta)
 
 
 # --- Subclass hooks -----------------------------------------------------------
+
+
+## Moves the body by the decaying shove from being shot, as a motion of its own rather than
+## as an addition to `velocity`.
+##
+## It used to be `velocity += _knockback`, which looks equivalent and is not. `velocity`
+## persists across frames, so a single impulse was re-added on every frame it took to decay:
+## a 55 px/s rivet peaked at 90 px/s three frames later, *growing* before it fell away, and
+## the enemy's own steering had to fight the leftovers. Keeping `velocity` purely the enemy's
+## own steering means the acceleration model never sees the shove at all.
+##
+## `move_and_collide` rather than folding it into `move_and_slide`: an enemy shoved into a wall
+## should stop against it, not slide along it as though it were walking.
+func _apply_knockback(delta: float) -> void:
+	if _knockback.is_zero_approx():
+		return
+	move_and_collide(_knockback * delta)
+	_knockback = _knockback.move_toward(Vector2.ZERO, config.deceleration * delta)
 
 
 ## Called at the end of _ready, once every shared component is wired.

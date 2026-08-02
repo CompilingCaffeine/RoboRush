@@ -44,6 +44,8 @@ func run() -> void:
 	await _test_dash_invulnerability_refuses_damage()
 	await _test_dormant_rooms_cannot_be_shot_into()
 	await _test_room_combat_reports_cleared_once()
+	await _test_damage_shoves_the_player()
+	await _test_the_player_shove_decays_and_does_not_compound()
 
 
 # --- Data ---------------------------------------------------------------------
@@ -616,3 +618,89 @@ func _fire_at(
 	var shooter := Node2D.new()
 	arena.add_child(shooter)
 	return ProjectileFactory.spawn(shooter, weapon_config, direction, origin, team)
+
+
+## Reported: "player knockback is authored for contact, beams, and boss charges but never
+## applied". It was authored three times — contact damage at 130, Firewall Node beams at 130,
+## the boss charge at 200 — and `Player._on_damaged` only re-emitted the event, so all three
+## were discarded.
+##
+## Nor could it have worked by adding to `velocity`: `_physics_process` overwrites velocity
+## outright every frame from either the dash or the motion controller, so an impulse parked
+## there would be gone before it moved anything. This checks the robot actually moves.
+func _test_damage_shoves_the_player() -> void:
+	var arena := _make_arena()
+	var player: Player = PLAYER_SCENE.instantiate()
+	player.position = Vector2(200.0, 200.0)
+	arena.add_child(player)
+	await advance_physics(2)
+
+	var origin := player.global_position
+	player.get_health_component().apply_damage(
+		DamageInfo.new(1.0, null, Vector2.RIGHT, 130.0)
+	)
+	await advance_physics(6)
+
+	var moved := player.global_position - origin
+	check(moved.length() > 1.0, "damage moves the player (%.2f px)" % moved.length())
+	check(
+		moved.x > absf(moved.y),
+		"and moves them the way the damage travelled (%s)" % moved,
+	)
+
+	# Damage with no knockback must not shove: projectile knockback is a per-weapon number and
+	# zero has to mean zero.
+	var settled := player.global_position
+	await advance_physics(30)
+	var before_second_hit := player.global_position
+	player.get_health_component().apply_damage(DamageInfo.new(0.0, null, Vector2.RIGHT, 0.0))
+	await advance_physics(6)
+	check(
+		player.global_position.distance_to(before_second_hit) <= 0.01,
+		"a hit that states no knockback does not move the player",
+	)
+	check(settled != origin, "the first shove had in fact displaced them")
+
+	await _teardown(arena)
+
+
+## The enemy version of this bug re-added the impulse every frame, so it grew before decaying.
+## The player's shove uses the same model, and this pins the same property: the motion only ever
+## slows, and the total distance stays inside what the impulse can physically account for.
+func _test_the_player_shove_decays_and_does_not_compound() -> void:
+	var arena := _make_arena()
+	var player: Player = PLAYER_SCENE.instantiate()
+	player.position = Vector2(200.0, 200.0)
+	arena.add_child(player)
+	await advance_physics(2)
+
+	var impulse := 130.0
+	var origin := player.global_position
+	player.get_health_component().apply_damage(
+		DamageInfo.new(1.0, null, Vector2.RIGHT, impulse)
+	)
+
+	var steps: Array[float] = []
+	var last := player.global_position
+	for _frame: int in 24:
+		await advance_physics(1)
+		steps.append(player.global_position.distance_to(last))
+		last = player.global_position
+
+	var worst_growth := 0.0
+	for index: int in range(1, steps.size()):
+		worst_growth = maxf(worst_growth, steps[index] - steps[index - 1])
+	check(worst_growth <= 0.01, "the shove only slows down (worst growth %.3f px)" % worst_growth)
+
+	# A shove of v decaying at a constant rate d travels v^2 / 2d and no further. Anything past
+	# that means the impulse was applied more than once.
+	var ceiling := impulse * impulse / (2.0 * player.config.knockback_decay)
+	var travelled := player.global_position.distance_to(origin)
+	check(
+		travelled <= ceiling * 1.25,
+		"the shove travels %.1f px, within the %.1f px a single %.0f px/s impulse allows"
+			% [travelled, ceiling, impulse],
+	)
+	check(travelled > ceiling * 0.4, "and it is not a token nudge (%.1f px)" % travelled)
+
+	await _teardown(arena)

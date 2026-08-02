@@ -39,6 +39,9 @@ func run() -> void:
 	await _test_leech_deals_contact_damage()
 	await _test_firewall_node_holds_still_and_sweeps()
 	await _test_firewall_beams_stop_at_walls()
+	await _test_knockback_decays_instead_of_growing()
+	await _test_knockback_stays_out_of_the_steering_velocity()
+	await _test_full_resistance_means_immovable()
 
 
 # --- Data ---------------------------------------------------------------------
@@ -449,3 +452,107 @@ func _fast_firewall() -> FirewallNodeConfig:
 	tuning.beam_rotation_speed = 9.0
 	tuning.beam_interval = 0.1
 	return tuning
+
+
+## Reported: enemy knockback was "repeatedly added to velocity and initially grows instead of
+## decaying". It was `velocity += _knockback` every frame, and because `velocity` persists the
+## same impulse was re-applied for every frame it took to decay — a 55 px/s rivet peaked at
+## 90 px/s three frames in, growing before it fell away.
+##
+## The check is the shape of the motion rather than a magic number: after one hit, each frame's
+## displacement must be no larger than the one before it. That is what "decays" means, and it is
+## false for any model that re-adds the impulse.
+func _test_knockback_decays_instead_of_growing() -> void:
+	var arena := _make_arena()
+	# A Ticket Bot with no player in the arena: its _act returns zero without a target, so it
+	# steers nowhere and anything that moves it is knockback. The Firewall Node would have been
+	# the obvious pick and is the wrong one — it is bolted down at knockback_resistance 1.0, so
+	# the first version of this check measured a shove that content correctly refuses to apply.
+	var enemy := _add_enemy(arena, TICKET_BOT_SCENE, Vector2(200.0, 200.0))
+	await advance_physics(2)
+
+	var origin := enemy.global_position
+	# Real damage, not zero: HealthComponent declines a hit of 0 outright, so a knockback
+	# attached to one never reaches _on_damaged at all.
+	enemy.get_node("%Health").apply_damage(
+		DamageInfo.new(1.0, null, Vector2.RIGHT, 120.0)
+	)
+
+	var steps: Array[float] = []
+	var last := enemy.global_position
+	for _frame: int in 12:
+		await advance_physics(1)
+		steps.append(enemy.global_position.distance_to(last))
+		last = enemy.global_position
+
+	check(steps[0] > 0.0, "the enemy is actually shoved (%.2f px on the first frame)" % steps[0])
+
+	var worst_growth := 0.0
+	var grew_at := -1
+	for index: int in range(1, steps.size()):
+		var growth := steps[index] - steps[index - 1]
+		if growth > worst_growth:
+			worst_growth = growth
+			grew_at = index
+	check(
+		worst_growth <= 0.01,
+		"the shove only ever slows down; frame %d moved %.2f px more than the one before it"
+			% [grew_at, worst_growth],
+	)
+
+	check(
+		enemy.global_position.x > origin.x,
+		"and it was pushed the way the damage travelled",
+	)
+	check(
+		steps[steps.size() - 1] <= 0.01,
+		"the shove has ended by the twelfth frame (%.2f px)" % steps[steps.size() - 1],
+	)
+
+	await _teardown(arena)
+
+
+## The other half of the same fix: `velocity` is the enemy's own steering and must never carry
+## the shove, or the acceleration model spends the next frames fighting it.
+func _test_knockback_stays_out_of_the_steering_velocity() -> void:
+	var arena := _make_arena()
+	var enemy := _add_enemy(arena, TICKET_BOT_SCENE, Vector2(200.0, 200.0))
+	await advance_physics(2)
+
+	enemy.get_node("%Health").apply_damage(
+		DamageInfo.new(1.0, null, Vector2.RIGHT, 120.0)
+	)
+	await advance_physics(1)
+
+	check(
+		enemy.velocity.is_zero_approx(),
+		"a stationary enemy's velocity is still zero while it is being shoved (got %s)"
+			% enemy.velocity,
+	)
+
+	await _teardown(arena)
+
+
+## The property that made the first draft of the check above measure nothing, and worth pinning
+## in its own right: an enemy authored as immovable stays where it is. Both stationary enemies
+## on Floor 1 are knockback_resistance 1.0, and a rivet must not slide a bolted-down emitter
+## across the room.
+func _test_full_resistance_means_immovable() -> void:
+	var arena := _make_arena()
+	var enemy := _add_enemy(arena, FIREWALL_NODE_SCENE, Vector2(200.0, 200.0))
+	await advance_physics(2)
+
+	check_near(
+		enemy.config.knockback_resistance, 1.0, "the Firewall Node is authored as immovable"
+	)
+	var origin := enemy.global_position
+	enemy.get_node("%Health").apply_damage(DamageInfo.new(1.0, null, Vector2.RIGHT, 200.0))
+	await advance_physics(10)
+
+	check(
+		enemy.global_position.distance_to(origin) <= 0.01,
+		"a fully resistant enemy is not shoved (moved %.2f px)"
+			% enemy.global_position.distance_to(origin),
+	)
+
+	await _teardown(arena)

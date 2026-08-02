@@ -841,7 +841,17 @@ resulting frames, and by nothing else. The suite was green for all of them.
     index 1 and does nothing at all. The editor's Input Map panel writes `-1` and calls it "All
     Devices"; a hand-built map does not get that for free. Confirmed by reintroducing the bug —
     28 checks fail, and the behavioural ones name indices 1, 2 and 7 exactly as reported.
-14. **The boss's central mechanic was very nearly a trap.** Destroying all four
+14. **Knockback was broken in both directions at once.** Reported. The player's was authored
+    three times — contact damage and Firewall Node beams at 130, the boss charge at 200 — and
+    thrown away: `Player._on_damaged` only re-emitted the event, and `_physics_process`
+    overwrites `velocity` every frame anyway, so an impulse parked there could never have
+    survived. Enemy knockback had the opposite fault: `velocity += _knockback` every frame,
+    and because `velocity` persists the same impulse was re-applied for every frame it took to
+    decay, so a 55 px/s rivet peaked at 90 px/s three frames later — growing before it fell
+    away, with the enemy's own steering left fighting the remains. Both now move the body as a
+    separate decaying motion, so `velocity` stays purely what the actor is doing under its own
+    power.
+15. **The boss's central mechanic was very nearly a trap.** Destroying all four
    synchronisation terminals saved two seconds out of thirteen — an eighteen percent return
    for crossing the arena four times under fire. Found by the balance suite computing what
    the numbers mean rather than asserting they are unchanged; the refund is now 0.75 and

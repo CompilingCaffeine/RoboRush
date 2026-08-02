@@ -51,4 +51,10 @@ extends Resource
 
 ## Seconds of invulnerability granted after taking damage. Unused until combat
 ## exists, but it belongs with the rest of the survivability tuning.
+## How fast a shove from damage bleeds off, in pixels per second squared. Separate from
+## `deceleration`, which is how hard the robot brakes under its own power: at 1800 a 130 px/s
+## contact shove would be gone in 0.07 seconds and move the player about five pixels, which is
+## indistinguishable from not being knocked back at all.
+@export var knockback_decay: float = 700.0
+
 @export var damage_invulnerability: float = 0.8

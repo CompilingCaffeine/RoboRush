@@ -32,6 +32,10 @@ const INTERACT_RANGE := 26.0
 
 var _is_dead := false
 
+## Decaying shove from taking damage. Kept out of `velocity` deliberately — see
+## `_apply_knockback`.
+var _knockback := Vector2.ZERO
+
 ## Debug Drone's escort. Owned here rather than by ItemEffects because a drone is a child
 ## of the robot — it orbits and travels with it, and parenting is the whole mechanism.
 var _drones: Array[PlayerDrone] = []
@@ -83,6 +87,7 @@ func _physics_process(delta: float) -> void:
 	# move_and_slide with a circular shape slides along walls rather than sticking to
 	# them, which covers spec section 6.6 (never trap the player in geometry).
 	move_and_slide()
+	_apply_knockback(delta)
 
 	_weapon.step(delta)
 	if _input.is_firing():
@@ -254,13 +259,35 @@ func _on_shot_fired(muzzle: Vector2, direction: Vector2) -> void:
 	EventBus.shot_fired.emit(Teams.Id.PLAYER, muzzle, direction)
 
 
+## Contact damage, Firewall Node beams, and the boss's charge all state a knockback and a
+## direction, and until now the player threw all three away — this function only re-emitted the
+## event. Being shoved is the clearest signal in the game that something touched you, and it was
+## authored, tuned, and invisible.
+##
+## It could not have worked by simply adding to `velocity` either: `_physics_process` overwrites
+## velocity outright every frame from either the dash or the motion controller, so an impulse
+## stored there would be gone before it moved anything.
 func _on_damaged(info: DamageInfo, remaining: float) -> void:
+	if info.knockback > 0.0 and not info.direction.is_zero_approx():
+		_knockback += info.direction.normalized() * info.knockback
 	EventBus.player_damaged.emit(info, remaining)
+
+
+## The same model the enemies use: a decaying shove moved as its own motion, so it is never
+## fed back into the acceleration model. See Enemy._apply_knockback for why adding it to
+## `velocity` is wrong rather than merely different.
+func _apply_knockback(delta: float) -> void:
+	if _knockback.is_zero_approx():
+		return
+	move_and_collide(_knockback * delta)
+	_knockback = _knockback.move_toward(Vector2.ZERO, config.knockback_decay * delta)
 
 
 func _on_died() -> void:
 	_is_dead = true
 	velocity = Vector2.ZERO
+	# Or the wreck keeps sliding for a fifth of a second after it stops being a robot.
+	_knockback = Vector2.ZERO
 	_input.clear()
 	_visuals.play_death()
 	_camera.clear_shake()
