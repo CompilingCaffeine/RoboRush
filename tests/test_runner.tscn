@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3]
+[gd_scene load_steps=15 format=3]
 
 [ext_resource type="Script" path="res://tests/test_runner.gd" id="1_runner"]
 [ext_resource type="Script" path="res://tests/test_player_movement.gd" id="2_movement"]
@@ -13,6 +13,7 @@
 [ext_resource type="Script" path="res://tests/test_save.gd" id="11_save"]
 [ext_resource type="Script" path="res://tests/test_audio.gd" id="12_audio"]
 [ext_resource type="Script" path="res://tests/test_gamepad.gd" id="13_gamepad"]
+[ext_resource type="Script" path="res://tests/test_balance.gd" id="14_balance"]
 
 [node name="TestRunner" type="Node"]
 script = ExtResource("1_runner")
@@ -52,3 +53,6 @@ script = ExtResource("12_audio")
 
 [node name="Gamepad" type="Node" parent="."]
 script = ExtResource("13_gamepad")
+
+[node name="Balance" type="Node" parent="."]
+script = ExtResource("14_balance")
