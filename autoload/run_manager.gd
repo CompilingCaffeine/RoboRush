@@ -138,6 +138,23 @@ func draw_item(pool: Array[ItemConfig], rng: RandomNumberGenerator) -> ItemConfi
 	return drawn
 
 
+## Returns an item to the pool so it can be offered again. The counterpart to `draw_item`'s
+## reservation, and it has exactly one caller: a shop reroll.
+##
+## The distinction it draws is the whole point. "Offered" means the player had their chance
+## and passed, which is right for an item lying on the floor of a room they walked out of. It
+## is wrong for an item swept off a shelf by a reroll — that is the player asking to see
+## something else, not declining this thing forever.
+##
+## Getting that wrong was a soft-lock. Two shop offers plus three rerolls struck eight of the
+## twelve items off the run for good; add three combat-clear rewards and the treasure vault
+## and the pool was dry before the boss died. The boss then had nothing to offer, created zero
+## reward stands, and since victory only happened when a reward was taken, the run could not
+## be won.
+func release_item(id: StringName) -> void:
+	offered_item_ids.erase(id)
+
+
 func _on_room_cleared() -> void:
 	rooms_cleared += 1
 	stats.record_room_cleared()

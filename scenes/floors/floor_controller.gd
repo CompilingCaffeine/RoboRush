@@ -253,10 +253,27 @@ func _on_boss_defeated(_boss_node: Node, room: Room) -> void:
 	_cleared[room.plan.id] = true
 	_set_doors_locked(room.plan.id, false)
 
+	var items := _draw_boss_reward()
+	if items.is_empty():
+		# Nothing left in the pool to offer. Winning must not depend on there being a prize:
+		# an empty choice creates zero stands, `choice_taken` never fires, and the run would
+		# sit in a cleared arena with a dead boss and no victory — which is exactly how this
+		# was reported. The boss is dead and the floor is done, so the run is won.
+		#
+		# Deferred, for the sixth time in this project and the same reason every time: this
+		# runs inside the boss's damage callback, and winning pauses the tree. Pausing the
+		# scene tree while the physics server is flushing leaked nineteen objects and four
+		# audio streams — measured, by taking this path with a deliberately emptied pool. The
+		# ordinary reward path is already outside the callback, which is why it never showed
+		# this.
+		push_warning("FloorController: no items left for the boss reward; winning without one.")
+		GameManager.win_run.call_deferred()
+		return
+
 	var reward: ShopRoom = SHOP_ROOM_SCENE.instantiate()
 	room.add_child(reward)
 	reward.choice_taken.connect(_on_boss_reward_taken)
-	reward.stock_choice(config.shop, _draw_boss_reward(), _boss_reward_positions(room))
+	reward.stock_choice(config.shop, items, _boss_reward_positions(room))
 
 
 func _on_boss_reward_taken(_item: ItemConfig) -> void:

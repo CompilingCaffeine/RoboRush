@@ -88,11 +88,32 @@ func on_item_taken(taken: ShopStand) -> void:
 
 ## Replaces every unsold item on the shelves. Sold stands stay sold — a reroll is a second
 ## chance at what is left, not a way to buy the same item twice.
+##
+## The items swept off the shelf go back into the run's pool, and the order here is deliberate:
+## replacements are drawn *first*, while the outgoing ids are still reserved, so a reroll can
+## never hand back the same item it just took away. Releasing before drawing would let a stand
+## redraw its own stock, which reads as the reroll having done nothing.
+##
+## Returning them at all is the fix for a reported soft-lock. Every displayed item used to be
+## struck off the twelve-item pool permanently, so three rerolls cost the run six items and
+## the boss was left with nothing to offer as a reward — see RunManager.release_item.
 func reroll() -> void:
 	_rerolls_used += 1
+
+	var returning: Array[StringName] = []
 	for stand: ShopStand in _stands:
-		if stand.kind == ShopStand.Kind.ITEM and not stand.is_sold:
-			_restock(stand)
+		if stand.kind != ShopStand.Kind.ITEM or stand.is_sold:
+			continue
+		var outgoing := stand.item
+		_restock(stand)
+		# Also covers the dry-pool case, where the stand ends up empty: the item belongs back
+		# in the pool either way, so the boss can still offer it.
+		if outgoing != null and stand.item != outgoing:
+			returning.append(outgoing.id)
+
+	for id: StringName in returning:
+		RunManager.release_item(id)
+
 	_refresh_reroll_price()
 	_refresh_all()
 

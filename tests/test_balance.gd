@@ -56,6 +56,7 @@ func run() -> void:
 	_test_shop_prices_match_the_spec()
 	_test_the_player_can_afford_something_but_not_everything()
 	_test_every_item_in_the_pool_has_a_price()
+	_test_the_pool_cannot_run_dry_before_the_boss_reward()
 
 
 ## Damage per second with the starting weapon and no items. Everything else is measured
@@ -270,3 +271,39 @@ func _test_every_item_in_the_pool_has_a_price() -> void:
 			_shop.price_for(item) > 0,
 			"'%s' costs something (%d scrap)" % [item.display_name, _shop.price_for(item)],
 		)
+
+
+## The check that would have caught a reported soft-lock, and the reason this suite computes
+## what the numbers mean rather than asserting they have not changed.
+##
+## Every item the floor reserves — the shop's shelf, each combat-clear reward, the treasure
+## vault — comes out of one shared pool, and the boss's reward comes out of what is left. If
+## the floor can reserve everything, the boss offers nothing, and victory (which waits on a
+## reward being taken) becomes unreachable. There is now a guard in FloorController that wins
+## the run anyway, but a floor that reaches it has still cheated the player out of spec
+## section 16's promised choice.
+##
+## Rerolls are deliberately *not* counted: a reroll returns what it sweeps off the shelf, so
+## the shop's cost is its shelf size no matter how many times it is rerolled. That property is
+## the actual fix, and it is asserted directly in the Shop suite.
+func _test_the_pool_cannot_run_dry_before_the_boss_reward() -> void:
+	if not require(_floor, "floor config loads"):
+		return
+
+	var pool_size := _floor.item_pool.size()
+	var shelf := _shop.item_stand_count
+	var clear_rewards := _floor.item_clear_indices.size()
+	var treasure := 1 if _floor.treasure_grants_item else 0
+	var reserved_before_boss := shelf + clear_rewards + treasure
+	var left_for_the_boss := pool_size - reserved_before_boss
+
+	check(
+		left_for_the_boss >= FloorController.BOSS_REWARD_COUNT,
+		"the floor reserves at most %d of %d items before the boss, leaving %d for a reward "
+			% [reserved_before_boss, pool_size, left_for_the_boss]
+			+ "that needs %d" % FloorController.BOSS_REWARD_COUNT,
+	)
+	check(
+		left_for_the_boss > 0,
+		"there is always something left for the boss to offer (%d)" % left_for_the_boss,
+	)

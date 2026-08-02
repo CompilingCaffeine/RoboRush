@@ -819,7 +819,14 @@ resulting frames, and by nothing else. The suite was green for all of them.
     of that frame. Removed from all three quit handlers, and `AudioManager.stop_all()` is now
     the general guard. Worth noting that I had seen this warning once in my own harness output
     earlier in the milestone and not chased it.
-11. **The boss's central mechanic was very nearly a trap.** Destroying all four
+11. **Shop rerolls could make a run unwinnable.** Reported, and the worst bug in the project
+    so far. Every item a shop *displayed* was struck off the run's shared twelve-item pool for
+    good, so two initial offers plus three rerolls burned eight of them; add three
+    combat-clear rewards and the treasure vault and the pool was dry before the boss died. The
+    boss then created zero reward stands, and victory only ever happened when a reward was
+    taken — so the player was left in a cleared arena with a dead boss and no way to win.
+    Rerolled items now return to the pool, and victory no longer depends on a prize existing.
+12. **The boss's central mechanic was very nearly a trap.** Destroying all four
    synchronisation terminals saved two seconds out of thirteen — an eighteen percent return
    for crossing the arena four times under fire. Found by the balance suite computing what
    the numbers mean rather than asserting they are unchanged; the refund is now 0.75 and
@@ -876,6 +883,13 @@ resulting frames, and by nothing else. The suite was green for all of them.
     adds a body should assume it is inside a callback until it has checked.
 15. **Hand-authored `NodePath` literals do not resolve into exported `Node` properties**, so
     text-authored scenes pass node references explicitly.
+16. **Quitting within a second of a sound starting can still print leak warnings at exit**,
+    roughly one run in four when quitting during the 1.1-second victory fanfare. The specific
+    reported case — a menu button that played a sound and quit on the same frame — is fixed,
+    and `AudioManager.stop_all()` is confirmed to run and to find nothing playing. Adding
+    prints to that function makes the warning disappear entirely, which places what is left in
+    the engine's own teardown ordering rather than in this code. It is noise on stderr after
+    the window has closed, and nothing the player can see.
 
 ---
 

@@ -42,6 +42,8 @@ func run() -> void:
 	await _test_the_player_uses_the_nearest_stand()
 	await _test_a_floor_cannot_afford_the_whole_shop()
 	await _test_stands_land_where_they_were_asked_to()
+	await _test_rerolling_does_not_consume_the_item_pool()
+	await _test_an_empty_choice_creates_no_stands()
 
 
 # --- Prices -------------------------------------------------------------------
@@ -344,3 +346,75 @@ func _stand_of_kind(shop: ShopRoom, kind: ShopStand.Kind) -> ShopStand:
 		if stand.kind == kind:
 			return stand
 	return null
+
+
+## Reported as a soft-lock, and it was: every item a shop *displayed* was struck off the
+## run's shared twelve-item pool for good, so two initial offers plus three rerolls burned
+## eight of them. Add three combat-clear rewards and the treasure vault and the pool is dry
+## before the boss dies — at which point the boss creates zero reward stands, and victory,
+## which only happens when a reward is taken, can never happen.
+##
+## A reroll is the player saying "show me something else", not "I decline these forever".
+## The items it sweeps off the shelf go back.
+func _test_rerolling_does_not_consume_the_item_pool() -> void:
+	await _make_shop(400)
+	var reroll := _stand_of_kind(_shop, ShopStand.Kind.REROLL)
+	var displayed := _item_stands(_shop).size()
+	if reroll == null or displayed < 2:
+		fail("the shop is not stocked as expected")
+		await _teardown()
+		return
+
+	var after_initial_stock := RunManager.offered_item_ids.size()
+	check(
+		after_initial_stock == displayed,
+		"stocking the shop reserves exactly what it puts on the shelf (%d for %d stands)"
+			% [after_initial_stock, displayed],
+	)
+
+	for _index: int in 3:
+		_shop.reroll()
+		await advance_physics(1)
+
+	check(
+		RunManager.offered_item_ids.size() == after_initial_stock,
+		"three rerolls reserve nothing extra: %d ids held, was %d — anything more and the "
+			% [RunManager.offered_item_ids.size(), after_initial_stock]
+			+ "pool runs dry before the boss can offer a reward",
+	)
+	check(
+		_item_stands(_shop).size() == displayed,
+		"and the shelf is still full after rerolling",
+	)
+
+	# The items on display are still reserved, so a reroll cannot show the same pair twice
+	# in a row and the floor cannot drop what is sitting in the shop.
+	for stand: ShopStand in _item_stands(_shop):
+		check(
+			stand.item.id in RunManager.offered_item_ids,
+			"'%s' is reserved while it is on the shelf" % stand.item.display_name,
+		)
+
+	await _teardown()
+
+
+## The mechanism behind the soft-lock, pinned so it cannot come back quietly: a choice with
+## nothing in it makes no stands at all, and therefore never emits `choice_taken`. That is why
+## FloorController must not treat taking a reward as the only route to victory.
+func _test_an_empty_choice_creates_no_stands() -> void:
+	await _make_shop(0)
+	var choice: ShopRoom = SHOP_ROOM_SCENE.instantiate()
+	_arena.add_child(choice)
+
+	var taken := 0
+	choice.choice_taken.connect(func(_item: ItemConfig) -> void: taken += 1)
+
+	var nothing: Array[ItemConfig] = []
+	choice.stock_choice(_shop_config, nothing, [Vector2.ZERO, Vector2(40.0, 0.0)])
+	await advance_physics(2)
+
+	check(choice.get_stands().is_empty(), "an empty choice creates no stands")
+	check(taken == 0, "and so can never announce that a choice was taken")
+
+	choice.queue_free()
+	await _teardown()
