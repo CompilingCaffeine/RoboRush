@@ -1,0 +1,62 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scenes/ui/controls_card.gd" id="1_controls"]
+
+[node name="ControlsCard" type="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_controls")
+
+[node name="Backdrop" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.019608, 0.027451, 0.043137, 0.941176)
+
+[node name="Panel" type="PanelContainer" parent="."]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -138.0
+offset_top = -85.0
+offset_right = 138.0
+offset_bottom = 85.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Layout" type="VBoxContainer" parent="Panel"]
+mouse_filter = 2
+theme_override_constants/separation = 5
+
+[node name="Title" type="Label" parent="Panel/Layout"]
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.345098, 0.941176, 0.784314, 1)
+theme_override_font_sizes/font_size = 16
+text = "CONTROLS"
+horizontal_alignment = 1
+
+[node name="Grid" type="GridContainer" parent="Panel/Layout"]
+unique_name_in_owner = true
+mouse_filter = 2
+theme_override_constants/h_separation = 14
+theme_override_constants/v_separation = 1
+columns = 3
+
+[node name="Explanation" type="Label" parent="Panel/Layout"]
+unique_name_in_owner = true
+mouse_filter = 2
+
+[node name="Hint" type="Label" parent="Panel/Layout"]
+unique_name_in_owner = true
+mouse_filter = 2
+horizontal_alignment = 1

@@ -11,7 +11,9 @@ config_version=5
 [application]
 
 config/name="Robo Rush"
-run/main_scene="res://main.tscn"
+; The title screen, not the game. main.tscn is still directly launchable — the tests and
+; `--seed=` debugging both do it — and starts a run immediately when it is.
+run/main_scene="res://scenes/ui/main_menu.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 
 [display]
@@ -22,6 +24,13 @@ window/size/window_width_override=1440
 window/size/window_height_override=810
 window/stretch/mode="viewport"
 window/stretch/aspect="keep"
+
+[gui]
+
+; One default theme for every Control in the game (data/ui/theme.tres). The font is a
+; hand-drawn 5x8 bitmap face: the game renders at 480x270 and is magnified whole, and a
+; vector face antialiases at that size into a blur the magnifier only makes worse.
+theme/custom="res://data/ui/theme.tres"
 
 [input]
 
@@ -155,6 +164,7 @@ GameManager="*res://autoload/game_manager.gd"
 RunManager="*res://autoload/run_manager.gd"
 AudioManager="*res://autoload/audio_manager.gd"
 SaveManager="*res://autoload/save_manager.gd"
+SceneRouter="*res://autoload/scene_router.gd"
 
 [layer_names]
 

@@ -9,3 +9,9 @@
 
 # macOS
 .DS_Store
+
+# Throwaway screenshot harnesses used while polishing the interface. Not tests: they assert
+# nothing, they need a real window, and they exist to be looked at rather than to pass.
+/verify_*.gd
+/verify_*.tscn
+/verify_*.gd.uid

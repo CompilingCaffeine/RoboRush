@@ -27,6 +27,13 @@ const LIBRARY := {
 	&"item_pickup": "res://audio/sfx/item_pickup.wav",
 	&"explosion": "res://audio/sfx/explosion.wav",
 	&"zap": "res://audio/sfx/zap.wav",
+	&"ui_move": "res://audio/sfx/ui_move.wav",
+	&"ui_confirm": "res://audio/sfx/ui_confirm.wav",
+	&"ui_back": "res://audio/sfx/ui_back.wav",
+	&"purchase": "res://audio/sfx/purchase.wav",
+	&"boss_phase": "res://audio/sfx/boss_phase.wav",
+	&"victory": "res://audio/sfx/victory.wav",
+	&"game_over": "res://audio/sfx/game_over.wav",
 }
 
 var _streams: Dictionary[StringName, AudioStream] = {}

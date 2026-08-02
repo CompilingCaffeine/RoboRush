@@ -11,6 +11,27 @@ grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("1_hud")
 
+[node name="Backing" type="ColorRect" parent="."]
+unique_name_in_owner = true
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -46.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+
+[node name="BackingEdge" type="ColorRect" parent="."]
+unique_name_in_owner = true
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -46.0
+offset_bottom = -45.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+
 [node name="Status" type="VBoxContainer" parent="."]
 anchor_top = 1.0
 anchor_bottom = 1.0
@@ -52,6 +73,16 @@ offset_left = 90.0
 offset_top = 6.0
 offset_right = -90.0
 offset_bottom = 20.0
+grow_horizontal = 2
+mouse_filter = 2
+
+[node name="BossBacking" type="ColorRect" parent="BossBar"]
+unique_name_in_owner = true
+anchor_right = 1.0
+offset_left = -6.0
+offset_top = -3.0
+offset_right = 6.0
+offset_bottom = 3.0
 grow_horizontal = 2
 mouse_filter = 2
 

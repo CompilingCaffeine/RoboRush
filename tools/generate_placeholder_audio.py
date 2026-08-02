@@ -225,6 +225,109 @@ def make_zap(noise: random.Random) -> list[float]:
     return render(0.06, voice)
 
 
+def make_ui_move(noise: random.Random) -> list[float]:
+    """One tick as the selection moves. As short as a sound can be and still be heard: it
+    fires on every keypress in a menu, which makes it the most repeated sound in the game."""
+    phase = [0.0]
+
+    def voice(_t: float, progress: float) -> float:
+        phase[0] += 1180.0 / SAMPLE_RATE
+        return square(phase[0], 0.25) * decay(progress, 26.0)
+
+    return render(0.035, voice)
+
+
+def make_ui_confirm(noise: random.Random) -> list[float]:
+    """Two notes up. The menu counterpart of room_clear, an octave smaller — confirming a
+    setting is good news, but it is not an achievement."""
+    steps = [784.0, 1175.0]
+    phase = [0.0]
+
+    def voice(_t: float, progress: float) -> float:
+        index = min(int(progress * len(steps)), len(steps) - 1)
+        phase[0] += steps[index] / SAMPLE_RATE
+        step_progress = (progress * len(steps)) % 1.0
+        return square(phase[0], 0.35) * decay(step_progress, 5.0)
+
+    return render(0.12, voice)
+
+
+def make_ui_back(noise: random.Random) -> list[float]:
+    """Two notes down: the same gesture as confirm, reversed, so the pair reads as a pair."""
+    steps = [880.0, 587.0]
+    phase = [0.0]
+
+    def voice(_t: float, progress: float) -> float:
+        index = min(int(progress * len(steps)), len(steps) - 1)
+        phase[0] += steps[index] / SAMPLE_RATE
+        step_progress = (progress * len(steps)) % 1.0
+        return square(phase[0], 0.35) * decay(step_progress, 6.0)
+
+    return render(0.10, voice)
+
+
+def make_purchase(noise: random.Random) -> list[float]:
+    """Scrap changing hands. A bright triple blip with a metallic noise edge — close enough
+    to a till to be legible, mechanical enough to belong in a maintenance robot's world."""
+    steps = [1047.0, 1319.0, 1568.0]
+    phase = [0.0]
+
+    def voice(_t: float, progress: float) -> float:
+        index = min(int(progress * len(steps)), len(steps) - 1)
+        phase[0] += steps[index] / SAMPLE_RATE
+        step_progress = (progress * len(steps)) % 1.0
+        clink = noise.uniform(-1.0, 1.0) * 0.18 * decay(step_progress, 24.0)
+        return (square(phase[0], 0.3) * 0.8 + clink) * decay(step_progress, 4.0)
+
+    return render(0.24, voice)
+
+
+def make_boss_phase(noise: random.Random) -> list[float]:
+    """The Merge Conflict changing shape. Two detuned squares sliding apart, which is the
+    fight's whole idea made audible: one thing becoming two that no longer agree."""
+    low = [0.0]
+    high = [0.0]
+
+    def voice(_t: float, progress: float) -> float:
+        low[0] += sweep(220.0, 138.0, progress) / SAMPLE_RATE
+        high[0] += sweep(226.0, 330.0, progress) / SAMPLE_RATE
+        envelope = min(1.0, progress * 8.0) * decay(progress, 1.6)
+        grind = noise.uniform(-1.0, 1.0) * 0.16 * decay(progress, 3.0)
+        return (square(low[0], 0.5) * 0.6 + square(high[0], 0.45) * 0.5 + grind) * envelope
+
+    return render(0.70, voice)
+
+
+def make_victory(noise: random.Random) -> list[float]:
+    """Run won. The longest sound in the game, and the only one allowed to be."""
+    steps = [523.0, 659.0, 784.0, 1047.0, 784.0, 1047.0, 1319.0]
+    phase = [0.0]
+
+    def voice(_t: float, progress: float) -> float:
+        index = min(int(progress * len(steps)), len(steps) - 1)
+        phase[0] += steps[index] / SAMPLE_RATE
+        step_progress = (progress * len(steps)) % 1.0
+        # The last note rings instead of clipping short, so the fanfare has an ending.
+        sharpness = 1.2 if index == len(steps) - 1 else 3.2
+        return square(phase[0], 0.4) * decay(step_progress, sharpness)
+
+    return render(1.10, voice)
+
+
+def make_game_over(noise: random.Random) -> list[float]:
+    """Run lost. A power-down: pitch and duty cycle both collapse, so it thins out as it
+    falls rather than simply getting lower."""
+    phase = [0.0]
+
+    def voice(_t: float, progress: float) -> float:
+        phase[0] += sweep(392.0, 62.0, progress) / SAMPLE_RATE
+        duty = 0.5 - 0.35 * progress
+        grit = noise.uniform(-1.0, 1.0) * 0.12 * decay(progress, 2.0)
+        return (square(phase[0], duty) * 0.9 + grit) * decay(progress, 1.3)
+
+    return render(0.85, voice)
+
+
 SOUNDS = {
     "audio/sfx/fire.wav": (make_fire, 0.22),
     "audio/sfx/enemy_hit.wav": (make_enemy_hit, 0.26),
@@ -238,6 +341,15 @@ SOUNDS = {
     "audio/sfx/item_pickup.wav": (make_item_pickup, 0.26),
     "audio/sfx/explosion.wav": (make_explosion, 0.30),
     "audio/sfx/zap.wav": (make_zap, 0.20),
+    # Interface and moment sounds. The UI ticks are the quietest things in the game on
+    # purpose: they accompany a keypress, and a keypress is not an event.
+    "audio/sfx/ui_move.wav": (make_ui_move, 0.10),
+    "audio/sfx/ui_confirm.wav": (make_ui_confirm, 0.16),
+    "audio/sfx/ui_back.wav": (make_ui_back, 0.14),
+    "audio/sfx/purchase.wav": (make_purchase, 0.24),
+    "audio/sfx/boss_phase.wav": (make_boss_phase, 0.30),
+    "audio/sfx/victory.wav": (make_victory, 0.28),
+    "audio/sfx/game_over.wav": (make_game_over, 0.30),
 }
 
 

@@ -20,20 +20,23 @@ extends Control
 
 const PIP_SIZE := Vector2(5, 8)
 const PIP_SEPARATION := 1
-const FONT_SIZE := 8
+const FONT_SIZE := UIPalette.FONT_SIZE
 
-const INTEGRITY_FULL := Color("58f0c8")
-const INTEGRITY_LOW := Color("ff6b5a")
+const INTEGRITY_FULL := UIPalette.ACCENT
+const INTEGRITY_LOW := UIPalette.DANGER
+const DASH_READY := UIPalette.WARN
+const LABEL_COLOR := UIPalette.TEXT_DIM
+const BANNER_CLEAR := UIPalette.ACCENT
+const BANNER_ITEM := UIPalette.WARN
+const BANNER_BOSS := UIPalette.DANGER
+const BOSS_BAR_FILL := UIPalette.DANGER
+
+## The "spent" half of a pip row. Not in UIPalette because these are the only two colours in
+## the game that exist to be *ignored* — a dark tint of their lit counterpart, dim enough to
+## count against but never bright enough to read as full.
 const INTEGRITY_EMPTY := Color("1e2a36")
-const DASH_READY := Color("f2a13c")
 const DASH_SPENT := Color("342a1a")
-const LABEL_COLOR := Color("7c8a99")
-const BANNER_CLEAR := Color("58f0c8")
-const BANNER_ITEM := Color("f2a13c")
-const BANNER_BOSS := Color("ff6b5a")
-
 const BOSS_BAR_BACK := Color("2a1a1e")
-const BOSS_BAR_FILL := Color("ff6b5a")
 
 ## Gap between item icons in the bar, in pixels.
 const ITEM_SEPARATION := 2
@@ -57,6 +60,9 @@ const BANNER_SECONDS := 2.0
 @onready var _boss_bar: Control = %BossBar
 @onready var _boss_fill: ColorRect = %BossFill
 @onready var _boss_label: Label = %BossLabel
+@onready var _backing: ColorRect = %Backing
+@onready var _backing_edge: ColorRect = %BackingEdge
+@onready var _boss_backing: ColorRect = %BossBacking
 
 var _player: Player
 var _banner_left := 0.0
@@ -74,6 +80,14 @@ func _ready() -> void:
 	_dash_label.text = "DASH"
 
 	_item_bar.add_theme_constant_override("separation", ITEM_SEPARATION)
+
+	# The readouts sit over whatever the camera happens to be framing below the room, which
+	# through milestone 5 was "usually black, sometimes a wall". Spec section 21 does not
+	# leave legibility to luck, so the strip is now an opaque bar with a lit edge — the
+	# bezel of the machine the interface is pretending to be.
+	_backing.color = UIPalette.VOID
+	_backing_edge.color = UIPalette.PANEL_BORDER
+	_boss_backing.color = UIPalette.VOID
 
 	_boss_bar.visible = false
 	_boss_fill.color = BOSS_BAR_FILL

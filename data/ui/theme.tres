@@ -1,0 +1,75 @@
+; The one place the interface's font, palette, and button states are defined.
+;
+; Registered as the project's default theme (see project.godot's gui/theme/custom), so every
+; Control in the game inherits it without being told to. Before this, each UI script called
+; add_theme_font_size_override on every label it built, which meant the look of the game was
+; spread across five scripts and a new screen was a copy-paste away from not matching.
+;
+; Spec section 21's motifs are the brief: monospace labels, status lights, pixelated windows.
+; The palette is the one already used by the HUD and the sprites, so the interface and the
+; game are the same machine.
+;
+; Focus is styled as loudly as hover, and deliberately so: the pause and settings screens are
+; driven by a gamepad's d-pad, and a focus ring that is merely a hint is a menu nobody can
+; navigate without a mouse (spec section 5's controller support).
+[gd_resource type="Theme" load_steps=6 format=3]
+
+[ext_resource type="FontFile" path="res://art/ui/font_6x8.fnt" id="1_font"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_normal"]
+content_margin_left = 6.0
+content_margin_top = 2.0
+content_margin_right = 6.0
+content_margin_bottom = 2.0
+bg_color = Color(0.07451, 0.086275, 0.117647, 1)
+border_width_left = 2
+border_color = Color(0.164706, 0.203922, 0.27451, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_hover"]
+content_margin_left = 6.0
+content_margin_top = 2.0
+content_margin_right = 6.0
+content_margin_bottom = 2.0
+bg_color = Color(0.105882, 0.141176, 0.2, 1)
+border_width_left = 2
+border_color = Color(0.345098, 0.941176, 0.784314, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_pressed"]
+content_margin_left = 6.0
+content_margin_top = 2.0
+content_margin_right = 6.0
+content_margin_bottom = 2.0
+bg_color = Color(0.345098, 0.941176, 0.784314, 1)
+border_width_left = 2
+border_color = Color(0.345098, 0.941176, 0.784314, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+content_margin_left = 8.0
+content_margin_top = 6.0
+content_margin_right = 8.0
+content_margin_bottom = 6.0
+bg_color = Color(0.054902, 0.066667, 0.094118, 0.94902)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.164706, 0.203922, 0.27451, 1)
+
+[resource]
+default_font = ExtResource("1_font")
+default_font_size = 8
+Button/colors/font_color = Color(0.847059, 0.886275, 0.92549, 1)
+Button/colors/font_disabled_color = Color(0.309804, 0.360784, 0.431373, 1)
+Button/colors/font_focus_color = Color(0.345098, 0.941176, 0.784314, 1)
+Button/colors/font_hover_color = Color(0.345098, 0.941176, 0.784314, 1)
+Button/colors/font_pressed_color = Color(0.043137, 0.05098, 0.070588, 1)
+Button/font_sizes/font_size = 8
+Button/styles/disabled = SubResource("StyleBoxFlat_button_normal")
+Button/styles/focus = SubResource("StyleBoxFlat_button_hover")
+Button/styles/hover = SubResource("StyleBoxFlat_button_hover")
+Button/styles/normal = SubResource("StyleBoxFlat_button_normal")
+Button/styles/pressed = SubResource("StyleBoxFlat_button_pressed")
+Label/colors/font_color = Color(0.847059, 0.886275, 0.92549, 1)
+Label/font_sizes/font_size = 8
+Panel/styles/panel = SubResource("StyleBoxFlat_panel")
+PanelContainer/styles/panel = SubResource("StyleBoxFlat_panel")

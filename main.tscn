@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://scenes/floors/floor.tscn" id="2_floor"]
@@ -9,6 +9,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/minimap.tscn" id="6_minimap"]
 [ext_resource type="PackedScene" path="res://scenes/ui/debug_hud.tscn" id="7_debug_hud"]
 [ext_resource type="PackedScene" path="res://scenes/ui/run_summary.tscn" id="9_summary"]
+[ext_resource type="PackedScene" path="res://scenes/ui/pause_menu.tscn" id="10_pause"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -37,8 +38,14 @@ unique_name_in_owner = true
 [node name="Minimap" parent="UILayer" instance=ExtResource("6_minimap")]
 unique_name_in_owner = true
 
-[node name="RunSummary" parent="UILayer" instance=ExtResource("9_summary")]
+[node name="DebugHUD" parent="UILayer" instance=ExtResource("7_debug_hud")]
 unique_name_in_owner = true
 
-[node name="DebugHUD" parent="UILayer" instance=ExtResource("7_debug_hud")]
+[node name="MenuLayer" type="CanvasLayer" parent="."]
+layer = 10
+
+[node name="RunSummary" parent="MenuLayer" instance=ExtResource("9_summary")]
+unique_name_in_owner = true
+
+[node name="PauseMenu" parent="MenuLayer" instance=ExtResource("10_pause")]
 unique_name_in_owner = true

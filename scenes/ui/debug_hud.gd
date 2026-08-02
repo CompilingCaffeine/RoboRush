@@ -48,6 +48,12 @@ var _last_dash_direction := Vector2.ZERO
 
 
 func _ready() -> void:
+	# Hidden until asked for. It was visible by default through milestone 5, which was right
+	# while the only person launching the game was the one writing it and wrong the moment
+	# anyone else does: it covers a third of a 480x270 screen, and a new player has no idea
+	# it is an overlay rather than the game. F1 brings it back.
+	visible = false
+
 	_style_label(_title, TITLE_COLOR)
 	_style_label(_hint, HINT_COLOR)
 	_title.text = "ROBO RUSH // DIAGNOSTICS"

@@ -9,14 +9,19 @@ extends Node
 ## flag is global, and the HUD, the player, and the summary screen all need to agree about
 ## it). Room logic does not, and lives in RoomCombat instead.
 ##
-## Spec section 23 lists twelve states. Four exist, because four are reachable: the rest
-## are menus and transitions that have nothing to show yet, and a state you cannot enter is
-## a state nobody can debug. The shop is deliberately not one of them — it is a room the
-## player walks into, not a mode the game enters, which means no state to leak input across.
+## Spec section 23 lists twelve states. Five exist, because five are reachable: the rest are
+## transitions that have nothing to show, and a state you cannot enter is a state nobody can
+## debug. Two of the twelve are deliberately *not* states, and for the same reason. The shop
+## is a room the player walks into, not a mode the game enters. Settings is a panel drawn
+## over whichever screen opened it, so there is no "where do I go back to" to get wrong.
+## Neither can leak input across a boundary that does not exist.
 
 const FEEDBACK_CONFIG_PATH := "res://data/settings/feedback_config.tres"
 
 enum State {
+	## The title screen. No run exists, and the tree is not paused — there is nothing behind
+	## the menu that pausing would be protecting.
+	MAIN_MENU,
 	## Normal play.
 	RUN,
 	## Play suspended by the player. The tree is paused.
@@ -32,6 +37,9 @@ signal state_changed(state: State)
 ## Intensity settings shared by every effect in the game.
 var feedback: FeedbackConfig
 
+## Starts in RUN rather than MAIN_MENU so that launching `main.tscn` directly — which is how
+## the tests and `--seed=` debugging run it — is playing the game, not sitting behind an
+## invisible title screen. The menu sets its own state when it loads.
 var state := State.RUN
 
 var _hit_pause_active := false
@@ -49,9 +57,15 @@ func is_playing() -> bool:
 	return state == State.RUN
 
 
-## True once the run is over, either way. What the restart prompt keys off.
+## True once the run is over, either way. What the summary screen keys off.
 func is_run_over() -> bool:
 	return state == State.GAME_OVER or state == State.VICTORY
+
+
+## True while a run exists at all, won, lost, paused, or in progress. What tells the pause
+## menu whether "abandon run" is a thing the player can do.
+func has_run() -> bool:
+	return state != State.MAIN_MENU
 
 
 ## Puts the game into play. Called when a run begins, including after a restart — the
@@ -59,6 +73,12 @@ func is_run_over() -> bool:
 ## would inherit the first one's ending.
 func start_run() -> void:
 	_set_state(State.RUN)
+
+
+## Leaves whatever was happening for the title screen. Called by SceneRouter rather than by
+## the menu, so the state and the loaded scene cannot disagree.
+func enter_main_menu() -> void:
+	_set_state(State.MAIN_MENU)
 
 
 func pause_game() -> void:
@@ -105,16 +125,31 @@ func hit_pause() -> void:
 	_hit_pause_active = false
 
 
-## Restarts the current scene. Spec section 31.8: losing must immediately permit a
-## new run.
+## Throws away the current run and starts a new one. Spec section 31.8: losing must
+## immediately permit a new run.
 func restart_run() -> void:
-	Engine.time_scale = 1.0
 	_hit_pause_active = false
-	start_run()
-	get_tree().reload_current_scene()
+	SceneRouter.start_run()
 
 
+## Abandons the run and returns to the title screen.
+func leave_run() -> void:
+	_hit_pause_active = false
+	SceneRouter.go_to_main_menu()
+
+
+## Only the two shortcuts that must work from anywhere. Everything else a player can do at a
+## menu is a button on that menu, because a game whose options are undocumented keypresses
+## fails milestone 6's success condition before it starts.
+##
+## Nothing here fires on the title screen: the menu is not a run, and `R` there would restart
+## one that does not exist. The menus themselves see these events first — unhandled input
+## travels up from the scene, and autoloads are the last to be offered it — so a menu that
+## wants `escape` for itself simply consumes it.
 func _unhandled_input(event: InputEvent) -> void:
+	if state == State.MAIN_MENU:
+		return
+
 	if is_run_over():
 		if event.is_action_pressed("restart"):
 			restart_run()
@@ -132,11 +167,18 @@ func _unhandled_input(event: InputEvent) -> void:
 ## The tree's paused flag and the run clock are both derived from the state rather than set
 ## alongside it, so there is no path where the game is showing a summary screen and still
 ## counting the run's duration.
+##
+## The title screen is the one non-RUN state that does not pause the tree. Pausing exists to
+## stop gameplay that is still loaded from advancing behind a menu; on the title screen there
+## is no gameplay loaded, and a paused tree would only freeze the menu itself.
 func _set_state(new_state: State) -> void:
 	state = new_state
-	get_tree().paused = state != State.RUN
+	get_tree().paused = state != State.RUN and state != State.MAIN_MENU
 	RunManager.set_timing(state == State.RUN)
-	if is_run_over():
+	# Abandoning a run files it too, as a loss. The player still cleared those rooms, and
+	# losing a personal best because you went back to the menu would read as the game
+	# forgetting rather than as a rule. RunManager ignores this when no run is open.
+	if is_run_over() or state == State.MAIN_MENU:
 		RunManager.end_run(state == State.VICTORY)
 	state_changed.emit(state)
 

@@ -48,6 +48,11 @@ theme_override_constants/h_separation = 12
 theme_override_constants/v_separation = 1
 columns = 2
 
+[node name="Buttons" type="HBoxContainer" parent="Panel"]
+unique_name_in_owner = true
+alignment = 1
+theme_override_constants/separation = 6
+
 [node name="Hint" type="Label" parent="Panel"]
 unique_name_in_owner = true
 mouse_filter = 2

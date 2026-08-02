@@ -55,9 +55,21 @@ func _resize_to_layout() -> void:
 	offset_bottom = MARGIN + wanted.y
 
 
+## How far the backing panel extends past the cells on each side.
+const BACKING_PAD := 3.0
+
+
 func _draw() -> void:
 	if _layout == null:
 		return
+
+	# An opaque panel behind the cells, for the same reason the HUD strip has one: the map is
+	# pinned to a corner of the screen and the room's own wall tiles are what is behind it.
+	# A dim grey cell over a grey wall tile is not a map (spec section 21: keep gameplay
+	# information readable).
+	var panel := Rect2(Vector2.ZERO, size).grow(BACKING_PAD)
+	draw_rect(panel, UIPalette.VOID)
+	draw_rect(panel, UIPalette.PANEL_BORDER, false, 1.0)
 
 	var origin := _layout.get_cell_bounds().position
 

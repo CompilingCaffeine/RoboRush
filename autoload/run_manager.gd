@@ -49,8 +49,9 @@ var records_beaten: PackedStringArray = []
 ## on the summary screen a measure of the run rather than of how long the window was open.
 var _is_timing := false
 
-## Set once the run has been filed into the lifetime record, so it cannot be filed twice.
-var _is_finished := false
+## False only while a run is open. Starts true because the game boots to a menu, and "no run
+## has started" and "the run is already filed" want the same answer from `end_run`.
+var _is_finished := true
 
 
 func _ready() -> void:

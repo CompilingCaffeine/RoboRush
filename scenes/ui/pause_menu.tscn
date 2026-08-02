@@ -1,0 +1,63 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scenes/ui/pause_menu.gd" id="1_pause"]
+[ext_resource type="PackedScene" path="res://scenes/ui/settings_menu.tscn" id="2_settings"]
+[ext_resource type="PackedScene" path="res://scenes/ui/controls_card.tscn" id="3_controls"]
+
+[node name="PauseMenu" type="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_pause")
+
+[node name="Backdrop" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.019608, 0.027451, 0.043137, 0.870588)
+
+[node name="Title" type="Label" parent="."]
+anchor_right = 1.0
+offset_top = 48.0
+offset_bottom = 68.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.94902, 0.631373, 0.235294, 1)
+theme_override_font_sizes/font_size = 16
+text = "PAUSED"
+horizontal_alignment = 1
+
+[node name="Progress" type="Label" parent="."]
+unique_name_in_owner = true
+anchor_right = 1.0
+offset_top = 70.0
+offset_bottom = 80.0
+grow_horizontal = 2
+mouse_filter = 2
+horizontal_alignment = 1
+
+[node name="Buttons" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -50.0
+offset_top = -18.0
+offset_right = 50.0
+offset_bottom = 76.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 3
+
+[node name="SettingsMenu" parent="." instance=ExtResource("2_settings")]
+unique_name_in_owner = true
+
+[node name="ControlsCard" parent="." instance=ExtResource("3_controls")]
+unique_name_in_owner = true
