@@ -80,7 +80,7 @@ func _physics_process(delta: float) -> void:
 		_dash.try_start(_resolve_dash_direction())
 
 	if _dash.is_dashing:
-		velocity = _dash.direction * _dash.get_speed()
+		velocity = _dash.get_frame_velocity(delta)
 	else:
 		velocity = _motion.step(velocity, _input.move_vector, delta)
 

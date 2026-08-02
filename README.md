@@ -516,7 +516,7 @@ audio/music/*.wav                       + Menu, explore, and boss loops
 
 tests/test_runner.tscn / .gd               Aggregating runner; fails on a vanished suite
 tests/test_case.gd                         Suite base class
-tests/test_player_movement.gd              28 movement and dash checks
+tests/test_player_movement.gd              32 movement and dash checks
 tests/test_combat.gd                       101 data, component, and integration checks
 tests/test_player_input.gd                 38 arrow-key shooting checks
 tests/test_floor.gd                        135 generation, invariant, and template checks

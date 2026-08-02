@@ -86,6 +86,16 @@ func _test_dash_covers_its_configured_distance(config: PlayerConfig) -> void:
 	)
 	dash.free()
 
+	# The line above is the maths on paper; these integrate it the way _physics_process
+	# does, one discrete frame at a time. dash_duration divides evenly into neither step,
+	# so an unclamped final frame overshot to 75px at 60Hz and 83px at 30Hz.
+	for step: float in [FRAME, 1.0 / 30.0]:
+		check_near(
+			_simulate_dash_distance(config, step),
+			config.dash_distance,
+			"a dash travels dash_distance at %d Hz" % roundi(1.0 / step),
+		)
+
 
 func _test_dash_lifecycle(config: PlayerConfig) -> void:
 	var dash := DashController.new()
@@ -139,6 +149,28 @@ func _test_dash_reuses_direction_when_none_requested(config: PlayerConfig) -> vo
 	dash.try_start(Vector2.ZERO)
 	check(dash.direction == Vector2.LEFT, "a zero direction reuses the previous dash direction")
 	dash.free()
+
+
+## Integrates a whole dash at a fixed timestep and returns the distance covered, in the
+## same order Player._physics_process uses: step, then start, then move by velocity*delta.
+func _simulate_dash_distance(config: PlayerConfig, step: float) -> float:
+	var dash := DashController.new()
+	dash.setup(config)
+
+	var travelled := 0.0
+	dash.step(step)
+	dash.try_start(Vector2.RIGHT)
+	# A generous frame ceiling: the loop exits when the dash does, and never hangs if
+	# it does not.
+	for _frame: int in ceili(config.dash_duration / step) + 8:
+		if not dash.is_dashing:
+			break
+		travelled += dash.get_frame_velocity(step).length() * step
+		dash.step(step)
+
+	check(not dash.is_dashing, "the dash ends within its duration at %d Hz" % roundi(1.0 / step))
+	dash.free()
+	return travelled
 
 
 ## Steps the dash controller forward by at least `seconds`, in whole simulated frames.

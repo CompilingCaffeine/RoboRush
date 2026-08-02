@@ -101,6 +101,21 @@ func get_speed() -> float:
 	return _config.dash_distance / maxf(_config.dash_duration, MIN_DASH_DURATION)
 
 
+## Velocity to apply for this physics frame, for a caller that multiplies by `delta`.
+##
+## The dash window almost never divides evenly into frames, so the last frame has less
+## than a full step of dash left in it. Moving at full speed anyway overshoots by up to
+## one frame of travel — the configured 70px dash covered 75px at 60Hz and 83px at 30Hz,
+## and how far you dashed depended on the refresh rate. Scaling the final frame by the
+## fraction of it the dash actually occupies makes the distance exact and frame-rate
+## independent. Call after step(), which is what leaves `_dash_time_left` holding the
+## travel still owed before this frame moves.
+func get_frame_velocity(delta: float) -> Vector2:
+	if not is_dashing or delta <= 0.0:
+		return Vector2.ZERO
+	return direction * get_speed() * (minf(delta, _dash_time_left) / delta)
+
+
 func get_max_charges() -> int:
 	return _max_charges
 
