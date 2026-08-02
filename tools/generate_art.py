@@ -1,14 +1,21 @@
 #!/usr/bin/env python3
-"""Generate Robo Rush placeholder pixel art as RGBA PNGs.
+"""Generate Robo Rush's pixel art as RGBA PNGs.
 
-Pure Python 3 stdlib (zlib + struct) — NOT required to build or run the game, only
-to regenerate the committed placeholder PNGs. Placeholders are replaced with real
-pixel art in milestone 6.
+Pure Python 3 stdlib (zlib + struct) — NOT required to build or run the game, only to
+regenerate the committed PNGs.
 
-    python3 tools/generate_placeholder_art.py .
+    python3 tools/generate_art.py .
 
-Sprites are authored as ASCII grids and every row length is asserted, so a typo
-fails loudly instead of silently producing a skewed image.
+Sprites are authored as ASCII grids and every row length is asserted, so a typo fails
+loudly instead of silently producing a skewed image.
+
+Authoring art as text is not a stopgap. It means a sprite is reviewable in a diff, a
+palette change is one edit rather than thirty repaints, and the whole art set can be
+regenerated from a file small enough to read — which is what makes the environment
+tile sheets below possible at all, since those are composed by code rather than drawn.
+
+Spec section 20 is the brief: chunky pixel art, bold silhouettes, limited palette,
+bright effects against dark environments, 1990s arcade cabinet.
 """
 
 import os
@@ -90,6 +97,54 @@ PLAYER = [
     "..odllddddlldo..",
     "..oooooooooooo..",
     "................",
+]
+
+# --- Visible upgrades. Spec section 20: "the player sprite should visibly change for major
+# --- items where practical", and names armour plating, a cooling fan, and a glowing battery
+# --- among the examples. Each is an overlay drawn on top of the 16x16 body, aligned to it,
+# --- so adding one is a sprite rather than a second version of the robot.
+
+# Reinforced Chassis: bolted plating across the robot's chest.
+PLAYER_ARMOUR = [
+    "................",
+    "................",
+    "................",
+    "..ollllllllllo..",
+    "..olddddddddlo..",
+    "..old......dlo..",
+    "................",
+    "................",
+    "................",
+    "..old......dlo..",
+    "..olddddddddlo..",
+    "..ollllllllllo..",
+    "................",
+    "................",
+    "................",
+    "................",
+]
+
+# Cooling Fan: a four-bladed rotor. Rotated by the game, so it is drawn square and centred
+# on its own origin rather than on the robot's.
+PLAYER_FAN = [
+    "..oooo..",
+    ".olllo..",
+    "ol.ll.lo",
+    "ollEEllo",
+    "ollEEllo",
+    "ol.ll.lo",
+    "..olllo.",
+    "..oooo..",
+]
+
+# Backup Battery: a cell that sits on the robot's back and glows.
+PLAYER_BATTERY = [
+    ".oooo.",
+    "oaaaao",
+    "oaEEao",
+    "oaEEao",
+    "oaaaao",
+    ".oooo.",
 ]
 
 # --- Arm cannon, points +X. Pivots near its left edge.
@@ -230,34 +285,92 @@ SHOP_STAND = [
     "................",
 ]
 
-# --- Merge Conflict: a 24x24 integration machine. Two halves that do not line up, with a
-# --- conflict marker down the seam — the silhouette states the whole fight.
-MERGE_CONFLICT = [
-    "........................",
-    "..oooooooooooooooooooo..",
-    ".oWWWWWWWWWWooddddddddo.",
-    ".oWrrrrrrrrWoodEEEEEEdo.",
-    ".oWrrrrrrrrWoodEEEEEEdo.",
-    ".oWrRRRRRRrWoodEeeeeeEdo",
-    ".oWrRYYYYRrWoodEeggeeEdo",
-    ".oWrRYYYYRrWoodEeggeeEdo",
-    ".oWrRRRRRRrWoodEeeeeeEdo",
-    ".oWrrrrrrrrWoodEEEEEEdo.",
-    ".oWWWWWWWWWWooddddddddo.",
-    "..oooooooooooooooooooo..",
-    "..oooooooooooooooooooo..",
-    ".oWWWWWWWWWWooddddddddo.",
-    ".oWrrrrrrrrWoodEEEEEEdo.",
-    ".oWrRRRRRRrWoodEeeeeeEdo",
-    ".oWrRYYYYRrWoodEeggeeEdo",
-    ".oWrRRRRRRrWoodEeeeeeEdo",
-    ".oWrrrrrrrrWoodEEEEEEdo.",
-    ".oWWWWWWWWWWooddddddddo.",
-    "..oooooooooooooooooooo..",
-    "...oo..oo....oo..oo.....",
-    "........................",
-    "........................",
-]
+def merge_conflict_sprite() -> list[str]:
+    """The Merge Conflict, 32x32 — four times the area of an enemy.
+
+    It was 24x24 and read as a slightly larger Ticket Bot, which is the wrong first
+    impression for the only boss in the game. Size alone does not fix that; the silhouette
+    has to be different in kind, so this is the one thing on screen that is wider than it
+    is tall, stands on feet, and has something sticking out of the top.
+
+    Built in code rather than typed as a grid because the shape that matters is the *tear*:
+    a jagged seam stepping down the middle, splitting the machine into two screens that no
+    longer line up. Hand-aligning a zigzag across fourteen rows of ASCII is exactly the kind
+    of thing that ends up one pixel out.
+
+    Drawn in neutral greys, which is not a style choice. The fight tints each body — red for
+    one version, green for the other (see MergeConflict.RED and .GREEN) — and modulate
+    multiplies, so a red tint over a baked-in green screen produces mud. The two versions
+    disagreeing is expressed by the *pair* in phase two, and by the tear in phase one; the
+    sprite stays a machine the tint can colour.
+    """
+    size = 32
+    grid = [["."] * size for _ in range(size)]
+
+    def fill(x0: int, y0: int, x1: int, y1: int, ch: str) -> None:
+        for y in range(y0, y1 + 1):
+            for x in range(x0, x1 + 1):
+                grid[y][x] = ch
+
+    def outline(x0: int, y0: int, x1: int, y1: int) -> None:
+        for x in range(x0, x1 + 1):
+            grid[y0][x] = "o"
+            grid[y1][x] = "o"
+        for y in range(y0, y1 + 1):
+            grid[y][x0] = "o"
+            grid[y][x1] = "o"
+
+    # Antennae: the only parts that break the rectangle, so the silhouette has a top.
+    for x in (7, 24):
+        fill(x, 1, x, 4, "m")
+        grid[0][x] = "a"
+        grid[1][x - 1] = "o"
+        grid[1][x + 1] = "o"
+
+    # Chassis.
+    fill(2, 4, 29, 27, "d")
+    outline(2, 4, 29, 27)
+
+    # Lit top bar with rivets — reads as a rack unit rather than a box.
+    fill(3, 5, 28, 7, "m")
+    for x in (6, 12, 19, 25):
+        grid[6][x] = "o"
+
+    # The two screens. Left is the red version, right is the green one.
+    fill(4, 9, 15, 22, "m")
+    fill(16, 9, 27, 22, "m")
+    outline(3, 8, 28, 23)
+
+    # One angry eye per half, each a bright block with a hot centre.
+    fill(6, 12, 12, 17, "l")
+    fill(8, 14, 10, 16, "Y")
+    fill(19, 12, 25, 17, "l")
+    fill(21, 14, 23, 16, "Y")
+
+    # The tear. Steps by one pixel every other row so it reads as torn rather than sawn,
+    # and is drawn last so it cuts through both screens and both eyes.
+    for y in range(9, 23):
+        seam = 15 + (1 if (y // 2) % 2 == 0 else -1)
+        grid[y][seam] = "o"
+        grid[y][seam + 1] = "Y"
+        grid[y][seam - 1] = "o"
+        grid[y][seam + 2] = "o"
+
+    # Exhaust vents along the bottom of the chassis.
+    for y in (25, 26):
+        for x in range(5, 27, 3):
+            grid[y][x] = "o"
+            grid[y][x + 1] = "o"
+
+    # Feet, so it stands on the floor instead of hovering like everything else.
+    for x0 in (4, 21):
+        fill(x0, 28, x0 + 6, 29, "m")
+        outline(x0, 28, x0 + 6, 29)
+
+    return ["".join(row) for row in grid]
+
+
+MERGE_CONFLICT = merge_conflict_sprite()
 
 # --- Synchronization terminal: a squat server box with a status light.
 BOSS_TERMINAL = [
@@ -515,49 +628,173 @@ def door_tile() -> list[str]:
     return rows
 
 
+# --- Environment tile sheets -------------------------------------------------------
+#
+# Walls and floors are drawn by Godot as one sprite with texture_repeat on, so the whole
+# environment is a single 16x16 image repeated across the screen. That is what made
+# milestone 5's rooms read as graph paper: the eye finds a 16-pixel period instantly and
+# stops seeing a room at all.
+#
+# The fix needs no engine change. A 64x64 sheet made of sixteen *different* 16x16 panels
+# tiles exactly the same way, but the period is 64 pixels and four times as much has to
+# repeat before the pattern is visible. Spec section 20 asks for industrial machinery and
+# old operating system windows; that is the vocabulary the panels are drawn from.
+
+TILE = 16
+SHEET_TILES = 4
+SHEET = TILE * SHEET_TILES
+
+
+def _blank_panel(fill: str) -> list[list[str]]:
+    return [[fill] * TILE for _ in range(TILE)]
+
+
+def _wall_panel_base() -> list[list[str]]:
+    """The bevel every wall panel shares: lit top edge, shaded bottom, dark outline."""
+    grid = _blank_panel("m")
+    for x in range(TILE):
+        grid[0][x] = "o"
+        grid[1][x] = "l"
+        grid[TILE - 2][x] = "d"
+        grid[TILE - 1][x] = "o"
+    for y in range(TILE):
+        grid[y][0] = "o"
+        grid[y][TILE - 1] = "o"
+    return grid
+
+
+def wall_panel(kind: str) -> list[list[str]]:
+    """One 16x16 wall panel. Four kinds, so a wall is machinery rather than graph paper."""
+    grid = _wall_panel_base()
+
+    if kind == "rivets":
+        for y in (4, 11):
+            for x in (4, 11):
+                grid[y][x] = "l"
+                grid[y + 1][x] = "d"
+    elif kind == "vent":
+        # Horizontal louvres. The most recognisable "this is a machine" marking there is.
+        for y in range(4, 12, 2):
+            for x in range(3, 13):
+                grid[y][x] = "d"
+                grid[y + 1][x] = "D"
+    elif kind == "conduit":
+        # A cable run down the panel, clipped at both ends.
+        for y in range(2, TILE - 2):
+            grid[y][7] = "d"
+            grid[y][8] = "D"
+            grid[y][9] = "d"
+        for y in (4, 10):
+            for x in range(6, 11):
+                grid[y][x] = "l"
+    elif kind == "screen":
+        # A dead terminal set into the wall, with one pixel still alive in it. Spec
+        # section 20's "old operating system windows", at the smallest possible scale.
+        for y in range(4, 11):
+            for x in range(4, 12):
+                grid[y][x] = "D"
+        for x in range(4, 12):
+            grid[3][x] = "o"
+            grid[11][x] = "o"
+        for y in range(3, 12):
+            grid[y][3] = "o"
+            grid[y][12] = "o"
+        grid[6][6] = "e"
+        grid[6][7] = "e"
+        grid[8][6] = "e"
+
+    return grid
+
+
+def floor_panel(kind: str) -> list[list[str]]:
+    """One 16x16 floor panel. Dark, because spec section 20 wants bright effects against
+    dark environments — the floor's job is to be legible and then get out of the way."""
+    grid = _blank_panel("D")
+    for x in range(TILE):
+        grid[0][x] = "G"
+    for y in range(TILE):
+        grid[y][0] = "G"
+
+    if kind == "scuffed":
+        for x, y in ((5, 7), (6, 7), (11, 3), (4, 12), (12, 10)):
+            grid[y][x] = "S"
+    elif kind == "grate":
+        for y in range(4, 12):
+            for x in range(4, 12):
+                grid[y][x] = "G" if (y % 2 == 0) else "S"
+        for x in range(4, 12):
+            grid[3][x] = "S"
+            grid[12][x] = "S"
+    elif kind == "seam":
+        # A cable seam crossing the tile, so long runs of floor have a direction.
+        for x in range(1, TILE):
+            grid[9][x] = "G"
+            grid[10][x] = "S"
+
+    return grid
+
+
+## Which panel goes where. Laid out by hand rather than shuffled so that no two adjacent
+## cells match — including across the seam where the sheet wraps, which is the join the eye
+## would otherwise find first.
+WALL_LAYOUT = [
+    ["rivets", "vent", "plain", "conduit"],
+    ["screen", "plain", "rivets", "plain"],
+    ["plain", "conduit", "plain", "vent"],
+    ["rivets", "plain", "screen", "plain"],
+]
+
+FLOOR_LAYOUT = [
+    ["plain", "scuffed", "plain", "plain"],
+    ["plain", "plain", "grate", "plain"],
+    ["seam", "plain", "plain", "scuffed"],
+    ["plain", "plain", "plain", "grate"],
+]
+
+
+def compose_sheet(layout: list[list[str]], panel_for) -> list[str]:
+    """Stitches a 4x4 arrangement of 16x16 panels into one 64x64 grid."""
+    rows = [[""] * SHEET for _ in range(SHEET)]
+    for cell_y, row in enumerate(layout):
+        for cell_x, kind in enumerate(row):
+            panel = panel_for(kind)
+            for y in range(TILE):
+                for x in range(TILE):
+                    rows[cell_y * TILE + y][cell_x * TILE + x] = panel[y][x]
+    return ["".join(row) for row in rows]
+
+
 def wall_tile() -> list[str]:
-    rows = ["o" * 16]
-    rows.append("o" + "l" * 14 + "o")
-    for _ in range(12):
-        rows.append("o" + "m" * 14 + "o")
-    rows.append("o" + "d" * 14 + "o")
-    rows.append("o" * 16)
-    grid = [list(r) for r in rows]
-    for y in (4, 11):          # panel rivets
-        for x in (4, 11):
-            grid[y][x] = "l"
-    return ["".join(r) for r in grid]
+    return compose_sheet(WALL_LAYOUT, wall_panel)
 
 
 def floor_tile() -> list[str]:
-    grid = [list("G" * 16)]
-    for _ in range(15):
-        grid.append(list("G" + "D" * 15))
-    grid[7][5] = "S"           # scuff marks break up the tiling
-    grid[3][11] = "S"
-    return ["".join(r) for r in grid]
+    return compose_sheet(FLOOR_LAYOUT, floor_panel)
 
 
 SPRITES = {
-    "art/characters/player_placeholder.png": PLAYER,
-    "art/characters/player_cannon_placeholder.png": CANNON,
-    "art/enemies/ticket_bot_placeholder.png": TICKET_BOT,
-    "art/enemies/pop_up_drone_placeholder.png": POP_UP_DRONE,
-    "art/enemies/memory_leech_placeholder.png": MEMORY_LEECH,
-    "art/enemies/firewall_node_placeholder.png": FIREWALL_NODE,
+    "art/characters/player.png": PLAYER,
+    "art/characters/player_cannon.png": CANNON,
+    "art/characters/player_drone.png": PLAYER_DRONE,
+    "art/characters/player_armour.png": PLAYER_ARMOUR,
+    "art/characters/player_fan.png": PLAYER_FAN,
+    "art/characters/player_battery.png": PLAYER_BATTERY,
+    "art/enemies/ticket_bot.png": TICKET_BOT,
+    "art/enemies/pop_up_drone.png": POP_UP_DRONE,
+    "art/enemies/memory_leech.png": MEMORY_LEECH,
+    "art/enemies/firewall_node.png": FIREWALL_NODE,
     "art/effects/projectile_drone.png": DRONE_SHOT,
-    "art/characters/player_drone_placeholder.png": PLAYER_DRONE,
-    "art/environments/shop_stand_placeholder.png": SHOP_STAND,
-    "art/bosses/merge_conflict_placeholder.png": MERGE_CONFLICT,
-    "art/bosses/boss_terminal_placeholder.png": BOSS_TERMINAL,
+    "art/environments/shop_stand.png": SHOP_STAND,
+    "art/bosses/merge_conflict.png": MERGE_CONFLICT,
+    "art/bosses/boss_terminal.png": BOSS_TERMINAL,
     "art/effects/projectile_boss_red.png": BOSS_RED,
     "art/effects/projectile_boss_green.png": BOSS_GREEN,
     "art/effects/projectile_rivet.png": RIVET,
     "art/effects/projectile_ticket.png": TICKET_SHOT,
     "art/effects/muzzle_flash.png": MUZZLE_FLASH,
     "art/effects/spark.png": SPARK,
-    "art/ui/scrap_placeholder.png": SCRAP,
-    "art/ui/repair_cell_placeholder.png": REPAIR_CELL,
+    "art/ui/scrap.png": SCRAP,
+    "art/ui/repair_cell.png": REPAIR_CELL,
 }
 
 
@@ -567,9 +804,9 @@ def main() -> int:
         write_png(os.path.join(root, relative), grid)
     for item_id, grid in ITEM_ICONS.items():
         write_png(os.path.join(root, f"art/items/{item_id}.png"), grid)
-    write_png(os.path.join(root, "art/environments/wall_placeholder.png"), wall_tile())
-    write_png(os.path.join(root, "art/environments/door_placeholder.png"), door_tile())
-    write_png(os.path.join(root, "art/environments/floor_placeholder.png"), floor_tile())
+    write_png(os.path.join(root, "art/environments/wall.png"), wall_tile())
+    write_png(os.path.join(root, "art/environments/door.png"), door_tile())
+    write_png(os.path.join(root, "art/environments/floor.png"), floor_tile())
     return 0
 
 

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://demjorfq5583e"
-path="res://.godot/imported/firewall_node_placeholder.png-17f8a4029246eaf751cbde77c45fd632.ctex"
+uid="uid://b7aw2cmxure1r"
+path="res://.godot/imported/player_drone.png-4fb5e58fc4fe2932f87f57bd1fcad5c1.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://art/enemies/firewall_node_placeholder.png"
-dest_files=["res://.godot/imported/firewall_node_placeholder.png-17f8a4029246eaf751cbde77c45fd632.ctex"]
+source_file="res://art/characters/player_drone.png"
+dest_files=["res://.godot/imported/player_drone.png-4fb5e58fc4fe2932f87f57bd1fcad5c1.ctex"]
 
 [params]
 

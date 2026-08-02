@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://n411ukjrg3bd"
-path="res://.godot/imported/merge_conflict_placeholder.png-268d02ab8a8b67bf837a639ca0f42aff.ctex"
+uid="uid://dngvys8v5tr02"
+path="res://.godot/imported/player_battery.png-c0f54ecf569ac0fc6218639973bb9fe9.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://art/bosses/merge_conflict_placeholder.png"
-dest_files=["res://.godot/imported/merge_conflict_placeholder.png-268d02ab8a8b67bf837a639ca0f42aff.ctex"]
+source_file="res://art/characters/player_battery.png"
+dest_files=["res://.godot/imported/player_battery.png-c0f54ecf569ac0fc6218639973bb9fe9.ctex"]
 
 [params]
 

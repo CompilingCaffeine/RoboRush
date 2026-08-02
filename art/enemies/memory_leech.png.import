@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://jjy4fmiph62n"
-path="res://.godot/imported/memory_leech_placeholder.png-f3a204b6653a7b9d58ceb4071e5f737f.ctex"
+uid="uid://bne4eb5gsi0jw"
+path="res://.godot/imported/memory_leech.png-7bee138445a3556964f0d4e05e7d828f.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://art/enemies/memory_leech_placeholder.png"
-dest_files=["res://.godot/imported/memory_leech_placeholder.png-f3a204b6653a7b9d58ceb4071e5f737f.ctex"]
+source_file="res://art/enemies/memory_leech.png"
+dest_files=["res://.godot/imported/memory_leech.png-7bee138445a3556964f0d4e05e7d828f.ctex"]
 
 [params]
 

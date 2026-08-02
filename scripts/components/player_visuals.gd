@@ -30,10 +30,29 @@ const MUZZLE_FLASH_SECONDS := 0.045
 ## Tint held after death.
 const DEAD_TINT := Color(0.45, 0.42, 0.5, 1.0)
 
+## Item id -> the sprite it bolts to the robot. Spec section 20 asks for the player sprite to
+## visibly change for major items "where practical", and names these three among its examples.
+##
+## Three rather than twelve, deliberately. An eleven-pixel-tall robot has room for a few
+## silhouette changes before it stops being a robot, so the ones that made it are the items
+## that change how the player *is* rather than what their bullets do — armour, cooling,
+## capacity. Ricochet Driver changes a great deal and shows nothing, which is the right
+## trade: the cannon's accent tint already says "something is different".
+const ATTACHMENTS := {
+	&"reinforced_chassis": "Armour",
+	&"cooling_fan": "Fan",
+	&"backup_battery": "Battery",
+}
+
+## Revolutions per second of the cooling fan, once one is fitted. Spec section 20 lists
+## "cooling fan spins" as an example, and a fan that does not turn reads as a sticker.
+const FAN_SPIN_HZ := 1.6
+
 @onready var _body: Sprite2D = $Body
 @onready var _aim_pivot: Node2D = $AimPivot
 @onready var _cannon: Sprite2D = $AimPivot/Cannon
 @onready var _muzzle_flash: Sprite2D = $AimPivot/MuzzleFlash
+@onready var _fan: Sprite2D = %Fan
 
 var _flash_time := 0.0
 var _muzzle_flash_left := 0.0
@@ -43,6 +62,10 @@ var _accent := Color.WHITE
 
 func _ready() -> void:
 	_muzzle_flash.visible = false
+	# Read off the bus rather than pushed by the inventory, for the same reason the particle
+	# bursts are: picking something up should not require the thing that picks it up to know
+	# what the robot looks like.
+	EventBus.item_collected.connect(_on_item_collected)
 
 
 ## Call once per frame with the player's current presentation-relevant state.
@@ -53,6 +76,8 @@ func update_visuals(aim_direction: Vector2, is_invulnerable: bool, delta: float)
 	_update_flash(is_invulnerable, delta)
 	_update_muzzle_flash(delta)
 	_body.scale = _body.scale.move_toward(Vector2.ONE, SQUASH_RECOVERY * delta)
+	if _fan.visible:
+		_fan.rotation += TAU * FAN_SPIN_HZ * delta
 
 
 ## Punched in from the dash signal rather than polled, so it fires exactly once.
@@ -79,6 +104,16 @@ func set_accent(color: Color) -> void:
 		_cannon.modulate = _accent
 
 
+## Bolts on the sprite an item brings, if it brings one. Unknown ids are the normal case —
+## nine of the twelve items change nothing here — so a miss is silent rather than a warning.
+func _on_item_collected(item: ItemConfig) -> void:
+	if item == null or not ATTACHMENTS.has(item.id):
+		return
+	var attachment := get_node_or_null(NodePath(ATTACHMENTS[item.id])) as Sprite2D
+	if attachment != null:
+		attachment.visible = true
+
+
 ## Locks the robot into a dimmed, un-flashing state. Called once on death so the
 ## per-frame updates cannot overwrite it.
 func play_death() -> void:
@@ -87,6 +122,12 @@ func play_death() -> void:
 	_body.modulate = DEAD_TINT
 	_body.scale = Vector2(1.25, 0.7)
 	_cannon.modulate = DEAD_TINT
+	# The attachments die with the robot: a glowing battery on a slumped wreck reads as the
+	# game having failed to notice, and the fan is stopped by _is_dead cutting the update.
+	for node_name: String in ATTACHMENTS.values():
+		var attachment := get_node_or_null(NodePath(node_name)) as Sprite2D
+		if attachment != null:
+			attachment.modulate = DEAD_TINT
 
 
 func _update_aim(aim_direction: Vector2) -> void:

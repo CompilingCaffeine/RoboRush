@@ -1,7 +1,7 @@
 [gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scenes/rooms/room.gd" id="1_room"]
-[ext_resource type="Texture2D" path="res://art/environments/floor_placeholder.png" id="2_floor_tex"]
+[ext_resource type="Texture2D" path="res://art/environments/floor.png" id="2_floor_tex"]
 [ext_resource type="Script" path="res://scripts/systems/room_combat.gd" id="3_room_combat"]
 
 [node name="Room" type="Node2D"]

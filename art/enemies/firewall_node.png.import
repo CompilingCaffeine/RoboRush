@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://c6pig8ski5txt"
-path="res://.godot/imported/pop_up_drone_placeholder.png-93efb199e43c4014c92987fe0757582b.ctex"
+uid="uid://c77rs8t2p3suk"
+path="res://.godot/imported/firewall_node.png-f0e759a67ee1b0853e93ff0827fa4bb0.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://art/enemies/pop_up_drone_placeholder.png"
-dest_files=["res://.godot/imported/pop_up_drone_placeholder.png-93efb199e43c4014c92987fe0757582b.ctex"]
+source_file="res://art/enemies/firewall_node.png"
+dest_files=["res://.godot/imported/firewall_node.png-f0e759a67ee1b0853e93ff0827fa4bb0.ctex"]
 
 [params]
 

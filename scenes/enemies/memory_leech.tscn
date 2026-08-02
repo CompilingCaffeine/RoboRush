@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://scenes/enemies/memory_leech.gd" id="1_script"]
 [ext_resource type="Resource" path="res://data/enemies/memory_leech.tres" id="2_config"]
-[ext_resource type="Texture2D" path="res://art/enemies/memory_leech_placeholder.png" id="3_tex"]
+[ext_resource type="Texture2D" path="res://art/enemies/memory_leech.png" id="3_tex"]
 [ext_resource type="Script" path="res://scripts/components/health_component.gd" id="4_health"]
 [ext_resource type="Script" path="res://scripts/components/hurt_flash.gd" id="5_flash"]
 

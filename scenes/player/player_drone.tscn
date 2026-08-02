@@ -1,7 +1,7 @@
 [gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scenes/player/player_drone.gd" id="1_drone"]
-[ext_resource type="Texture2D" path="res://art/characters/player_drone_placeholder.png" id="2_tex"]
+[ext_resource type="Texture2D" path="res://art/characters/player_drone.png" id="2_tex"]
 [ext_resource type="Script" path="res://scripts/components/weapon_controller.gd" id="3_weapon"]
 [ext_resource type="Resource" path="res://data/weapons/drone_blaster.tres" id="4_blaster"]
 

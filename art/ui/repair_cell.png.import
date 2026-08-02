@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://wtqajfitsjl"
-path="res://.godot/imported/repair_cell_placeholder.png-3b2a4a05c7db3aafe7d3f8906f2bbf04.ctex"
+uid="uid://c5wpu7ykgfqw2"
+path="res://.godot/imported/repair_cell.png-9c5f3fa12ccd5576b878f1721aa807f8.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://art/ui/repair_cell_placeholder.png"
-dest_files=["res://.godot/imported/repair_cell_placeholder.png-3b2a4a05c7db3aafe7d3f8906f2bbf04.ctex"]
+source_file="res://art/ui/repair_cell.png"
+dest_files=["res://.godot/imported/repair_cell.png-9c5f3fa12ccd5576b878f1721aa807f8.ctex"]
 
 [params]
 

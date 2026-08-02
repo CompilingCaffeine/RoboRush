@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cplowgkt571q5"
-path="res://.godot/imported/door_placeholder.png-1d2bcaf6e34de1a66acd0cfda3d8fded.ctex"
+uid="uid://duwm551ysiei8"
+path="res://.godot/imported/pop_up_drone.png-7d125eb97d4d91f1ecf4b6fba1846665.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://art/environments/door_placeholder.png"
-dest_files=["res://.godot/imported/door_placeholder.png-1d2bcaf6e34de1a66acd0cfda3d8fded.ctex"]
+source_file="res://art/enemies/pop_up_drone.png"
+dest_files=["res://.godot/imported/pop_up_drone.png-7d125eb97d4d91f1ecf4b6fba1846665.ctex"]
 
 [params]
 

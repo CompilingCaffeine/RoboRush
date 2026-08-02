@@ -1,11 +1,14 @@
-[gd_scene load_steps=15 format=3]
+[gd_scene load_steps=18 format=3]
 
 [ext_resource type="Script" path="res://scenes/player/player.gd" id="1_player"]
 [ext_resource type="Resource" path="res://data/player/player_config.tres" id="2_config"]
 [ext_resource type="Script" path="res://scripts/components/player_visuals.gd" id="3_visuals"]
-[ext_resource type="Texture2D" path="res://art/characters/player_placeholder.png" id="4_body_tex"]
-[ext_resource type="Texture2D" path="res://art/characters/player_cannon_placeholder.png" id="5_cannon_tex"]
+[ext_resource type="Texture2D" path="res://art/characters/player.png" id="4_body_tex"]
+[ext_resource type="Texture2D" path="res://art/characters/player_cannon.png" id="5_cannon_tex"]
 [ext_resource type="Texture2D" path="res://art/effects/muzzle_flash.png" id="6_muzzle_tex"]
+[ext_resource type="Texture2D" path="res://art/characters/player_armour.png" id="15_armour_tex"]
+[ext_resource type="Texture2D" path="res://art/characters/player_fan.png" id="16_fan_tex"]
+[ext_resource type="Texture2D" path="res://art/characters/player_battery.png" id="17_battery_tex"]
 [ext_resource type="Script" path="res://scripts/components/player_input.gd" id="7_input"]
 [ext_resource type="Script" path="res://scripts/components/motion_controller.gd" id="8_motion"]
 [ext_resource type="Script" path="res://scripts/components/dash_controller.gd" id="9_dash"]
@@ -34,6 +37,23 @@ script = ExtResource("3_visuals")
 
 [node name="Body" type="Sprite2D" parent="Visuals"]
 texture = ExtResource("4_body_tex")
+
+[node name="Armour" type="Sprite2D" parent="Visuals"]
+unique_name_in_owner = true
+visible = false
+texture = ExtResource("15_armour_tex")
+
+[node name="Battery" type="Sprite2D" parent="Visuals"]
+unique_name_in_owner = true
+visible = false
+position = Vector2(-8, -5)
+texture = ExtResource("17_battery_tex")
+
+[node name="Fan" type="Sprite2D" parent="Visuals"]
+unique_name_in_owner = true
+visible = false
+position = Vector2(8, -6)
+texture = ExtResource("16_fan_tex")
 
 [node name="AimPivot" type="Node2D" parent="Visuals"]
 

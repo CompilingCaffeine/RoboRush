@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://clldcrdgkubrh"
-path="res://.godot/imported/scrap_placeholder.png-65cea677998717ab222772303806418d.ctex"
+uid="uid://bbdja4mq22005"
+path="res://.godot/imported/boss_terminal.png-77cea4ae9f61083d785a890ad6d99b75.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://art/ui/scrap_placeholder.png"
-dest_files=["res://.godot/imported/scrap_placeholder.png-65cea677998717ab222772303806418d.ctex"]
+source_file="res://art/bosses/boss_terminal.png"
+dest_files=["res://.godot/imported/boss_terminal.png-77cea4ae9f61083d785a890ad6d99b75.ctex"]
 
 [params]
 

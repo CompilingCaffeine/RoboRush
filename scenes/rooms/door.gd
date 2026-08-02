@@ -10,7 +10,7 @@ extends StaticBody2D
 ## player. That is deliberate — being able to shoot out of a sealed room would let the player
 ## clear the next room through the doorway.
 
-const DOOR_TEXTURE := preload("res://art/environments/door_placeholder.png")
+const DOOR_TEXTURE := preload("res://art/environments/door.png")
 
 @onready var _sprite: Sprite2D = $Sprite
 @onready var _shape: CollisionShape2D = $Shape

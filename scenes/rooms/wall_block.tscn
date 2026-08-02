@@ -1,7 +1,7 @@
 [gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scenes/rooms/wall_block.gd" id="1_wall"]
-[ext_resource type="Texture2D" path="res://art/environments/wall_placeholder.png" id="2_wall_tex"]
+[ext_resource type="Texture2D" path="res://art/environments/wall.png" id="2_wall_tex"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_wall"]
 size = Vector2(16, 16)

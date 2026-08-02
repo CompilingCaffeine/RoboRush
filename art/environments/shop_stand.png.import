@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://gqndc1t0pheg"
-path="res://.godot/imported/player_drone_placeholder.png-e60ff6964452746e2aa1161a7ea29d0f.ctex"
+uid="uid://xxp3cp2jni2h"
+path="res://.godot/imported/shop_stand.png-1c1700fd5a7522eabe129842a315b2c0.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://art/characters/player_drone_placeholder.png"
-dest_files=["res://.godot/imported/player_drone_placeholder.png-e60ff6964452746e2aa1161a7ea29d0f.ctex"]
+source_file="res://art/environments/shop_stand.png"
+dest_files=["res://.godot/imported/shop_stand.png-1c1700fd5a7522eabe129842a315b2c0.ctex"]
 
 [params]
 
