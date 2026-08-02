@@ -49,6 +49,11 @@ var _primary: BossPart
 var _clone: BossPart
 var _terminals: Array[BossTerminal] = []
 
+## Terminals still standing, counted from the moment the phase begins rather than from the
+## moment their nodes exist. The bodies are added a frame late (see `_enter_duplicated`),
+## and a refund that lapsed for that frame would be a refund the player did not earn.
+var _terminals_remaining := 0
+
 var _arena: Rect2
 var _player: Node2D
 var _attack_left := 0.0
@@ -101,11 +106,7 @@ func get_health_ratio() -> float:
 
 
 func get_terminal_count() -> int:
-	var alive := 0
-	for terminal: BossTerminal in _terminals:
-		if is_instance_valid(terminal):
-			alive += 1
-	return alive
+	return _terminals_remaining
 
 
 ## True while the two versions are still synchronised, which is what makes damage partly
@@ -157,13 +158,30 @@ func _advance_phase() -> void:
 		_enter_merged()
 
 
+## The phase itself changes immediately; the bodies it brings arrive next frame.
+##
+## A phase change is reached from a projectile's hit callback, and registering a new body's
+## collision shape while the physics server is flushing queries is refused outright — the
+## fifth time this project has met that trap. Splitting it this way keeps every piece of
+## *state* the fight depends on correct within the frame the threshold was crossed, and
+## defers only the part Godot will not accept yet.
 func _enter_duplicated() -> void:
 	_phase = Phase.DUPLICATED
+	_terminals_remaining = config.terminal_count
 	_primary.set_tint(RED)
-	_clone = _spawn_part(_mirror_of(_primary.global_position), GREEN)
-	_spawn_terminals()
 	_attack_left = config.phase_two_interval
 	EventBus.boss_phase_changed.emit(int(_phase))
+	_build_duplicate.call_deferred()
+
+
+## Guarded, because a frame is long enough for the fight to have moved on: a large enough
+## hit can merge or end it before this runs, and a clone appearing afterwards would be a
+## second body nothing is tracking.
+func _build_duplicate() -> void:
+	if _is_dead or _phase != Phase.DUPLICATED or not is_instance_valid(_primary):
+		return
+	_clone = _spawn_part(_mirror_of(_primary.global_position), GREEN)
+	_spawn_terminals()
 
 
 func _enter_merged() -> void:
@@ -174,10 +192,7 @@ func _enter_merged() -> void:
 	# Spec section 16: the two versions merge incorrectly into a larger unstable form.
 	_primary.scale = Vector2.ONE * MERGED_SCALE
 	_primary.set_tint(Color(1.0, 0.75, 0.55, 1.0))
-	for terminal: BossTerminal in _terminals:
-		if is_instance_valid(terminal):
-			terminal.queue_free()
-	_terminals.clear()
+	_clear_terminals()
 	_attack_left = config.phase_three_interval
 	EventBus.boss_phase_changed.emit(int(_phase))
 
@@ -187,10 +202,7 @@ func _die() -> void:
 	var where := _primary.global_position if is_instance_valid(_primary) else global_position
 	for part: BossPart in get_parts():
 		part.queue_free()
-	for terminal: BossTerminal in _terminals:
-		if is_instance_valid(terminal):
-			terminal.queue_free()
-	_terminals.clear()
+	_clear_terminals()
 
 	EventBus.enemy_killed.emit(self, where)
 	EventBus.boss_defeated.emit(self)
@@ -388,7 +400,16 @@ func _spawn_terminals() -> void:
 ## on protecting the boss after the player destroyed it is a refund they already paid for.
 func _on_terminal_destroyed(terminal: BossTerminal) -> void:
 	_terminals.erase(terminal)
+	_terminals_remaining = maxi(_terminals_remaining - 1, 0)
 	_announce_health()
+
+
+func _clear_terminals() -> void:
+	for terminal: BossTerminal in _terminals:
+		if is_instance_valid(terminal):
+			terminal.queue_free()
+	_terminals.clear()
+	_terminals_remaining = 0
 
 
 func _spawn(shot: ProjectileConfig, origin: Vector2, direction: Vector2) -> void:

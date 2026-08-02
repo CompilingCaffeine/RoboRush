@@ -16,6 +16,7 @@ const BOSS_CONFIG_PATH := "res://data/bosses/merge_conflict.tres"
 const PLAYER_SCENE := preload("res://scenes/player/player.tscn")
 
 const ARENA := Rect2(Vector2.ZERO, Vector2(416.0, 192.0))
+const RIVET_PATH := "res://data/projectiles/rivet.tres"
 
 var _config: BossConfig
 var _arena: Node2D
@@ -38,6 +39,7 @@ func run() -> void:
 	await _test_the_boss_actually_attacks()
 	await _test_health_is_announced()
 	await _test_the_boss_fights_inside_its_arena()
+	await _test_real_projectiles_drive_the_whole_fight()
 
 
 func _test_config_matches_the_spec() -> void:
@@ -75,9 +77,18 @@ func _test_duplicates_at_seventy_percent() -> void:
 		_boss.get_phase() == MergeConflict.Phase.DUPLICATED,
 		"crossing 70 percent duplicates it",
 	)
-	check(_boss.get_parts().size() == 2, "into two versions")
-	check(_boss.get_terminal_count() == 4, "and four terminals appear with them")
-	check(_boss.is_synchronised(), "which are keeping the two in sync")
+	# The state changes in the frame the threshold is crossed, even though the bodies it
+	# brings cannot be added until the next one. The refund must not lapse in between.
+	check(_boss.get_terminal_count() == 4, "and its terminals count immediately")
+	check(_boss.is_synchronised(), "so the two are in sync from the moment they split")
+	# Deliberately asserting the *deferral*, not just the outcome. A phase change is
+	# reached from inside a projectile's hit callback, where Godot refuses to register a
+	# new body's collision shape; building the clone there prints a wall of errors. This
+	# check fails if anyone makes the spawn immediate again.
+	check(_boss.get_parts().size() == 1, "the second body is not built inside the hit callback")
+
+	await advance_physics(2)
+	check(_boss.get_parts().size() == 2, "and arrives on the next frame instead")
 	await _teardown()
 
 
@@ -85,6 +96,7 @@ func _test_duplicates_at_seventy_percent() -> void:
 func _test_synchronised_damage_is_refunded() -> void:
 	await _begin()
 	_hurt(_config.max_health * 0.35)
+	await advance_physics(2)
 	var synchronised := _boss.is_synchronised()
 	check(synchronised, "the boss reached its synchronised phase")
 	if not synchronised:
@@ -105,6 +117,8 @@ func _test_synchronised_damage_is_refunded() -> void:
 func _test_breaking_terminals_stops_the_refund() -> void:
 	await _begin()
 	_hurt(_config.max_health * 0.35)
+	# The terminals exist as nodes a frame later; they cannot be shot before that.
+	await advance_physics(2)
 	var synchronised := _boss.is_synchronised()
 	check(synchronised, "the boss reached its synchronised phase")
 	if not synchronised:
@@ -250,6 +264,66 @@ func _test_the_boss_fights_inside_its_arena() -> void:
 	await _teardown()
 
 
+## The fight driven the way the game drives it: real projectiles, real collision, real hit
+## callbacks. Every other check here damages the boss by emitting `took_damage` directly,
+## which is a faithful test of the forwarding and a blind spot for everything upstream of
+## it — a phase change is reached from inside a projectile's hit callback, and Godot
+## refuses to register a new body's collision shape while the physics server is flushing
+## queries. A clone spawned there exists but cannot be shot, and nothing that emits
+## `took_damage` by hand would ever notice.
+func _test_real_projectiles_drive_the_whole_fight() -> void:
+	await _begin()
+
+	# One real hit, big enough to cross the duplication threshold from inside the callback.
+	_shoot(_boss.get_parts()[0], _config.max_health * 0.4)
+	await advance_physics(12)
+
+	check(_boss.get_phase() == MergeConflict.Phase.DUPLICATED, "a real hit duplicates the boss")
+	check(_boss.get_parts().size() == 2, "and the second version arrives")
+	check(_boss.get_terminal_count() == 4, "along with its terminals")
+
+	# The clone must be shootable. If its collision shape failed to register, this passes
+	# straight through it and the boss takes nothing.
+	var before := _boss.get_health()
+	_shoot(_boss.get_parts()[1], 5.0)
+	await advance_physics(12)
+	check(_boss.get_health() < before, "the duplicated version can actually be shot")
+
+	# So must the terminals, or the fight has no answer.
+	var terminal := _find_terminal()
+	check(terminal != null, "a terminal is in the world to shoot")
+	if terminal != null:
+		var terminal_health := terminal.get_health_component().current
+		_shoot(terminal, 2.0)
+		await advance_physics(12)
+		check(
+			terminal.get_health_component().current < terminal_health,
+			"and the terminals can be shot too",
+		)
+
+	await _teardown()
+
+
+## Fires a real player projectile into `target` from just outside it.
+func _shoot(target: Node2D, damage: float) -> void:
+	var config := (load(RIVET_PATH) as ProjectileConfig).spawn_copy()
+	config.damage = damage
+	var origin := target.global_position - Vector2(40.0, 0.0)
+	var shooter := Node2D.new()
+	_arena.add_child(shooter)
+	ProjectileFactory.spawn_configured(
+		shooter, config, Vector2.RIGHT, origin, Teams.Id.PLAYER, shooter
+	)
+
+
+func _find_terminal() -> BossTerminal:
+	for node: Node in get_tree().get_nodes_in_group(Teams.GROUP_ENEMY):
+		var terminal := node as BossTerminal
+		if terminal != null and is_instance_valid(terminal):
+			return terminal
+	return null
+
+
 # --- Fixtures -----------------------------------------------------------------
 
 
@@ -301,6 +375,8 @@ func _hurt(amount: float) -> void:
 ## measuring the phase rather than the refund.
 func _destroy_terminals_after_duplication() -> void:
 	_hurt(_config.max_health * 0.35)
+	# Terminals are added a frame after the phase begins, so there is nothing to break yet.
+	await advance_physics(2)
 	_destroy_all_terminals()
 	await advance_physics(2)
 

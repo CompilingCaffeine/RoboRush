@@ -438,7 +438,7 @@ tests/test_items.gd                        172 item, stack, inventory, and syner
 tests/test_enemies.gd                    + 57 checks that each enemy poses its problem
 tests/test_run.gd                        + 64 statistics, state, and summary checks
 tests/test_shop.gd                       + 47 price, purchase, and refusal checks
-tests/test_boss.gd                       + 43 phase, terminal, and defeat checks
+tests/test_boss.gd                       + 50 phase, terminal, and defeat checks
 
 tools/generate_input_map.gd                Regenerates project.godot's [input]
 tools/generate_placeholder_art.py          Regenerates every placeholder PNG
@@ -454,7 +454,7 @@ Executed on this machine, not assumed.
 - **`godot --headless --import`** completes with no errors.
 - **Clean boot** (`--quit-after 300` on `main.tscn`) produces zero errors and zero
   warnings on stdout/stderr.
-- **685 checks across 9 suites pass, exit 0**, in 42s.
+- **692 checks across 9 suites pass, exit 0**, in 43s.
 - **The floor generator is swept across 120 seeds per run**, asserting every spec section 9
   requirement on each: exactly the requested room count, no disconnected rooms, no two rooms
   in one cell, exactly one of each special room, every door symmetric and between adjacent
@@ -631,10 +631,23 @@ fixed. Each now has a regression check in the combat suite.
     meant to be blocked by had entered the physics space, so whether the check passed
     depended on the random angle its beams started at.
 
-The pattern worth naming: **four of these were invisible to the test suite and visible the
-moment something actually ran.** The suite is 685 checks and it did not catch a shop whose
-stands were in another room. Rendered frames and a harness that plays the game are not
-redundant with unit tests; they fail differently.
+15. **The boss's phase change spawned bodies inside a physics callback** — the fifth time
+    this project has met that trap, and the first time it reached a player rather than a
+    harness. Crossing 70% health is reached from `Projectile._on_body_entered`, and adding
+    the second version and its four terminals there printed twenty errors per fight. The
+    suite missed it because **every boss check damaged the boss by emitting `took_damage`
+    directly**, which is a faithful test of the forwarding and a blind spot for everything
+    upstream of it. The phase state now changes immediately and only the *bodies* are
+    deferred, so the refund cannot lapse for the frame in between; the suite now also
+    fights the boss with real projectiles from a real weapon, and separately asserts the
+    deferral itself so nobody can quietly make the spawn immediate again.
+
+The pattern worth naming: **five of these were invisible to the test suite and visible the
+moment something actually ran.** The suite is 692 checks and it did not catch a shop whose
+stands were in another room, nor a boss that printed twenty errors every time it split.
+Rendered frames, a harness that plays the game, and a person actually playing it are not
+redundant with unit tests; they fail differently, and the last of those found the one the
+first two missed.
 
 ---
 
@@ -672,9 +685,11 @@ redundant with unit tests; they fail differently.
     strip below shows whatever is there — usually black, sometimes the top wall of the room
     below. Legible today by luck rather than design.
 14. **Gamepad is untested** — no controller was available.
-15. **Physics changes made during physics callbacks must be deferred**, and this project has
-    now been bitten by it four times (doors, loot, split projectiles, boss spawning). Every
-    site is deferred and commented; the trap is Godot's, but the count is worth recording.
+15. **Physics changes made during physics callbacks must be deferred**, and this project
+    has now been bitten by it five times (doors, loot, split projectiles, boss spawning,
+    and the boss's phase change). Every site is deferred and commented. The trap is
+    Godot's, but five is enough that any new code adding a body should assume it is inside
+    a callback until it has checked.
 16. **Hand-authored `NodePath` literals do not resolve into exported `Node` properties**, so
     text-authored scenes pass node references explicitly.
 
