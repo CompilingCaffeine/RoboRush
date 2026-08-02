@@ -132,6 +132,7 @@ func _on_settings_pressed() -> void:
 	_settings.open()
 
 
+## No sound: quitting takes effect at the end of this frame, so a click here would be cut off
+## before it was audible — and a stream still playing at teardown leaks it.
 func _on_quit_pressed() -> void:
-	AudioManager.play_sfx(&"ui_back")
 	SceneRouter.quit_game()

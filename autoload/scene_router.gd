@@ -32,10 +32,14 @@ func start_run() -> void:
 	_change_scene(GAME_SCENE)
 
 
+## Ends the process. `get_tree().quit()` takes effect at the end of the current frame, which
+## has two consequences worth stating: SaveManager still gets its shutdown notification and
+## flushes any pending write, and there is no time for a sound. Callers deliberately do not
+## play one — a 100 ms blip started on the frame the window closes is inaudible, and leaving
+## it playing at teardown leaked the stream (see AudioManager.stop_all).
 func quit_game() -> void:
 	_restore_time()
-	# Not quit() directly: SaveManager flushes a pending write on the quit notification, and
-	# the tree needs a frame to deliver it.
+	AudioManager.stop_all()
 	get_tree().quit()
 
 

@@ -149,6 +149,29 @@ func _process(delta: float) -> void:
 			player.stop()
 
 
+## Silences everything. Called on the way out, and it is not merely tidy: a stream that is
+## still playing when the engine tears down is still *referenced* when the engine checks for
+## leaks, which reported "1 resources still in use at exit" plus two leaked ObjectDB
+## instances.
+##
+## The reproduced trigger was narrow — the pause menu's QUIT button played `ui_back` and
+## called `quit()` on the same frame, so the sound could not possibly finish. Quitting a few
+## frames after ordinary gameplay sounds was measured and did *not* leak, because those are
+## short enough to have ended. This is kept anyway as the general guard, since "no audio is
+## mid-playback at teardown" is a cheaper thing to guarantee than to audit call by call.
+func stop_all() -> void:
+	for player: AudioStreamPlayer in _pool:
+		player.stop()
+	for player: AudioStreamPlayer in _music:
+		player.stop()
+	_music_id = &""
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_EXIT_TREE:
+		stop_all()
+
+
 func set_bus_volume_db(bus: StringName, volume_db: float) -> void:
 	var index := AudioServer.get_bus_index(bus)
 	if index >= 0:

@@ -24,6 +24,7 @@ func run() -> void:
 	await _test_music_crossfades()
 	await _test_repeating_a_track_does_not_restart_it()
 	await _test_stopping_music_fades_it_out()
+	await _test_stop_all_leaves_nothing_playing()
 
 	_teardown()
 
@@ -162,3 +163,33 @@ func _test_stopping_music_fades_it_out() -> void:
 		if player.playing and player.volume_db > AudioManager.SILENT_DB:
 			anything_audible = true
 	check(not anything_audible, "nothing is still playing once the fade out finishes")
+
+
+## The invariant behind a real bug: the pause menu's QUIT button played a sound and called
+## `quit()` on the same frame, so the stream was still playing when the engine tore down and
+## was still referenced when it checked for leaks — "1 resources still in use at exit", plus
+## two leaked ObjectDB instances, reported from an actual playthrough.
+##
+## The leak itself only happens at process exit and cannot be observed from inside a suite.
+## What can be pinned is the mechanism: after `stop_all` nothing is playing, so there is
+## nothing left to be referenced.
+func _test_stop_all_leaves_nothing_playing() -> void:
+	AudioManager.play_music(&"explore")
+	for id: StringName in [&"ui_back", &"fire", &"enemy_hit"]:
+		AudioManager.play_sfx(id)
+	await advance_physics(1)
+
+	var playing_before := 0
+	for player: AudioStreamPlayer in AudioManager._pool:
+		if player.playing:
+			playing_before += 1
+	check(playing_before > 0, "there is something to stop (%d voices)" % playing_before)
+
+	AudioManager.stop_all()
+
+	var still_playing := 0
+	for player: AudioStreamPlayer in AudioManager._pool + AudioManager._music:
+		if player.playing:
+			still_playing += 1
+	check(still_playing == 0, "stop_all leaves nothing playing (%d still going)" % still_playing)
+	check(AudioManager._music_id.is_empty(), "stop_all forgets the current track")

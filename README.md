@@ -811,7 +811,15 @@ resulting frames, and by nothing else. The suite was green for all of them.
    which is not guaranteed to be before the poll on the next physics frame. It passed for an
    afternoon and then failed four checks with no input change at all. Every synthetic event
    is flushed immediately now, and the suite was run three times over to confirm it.
-10. **The boss's central mechanic was very nearly a trap.** Destroying all four
+10. **Quitting from a menu leaked the sound it played on the way out.** Reported from a real
+    playthrough as "2 ObjectDB instances were leaked" and "1 resources still in use". The
+    pause menu's QUIT button played `ui_back` and called `quit()` on the same frame, so the
+    stream was still playing — and therefore still referenced — when the engine checked for
+    leaks. The sound could never have been heard either, since the window closes at the end
+    of that frame. Removed from all three quit handlers, and `AudioManager.stop_all()` is now
+    the general guard. Worth noting that I had seen this warning once in my own harness output
+    earlier in the milestone and not chased it.
+11. **The boss's central mechanic was very nearly a trap.** Destroying all four
    synchronisation terminals saved two seconds out of thirteen — an eighteen percent return
    for crossing the arena four times under fire. Found by the balance suite computing what
    the numbers mean rather than asserting they are unchanged; the refund is now 0.75 and
