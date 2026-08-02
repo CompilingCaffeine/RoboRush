@@ -833,7 +833,15 @@ resulting frames, and by nothing else. The suite was green for all of them.
     handed keyboard focus back to a button the player could not see. The keyboard half of this
     had already been reported and fixed a week earlier; the mouse half was the same mistake in
     the other input device.
-13. **The boss's central mechanic was very nearly a trap.** Destroying all four
+13. **Every gamepad binding worked on joypad 0 and no other.** Reported. A freshly constructed
+    InputEvent has `device = 0`, and `InputMap` matches a binding to an incoming event only when
+    the devices agree or the binding says `-1` — so the whole generated map was pinned to one
+    controller index. That is worse than "player two does not work": Godot hands out indices in
+    connection order, so a pad paired after another device, or reconnected mid-session, lands on
+    index 1 and does nothing at all. The editor's Input Map panel writes `-1` and calls it "All
+    Devices"; a hand-built map does not get that for free. Confirmed by reintroducing the bug —
+    28 checks fail, and the behavioural ones name indices 1, 2 and 7 exactly as reported.
+14. **The boss's central mechanic was very nearly a trap.** Destroying all four
    synchronisation terminals saved two seconds out of thirteen — an eighteen percent return
    for crossing the arena four times under fire. Found by the balance suite computing what
    the numbers mean rather than asserting they are unchanged; the refund is now 0.75 and
@@ -848,9 +856,12 @@ resulting frames, and by nothing else. The suite was green for all of them.
    balance suite computes what the numbers mean and refuses to let them drift somewhere
    absurd; it cannot tell you whether the game is fun.
 2. **Gamepad support is verified but not played.** A synthesized controller drives every
-   binding and every code path, which caught a real blocker. What it cannot tell you is
-   whether a particular controller reports the axes Godot's abstraction claims, or whether
-   the deadzones feel right in the hand.
+   binding and every code path from a nonzero device index, which has now caught two real
+   blockers. What it cannot tell you is whether a particular controller reports the axes
+   Godot's abstraction claims, or whether the deadzones feel right in the hand. Nothing has
+   been tried with two pads connected at once, either — the bindings answer any index, but no
+   code anywhere distinguishes one controller from another, so a second pad would drive the
+   same player rather than a second one.
 3. **The builds are unsigned and untested off this machine.** All four targets build and the
    macOS app runs here, but nothing is code-signed or notarised, so macOS and Windows will
    both warn on first launch. The Windows, Linux, and Web builds have not been *run* at all —

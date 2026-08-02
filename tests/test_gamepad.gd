@@ -44,6 +44,17 @@ const MENU_ACTIONS: Array[StringName] = [
 	&"ui_cancel",
 ]
 
+## The device index every synthetic event is sent from. Deliberately not 0.
+##
+## The suite originally used device 0 throughout and passed while every gamepad binding in the
+## game was bound to joypad 0 alone — a controller that Godot handed index 1 to, which is what
+## happens to anything paired after another device or reconnected mid-session, did nothing at
+## all. Testing the index the bindings happened to use is testing nothing.
+const PROBE_DEVICE := 3
+
+## Indices a controller can realistically be handed, checked against the action map directly.
+const DEVICE_INDICES: Array[int] = [0, 1, 2, 7]
+
 var _input: PlayerInput
 
 
@@ -53,6 +64,8 @@ func run() -> void:
 	add_child(_input)
 
 	_test_every_required_action_has_a_gamepad_binding()
+	_test_bindings_are_not_tied_to_one_controller()
+	await _test_any_device_index_drives_the_game()
 	_test_menu_actions_are_reachable_from_a_gamepad()
 	_test_no_action_is_bound_to_nothing()
 	await _test_left_stick_moves()
@@ -79,6 +92,47 @@ func _test_every_required_action_has_a_gamepad_binding() -> void:
 			if event is InputEventJoypadButton or event is InputEventJoypadMotion:
 				has_joypad = true
 		check(has_joypad, "action '%s' is reachable from a gamepad" % action)
+
+
+## Every joypad binding must be device -1 ("All Devices"). A freshly constructed InputEvent has
+## device 0, so this is the one thing a hand-built input map gets wrong for free.
+func _test_bindings_are_not_tied_to_one_controller() -> void:
+	var checked := 0
+	for action: StringName in REQUIRED_GAMEPAD_ACTIONS + MENU_ACTIONS:
+		if not InputMap.has_action(action):
+			continue
+		for event: InputEvent in InputMap.action_get_events(action):
+			if not (event is InputEventJoypadButton or event is InputEventJoypadMotion):
+				continue
+			checked += 1
+			check(
+				event.device == -1,
+				"'%s' is bound to every controller, not just joypad %d" % [action, event.device],
+			)
+	check(checked > 0, "there were joypad bindings to check (%d)" % checked)
+
+
+## The same claim from the other side: drive the action map from several plausible device
+## indices and confirm each one reaches the game.
+func _test_any_device_index_drives_the_game() -> void:
+	for device: int in DEVICE_INDICES:
+		var event := InputEventJoypadButton.new()
+		event.device = device
+		event.button_index = JOY_BUTTON_A
+		event.pressed = true
+		Input.parse_input_event(event)
+		Input.flush_buffered_events()
+		await advance_physics(1)
+
+		check(Input.is_action_pressed("dash"), "a controller on index %d can dash" % device)
+
+		event = InputEventJoypadButton.new()
+		event.device = device
+		event.button_index = JOY_BUTTON_A
+		event.pressed = false
+		Input.parse_input_event(event)
+		Input.flush_buffered_events()
+		await advance_physics(1)
 
 
 func _test_menu_actions_are_reachable_from_a_gamepad() -> void:
@@ -229,7 +283,7 @@ func _test_a_released_stick_stops_firing() -> void:
 ## a race looks like from the outside.
 func _axis(axis: JoyAxis, value: float) -> void:
 	var event := InputEventJoypadMotion.new()
-	event.device = 0
+	event.device = PROBE_DEVICE
 	event.axis = axis
 	event.axis_value = value
 	Input.parse_input_event(event)
@@ -238,7 +292,7 @@ func _axis(axis: JoyAxis, value: float) -> void:
 
 func _button(button: JoyButton, pressed: bool) -> void:
 	var event := InputEventJoypadButton.new()
-	event.device = 0
+	event.device = PROBE_DEVICE
 	event.button_index = button
 	event.pressed = pressed
 	Input.parse_input_event(event)

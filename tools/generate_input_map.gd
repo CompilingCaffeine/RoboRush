@@ -15,6 +15,17 @@ extends SceneTree
 const STICK_DEADZONE := 0.2
 const TRIGGER_DEADZONE := 0.5
 
+## Binds a joypad event to every controller rather than to one. `InputMap` matches an action's
+## event to an incoming one only when the devices agree *or* the binding says -1, and a freshly
+## constructed InputEvent has device 0 — so without this every gamepad binding in the game
+## worked on joypad 0 and nothing else.
+##
+## Reported, and it is worse than "second player does not work": Godot hands out joypad indices
+## in connection order, so a controller paired after another device, or reconnected mid-session,
+## can land on index 1 and stop working entirely. The editor's Input Map panel writes -1 for
+## this reason and labels it "All Devices"; hand-built events do not get that for free.
+const ALL_JOYPADS := -1
+
 
 func _initialize() -> void:
 	var actions := {
@@ -110,12 +121,14 @@ func _mouse(button: MouseButton) -> InputEventMouseButton:
 
 func _button(button: JoyButton) -> InputEventJoypadButton:
 	var event := InputEventJoypadButton.new()
+	event.device = ALL_JOYPADS
 	event.button_index = button
 	return event
 
 
 func _axis(axis: JoyAxis, value: float) -> InputEventJoypadMotion:
 	var event := InputEventJoypadMotion.new()
+	event.device = ALL_JOYPADS
 	event.axis = axis
 	event.axis_value = value
 	return event
