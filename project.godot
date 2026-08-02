@@ -165,6 +165,7 @@ RunManager="*res://autoload/run_manager.gd"
 AudioManager="*res://autoload/audio_manager.gd"
 SaveManager="*res://autoload/save_manager.gd"
 SceneRouter="*res://autoload/scene_router.gd"
+ScreenEffects="*res://autoload/screen_effects.gd"
 
 [layer_names]
 

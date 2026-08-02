@@ -48,6 +48,19 @@ const ATTACHMENTS := {
 ## "cooling fan spins" as an example, and a fan that does not turn reads as a sticker.
 const FAN_SPIN_HZ := 1.6
 
+## Frames between dash afterimages. Every frame is a smear rather than a trail, and the dash
+## is only about eight frames long — every other one gives four ghosts, which is enough to
+## show the path without the robot appearing to have been duplicated.
+const AFTER_IMAGE_INTERVAL := 2
+
+## How long one afterimage takes to fade out, and how solid it starts.
+const AFTER_IMAGE_SECONDS := 0.22
+const AFTER_IMAGE_ALPHA := 0.45
+
+## Afterimages are tinted towards the dash's own colour rather than left grey, so the trail
+## reads as the dash rather than as the robot failing to redraw.
+const AFTER_IMAGE_TINT := Color(0.55, 0.95, 1.0)
+
 @onready var _body: Sprite2D = $Body
 @onready var _aim_pivot: Node2D = $AimPivot
 @onready var _cannon: Sprite2D = $AimPivot/Cannon
@@ -58,10 +71,14 @@ var _flash_time := 0.0
 var _muzzle_flash_left := 0.0
 var _is_dead := false
 var _accent := Color.WHITE
+var _is_dashing := false
+var _frames_since_after_image := 0
 
 
 func _ready() -> void:
 	_muzzle_flash.visible = false
+	EventBus.player_dash_started.connect(_on_dash_started)
+	EventBus.player_dash_ended.connect(_on_dash_ended)
 	# Read off the bus rather than pushed by the inventory, for the same reason the particle
 	# bursts are: picking something up should not require the thing that picks it up to know
 	# what the robot looks like.
@@ -78,6 +95,49 @@ func update_visuals(aim_direction: Vector2, is_invulnerable: bool, delta: float)
 	_body.scale = _body.scale.move_toward(Vector2.ONE, SQUASH_RECOVERY * delta)
 	if _fan.visible:
 		_fan.rotation += TAU * FAN_SPIN_HZ * delta
+	_update_after_images()
+
+
+## The dash was the one thing the robot does that had no visual weight — it moved fast and
+## arrived, and at 480x270 that is a teleport. A short trail of fading copies is the cheapest
+## way to say "it travelled", and it doubles as the readout for the invulnerability window.
+func _update_after_images() -> void:
+	if not _is_dashing:
+		return
+	_frames_since_after_image += 1
+	if _frames_since_after_image < AFTER_IMAGE_INTERVAL:
+		return
+	_frames_since_after_image = 0
+	_spawn_after_image()
+
+
+func _spawn_after_image() -> void:
+	var ghost := Sprite2D.new()
+	ghost.texture = _body.texture
+	# top_level so the ghost stays where the robot *was*. Without it every copy would ride
+	# along with the player and the trail would be a single flickering sprite.
+	ghost.top_level = true
+	add_child(ghost)
+	ghost.global_position = _body.global_position
+	ghost.scale = _body.scale
+	ghost.modulate = Color(
+		AFTER_IMAGE_TINT.r, AFTER_IMAGE_TINT.g, AFTER_IMAGE_TINT.b, AFTER_IMAGE_ALPHA
+	)
+
+	var fade := ghost.create_tween()
+	fade.tween_property(ghost, "modulate:a", 0.0, AFTER_IMAGE_SECONDS)
+	fade.tween_callback(ghost.queue_free)
+
+
+func _on_dash_started(_direction: Vector2) -> void:
+	_is_dashing = true
+	# Reset rather than left running, so the first ghost lands on the frame the dash starts
+	# instead of up to two frames into it.
+	_frames_since_after_image = AFTER_IMAGE_INTERVAL
+
+
+func _on_dash_ended() -> void:
+	_is_dashing = false
 
 
 ## Punched in from the dash signal rather than polled, so it fires exactly once.
