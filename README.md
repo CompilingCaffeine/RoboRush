@@ -4,12 +4,17 @@ A 2D top-down roguelite shooter built to [`robo_rush_build_spec.md`](robo_rush_b
 You play an obsolete maintenance robot scavenging hardware and software upgrades
 inside a corrupted software megacorporation.
 
-**Current state: Milestone 4 — Item System.** A seven-room floor is generated
-procedurally. You enter a room, the doors seal, you fight, the doors open, a reward
-drops, and you pick the next room from the minimap. Four of those rewards are items
-drawn from a pool of ten, and they compose: a run that finds Ricochet Driver and Fork
-Bomb fires shots that bounce off a wall and then split, with no code anywhere aware
-that those two items can be held at once. There is no shop and no boss yet.
+**Current state: Milestone 5 — Floor 1.** A complete run exists. A ten-room floor is
+generated procedurally with a start, six combat rooms, a treasure vault, a shop, and a
+boss arena. You fight through it against four enemy types, spend scrap on items you
+cannot all afford, and finish against the Merge Conflict — a boss that splits into two
+incompatible versions of itself and heals one when you damage the other, until you stop
+shooting it and go break the terminals keeping them in sync. Beating it offers a choice
+of three rare items, and the run ends on a statistics screen.
+
+Items compose: a run that finds Ricochet Driver and Fork Bomb fires shots that bounce
+off a wall and then split, with no code anywhere aware those two items can be held at
+once.
 
 Engine: **Godot 4.7.1**, GDScript, GL Compatibility renderer.
 
@@ -48,11 +53,11 @@ godot --path . res://main.tscn -- --seed=918273
 | Move | `WASD` | Left stick |
 | Aim and fire | Arrow keys | Right stick |
 | Dash | `Space` | A / cross |
-| Restart after death | `R` | Y / triangle |
-| Active item | Right mouse | Left trigger |
-| Interact | `E` | X / square |
-| Run statistics | `Tab` | — |
+| Buy / take | `E` | X / square |
+| Run statistics | `Tab` (hold) | — |
 | Pause | `Escape` | Start |
+| Restart | `R` | Y / triangle |
+| Active item | Right mouse | Left trigger |
 | Toggle debug overlay | `F1` | — |
 
 **There is no fire button.** Holding an arrow key points the cannon and fires it;
@@ -68,14 +73,15 @@ fire" still holds. Once the direction is the trigger, a separate fire button can
 fire where the player is already firing, so `fire_primary` was removed rather than left
 as a dead binding.
 
-Active item, interact, run statistics, and pause are bound but not yet wired to
-behaviour — the actions exist so later milestones bind names, never keys.
+`Escape` pauses, `Tab` peeks at the run statistics while held, `E` buys from a shop
+stand or takes a boss reward, and `R` restarts. Only the active item remains bound
+without behaviour, because there are no active items yet.
 
 ---
 
 ## Architecture
 
-Six decisions carry the rest of the project.
+Seven decisions carry the rest of the project.
 
 **One room is one grid cell, and every room is the same size.** That single choice makes
 two of spec section 9's requirements true by construction instead of by checking:
@@ -114,10 +120,31 @@ not each item in turn. That makes the result independent of the order items were
 up in, which is asserted, and it is why two `+1 bounce` items would be two bounces
 rather than one.
 
-**Actors are composed, not inherited.** [player.gd](scenes/player/player.gd) and
-[ticket_bot.gd](scenes/enemies/ticket_bot.gd) share `HealthComponent` and
-`WeaponController` unchanged, so damage is symmetric by construction: a projectile
-does not care what it hit, only whether that thing has a `HealthComponent`.
+**A boss has one health pool and several bodies.** Spec section 16 has the Merge Conflict
+*duplicating* into two versions of itself, and two copies of one thing share what it has
+left. So [merge_conflict.gd](scenes/bosses/merge_conflict.gd) owns the fight and the
+things the player shoots at are [boss_part.gd](scenes/bosses/boss_part.gd)s that carry a
+`HealthComponent` purely as a *receiver* — it is what makes a projectile register a hit at
+all — and forward every hit to the controller. The alternative was teaching projectiles
+about bosses, which would put a boss-specific branch in the one file that has never had
+one. It also means there is exactly one place the fight can end, which is why it cannot
+end twice.
+
+**Actors are composed, not inherited — with one deliberate exception.**
+[player.gd](scenes/player/player.gd) and [ticket_bot.gd](scenes/enemies/ticket_bot.gd)
+share `HealthComponent` and `WeaponController` unchanged, so damage is symmetric by
+construction: a projectile does not care what it hit, only whether that thing has a
+`HealthComponent`.
+
+The exception is [enemy.gd](scenes/enemies/enemy.gd), the project's one actor base class,
+added in milestone 5 when the roster went from one enemy to four. Spec section 15 asks for
+enemies that differ in exactly one thing — *how they create a movement problem* — and
+everything else about them is identical: the same collision layers, the same health
+wiring, the same knockback model, the same death announcement. Four copies of that
+lifecycle is four places for it to drift, and the drift would be invisible until one enemy
+quietly stopped emitting `enemy_killed` and its rooms stopped clearing. What is inherited
+is only the wiring *between* components, which is the part that has no business differing.
+A subclass implements `_act` and nothing else.
 
 Immunity that a component does not own is *registered* with it rather than copied into it.
 `HealthComponent.add_immunity_source` takes a `Callable`, and the player hands it
@@ -150,9 +177,9 @@ Supporting decisions:
   would never seal and kills would drop nothing. Both are `set_deferred` /
   `call_deferred`, and both are commented as to why.
 - **All tuning is in resources.** `PlayerConfig`, `WeaponConfig`, `ProjectileConfig`,
-  `EnemyConfig`, `FeedbackConfig`, `ItemConfig`. `FeedbackConfig` is what the milestone 6
+  `EnemyConfig`, `FeedbackConfig`, `ItemConfig`, `BossConfig`, `ShopConfig`. `FeedbackConfig` is what the milestone 6
   settings menu will edit, which is why no effect hardcodes its own intensity.
-- **`EventBus` is 17 signals and stays small.** Components emit *local* signals;
+- **`EventBus` is 20 signals and stays small.** Components emit *local* signals;
   the owning actor decides what the wider game hears. `WeaponController` therefore has
   no autoload dependency at all, which is why it can be tested in isolation. Milestone 4
   added three, each passing the same test: explosions and chain jumps are damage resolved
@@ -196,10 +223,31 @@ Supporting decisions:
   reproducible. Sound is square waves and noise — the two voices a 1990s arcade
   cabinet actually had.
 
-### The ten items
+### The four enemies
 
-Spec section 12 lists twelve. Ten ship; the two that do not are the two that need a new
-system rather than a new resource.
+Spec section 15 asks for four enemies that each pose a different movement problem, so the
+roster is checked for being four *problems* rather than four names.
+
+| Enemy | Integrity | Its one behaviour | The problem it poses |
+| --- | --- | --- | --- |
+| Ticket Bot | 3 | Holds its preferred range and fires single shots | Basic pressure; teaches reading a telegraph |
+| Pop Up Drone | 2 | Teleports to a room edge, pauses, fires a three-shot spread | Forces you to find it again and re-aim |
+| Memory Leech | 4 | Stops, commits to a direction, charges; hurts on contact | Forces movement — read the tell and step out of it |
+| Firewall Node | 6 | Never moves; sweeps rotating beams that stop at walls | Denies space; asks where you are allowed to stand |
+
+The Memory Leech's charge deliberately does not steer, and that is asserted: a homing
+charge is the same enemy with none of the interest. The Firewall Node's beams are measured
+against the same line that is drawn, so there is no invisible hazard and no decorative
+beam.
+
+Which enemies a room may draw is a weighted roster gated on `RoomTemplate.difficulty`,
+declared in milestone 3 and unread until now. Uniform selection puts three Firewall Nodes
+in the second room of a run as readily as anything else, and a ten-room floor needs a
+curve.
+
+### The twelve items
+
+Spec section 12's full pool ships.
 
 | Item | Rarity | What it does | How |
 | --- | --- | --- | --- |
@@ -213,6 +261,8 @@ system rather than a new resource.
 | Reinforced Chassis | Common | +2 maximum integrity, repairs 2 | `max_integrity_delta`, `heal_on_pickup` |
 | Backup Battery | Common | +1 dash charge | `dash_charges_delta` |
 | Unsafe Overclock | Corrupted | +35% damage, +25% fire rate, −2 maximum integrity | all three at once |
+| Scrap Magnet | Common | Pulls nearby pickups toward you | `pickup_magnet_radius` |
+| Debug Drone | Rare | An orbiting drone fires whenever you do | `drone_count` |
 
 Six of the ten change behaviour rather than numbers, which is the majority spec section 10
 asks for and the item suite asserts. Unsafe Overclock deliberately counts as a numbers item
@@ -220,14 +270,47 @@ even though it touches a projectile field: a *scale* only multiplies what the we
 did, while a set or an add turns something on that was not there. Pure-stat items are the
 easy ones to add, and a pool drifts that way on its own if nobody is counting.
 
-Milestone 4 asked for six. Items seven to ten cost a handful of lines between them
-(`DashController.add_charges` and `HealthComponent.set_max_health`) and are otherwise
-pure data, and the success condition — *two runs produce noticeably different combat
-styles* — is far better served by a pool of ten than a pool of six.
+Eight of the twelve change behaviour rather than numbers, which is the majority spec
+section 10 asks for and the item suite asserts. Unsafe Overclock deliberately counts as a
+numbers item even though it touches a projectile field: a *scale* only multiplies what the
+weapon already did, while a set or an add turns something on that was not there.
 
-**Scrap Magnet** and **Debug Drone** are milestone 5. Neither is expressible as data over
-what exists: a magnet needs pickups to be attracted by something, and a drone is a second
-actor that fires. Both are the kind of thing `ItemEffects` is shaped to hold.
+**Debug Drone is where spec section 13's one explicit synergy lives.** The design names
+exactly one combination that should need a rule beyond ordinary composition — drone shots
+counting toward Capacitor Leak's fifth-shot trigger — and the obvious implementation is a
+check asking whether a drone fired the shot, which is precisely the item-specific
+conditional section 14 forbids. Instead the player hands its drones the same
+[shot_counter.gd](scripts/combat/shot_counter.gd) its own weapon counts into, so the fifth
+shot is the fifth shot whichever barrel it left. The suite measures it rather than
+asserting it: the chain arrives on the fifth trigger pull alone and on the *third* with a
+drone.
+
+### The floor, the shop, and the boss
+
+**A floor is a start room, some combat, and three dead ends.** The generator has always
+protected the treasure vault with one argument — a dead end cannot be a cut vertex, so no
+route to anywhere can run through it — and milestone 5 applies it twice more. The shop and
+the boss arena are attached the same way, so none of the three can block progression, and
+all three are asserted that way across 120 seeds. The boss takes the cell furthest from the
+start, because the end of a floor should be somewhere the player walked *to*.
+
+**A shop is a room, not a state.** Spec section 23 warns against input leaking between UI
+and gameplay states, and the cheapest way to honour that is to have no second state: the
+player walks in, the stands advertise their prices permanently, and the interact key they
+already had does the rest. The robot goes looking for whatever it is standing next to
+rather than stands registering themselves with it, so a stand is a plain object in a group
+with an `interact` method.
+
+The boss reward reuses those same stands in an *exclusive* mode — three rare items, free,
+and taking one closes the others. The interaction is identical to shopping, so a second
+almost-identical pedestal would be a second thing to keep working.
+
+**The boss arena is one room, and that was re-examined rather than assumed.** Milestone 4's
+README listed "the boss needs an arena larger than one grid cell" as a limitation. It was
+speculation, not a spec requirement: section 16 asks for a *rectangular server room with
+four destructible terminals*, and a 26x12-tile room is one. Keeping it to a single cell
+preserves the decision the whole project is built on — the camera frames a whole room with
+no scrolling — and a single-screen boss is what a bullet-dodging arcade game wants anyway.
 
 ### Deliberate non-abstractions
 
@@ -244,7 +327,9 @@ would have exactly one implementation:
   explosions and chain lightning now actually populate (`explosion`, `electric`).
 - **StatusEffectController** — `ProjectileConfig.status_effects` is declared and
   carried; nothing reads it yet. It is the last field left in the "declared, not yet
-  honoured" group, and it is milestone 5's job.
+  honoured" group, and no shipped item needs it: freezing and burning are milestone 6's
+  polish pass or a second floor's item pool, and building the controller before either
+  exists would be building it for one imaginary caller.
 
 `ShotContext` was considered and rejected. `ProjectileFactory.spawn` now takes nine
 parameters, four of them optional, and bundling the trailing ones into an object would
@@ -254,94 +339,110 @@ when charge level and combo multipliers arrive and the list grows again.
 
 ### Files
 
-New in milestone 4 marked `+`.
+New in milestone 5 marked `+`.
 
 ```
 project.godot                             Config, resolution, input map, layers, autoloads
 main.tscn / main.gd                       Entry point: starts a run, builds the floor, wires HUDs
 
-autoload/event_bus.gd                     17 cross-system signals
-autoload/game_manager.gd                  Feedback config, hit pause, restart
+autoload/event_bus.gd                     20 cross-system signals
+autoload/game_manager.gd                  Feedback config, hit pause, game state
 autoload/audio_manager.gd                 Pooled one-shot SFX playback
-autoload/run_manager.gd                   Run-scoped state: scrap, floor, seed, items offered
+autoload/run_manager.gd                   Run state: scrap, floor, seed, items, statistics
 
 scripts/resources/player_config.gd        Movement, dash, integrity tunables
 scripts/resources/projectile_config.gd    The composition surface for every item
 scripts/resources/weapon_config.gd        Fire rate, pattern, muzzle
-scripts/resources/enemy_config.gd         Durability, range-keeping, telegraph
+scripts/resources/enemy_config.gd         Durability, range-keeping, contact, telegraph
+scripts/resources/pop_up_drone_config.gd  + Teleport interval, arrival pause, placement
+scripts/resources/memory_leech_config.gd  + Windup, charge speed, recovery
+scripts/resources/firewall_node_config.gd + Beam count, reach, sweep, damage
+scripts/resources/enemy_spawn.gd        + One roster entry: what, how often, how early
+scripts/resources/boss_config.gd        + The Merge Conflict's phases and attacks
+scripts/resources/shop_config.gd        + Spec section 17's prices
 scripts/resources/feedback_config.gd      Shake, flash, damage numbers, hit pause
 scripts/resources/room_template.gd        One handcrafted room layout, in tiles
-scripts/resources/floor_config.gd         A floor's parts list, drop rates, and item pool
+scripts/resources/floor_config.gd         A floor's parts list, rosters, rewards, shop
 scripts/resources/pickup_config.gd        What a pickup is and what collecting it does
-scripts/resources/item_config.gd        + One item, entirely as data
+scripts/resources/item_config.gd          One item, entirely as data
 
 scripts/combat/damage_info.gd             One described damage event
 scripts/combat/projectile_factory.gd      Builds projectiles; runs the modifier stack
-scripts/combat/projectile_modifier_stack.gd + Every held item's changes, applied to one shot
-scripts/combat/targeting.gd             + The hostile bodies near a point
-scripts/combat/explosion.gd             + One blast, damage only
-scripts/combat/chain_lightning.gd       + Damage that hops between enemies
+scripts/combat/projectile_modifier_stack.gd Every held item's changes, applied to one shot
+scripts/combat/shot_counter.gd          + A shot tally several weapons can share
+scripts/combat/targeting.gd               The hostile bodies near a point
+scripts/combat/explosion.gd               One blast, damage only
+scripts/combat/chain_lightning.gd         Damage that hops between enemies
 
-scripts/components/player_input.gd        Named actions -> movement and directional fire
+scripts/components/player_input.gd        Named actions -> movement, fire, dash, interact
 scripts/components/motion_controller.gd   Acceleration/deceleration
 scripts/components/dash_controller.gd     Dash window, charges, invulnerability
-scripts/components/player_visuals.gd      Aim, dash squash, flash, muzzle flash, item accent
+scripts/components/player_visuals.gd      Aim, dash squash, flash, muzzle, item accent
 scripts/components/weapon_controller.gd   Fire timing, shot arrangement, item modifiers
-scripts/components/health_component.gd    Integrity, invulnerability, death
-scripts/components/item_inventory.gd    + What an actor carries, and its aggregates
+scripts/components/health_component.gd    Integrity, invulnerability, immunity sources
+scripts/components/item_inventory.gd      What an actor carries, and its aggregates
 scripts/components/hurt_flash.gd          Reusable hit flash
 scripts/components/shake_camera.gd        Trauma-based screen shake
 
 scripts/systems/room_combat.gd            Counts enemies, reports room cleared
 scripts/systems/feedback_director.gd      All event -> audiovisual mapping
-scripts/systems/item_effects.gd         + Item behaviour that is not a projectile field
+scripts/systems/item_effects.gd           Item behaviour that is not a projectile field
+scripts/systems/run_stats.gd            + Spec section 25's tracked statistics
 scripts/systems/room_plan.gd              One room's place in a floor, pre-instantiation
 scripts/systems/floor_layout.gd           The graph: cells, links, connectivity, bounds
 scripts/systems/floor_generator.gd        Builds the graph; invariants by construction
 scripts/systems/loot_spawner.gd           Enemy drops, room rewards, and item drops
 scripts/utilities/teams.gd                Teams, collision layers, and body groups
 
-scenes/player/player.tscn / .gd           The robot
-scenes/enemies/ticket_bot.tscn / .gd      Range-keeping shooter
-scenes/projectiles/projectile.tscn / .gd  Fully config-driven projectile
-scenes/effects/impact_burst.tscn          Hit sparks
-scenes/effects/death_burst.tscn           Death debris
-scenes/effects/explosion_burst.tscn     + Blast fireball, scaled to the radius
-scenes/effects/chain_zap.tscn / .gd     + One jump of a chain lightning arc
-scenes/effects/one_shot_burst.gd          Self-freeing particle burst
-scenes/effects/damage_number.tscn / .gd   Floating damage readout
-scenes/rooms/wall_block.tscn / .gd        Resizable solid wall
-scenes/rooms/room.tscn / .gd              A room built from a template
-scenes/rooms/door.tscn / .gd              Shared door between two rooms
-scenes/floors/floor.tscn / .gd            Instantiates the layout, runs the room loop
-scenes/pickups/pickup.tscn / .gd          One scene, behaviour from PickupConfig
-scenes/ui/combat_hud.tscn / .gd           Integrity, dash, weapon, scrap, items, banners
-scenes/ui/minimap.tscn / .gd              Explored floor; unvisited types stay hidden
-scenes/ui/debug_hud.tscn / .gd            Developer diagnostics (F1)
+scenes/player/player.tscn / .gd            The robot
+scenes/player/player_drone.tscn / .gd    + Debug Drone's orbiting companion
+scenes/enemies/enemy.gd                  + What every enemy has in common
+scenes/enemies/ticket_bot.tscn / .gd       Range-keeping shooter
+scenes/enemies/pop_up_drone.tscn / .gd   + Teleports, pauses, fires a spread
+scenes/enemies/memory_leech.tscn / .gd   + Commits to a charge it will not steer
+scenes/enemies/firewall_node.tscn / .gd  + Stationary; sweeps rotating beams
+scenes/bosses/merge_conflict.tscn / .gd  + The Floor 1 boss and its three phases
+scenes/bosses/boss_part.tscn / .gd       + A shootable body that forwards its hits
+scenes/bosses/boss_terminal.tscn / .gd   + A synchronization terminal
+scenes/shop/shop_room.tscn / .gd         + A shop's stock, rerolls, and exclusive choices
+scenes/shop/shop_stand.tscn / .gd        + One thing for sale
+scenes/projectiles/projectile.tscn / .gd   Fully config-driven projectile
+scenes/effects/*.tscn                      Impact, death, explosion, chain zap, numbers
+scenes/rooms/wall_block.tscn / .gd         Resizable solid wall
+scenes/rooms/room.tscn / .gd               A room built from a template
+scenes/rooms/door.tscn / .gd               Shared door between two rooms
+scenes/floors/floor.tscn / .gd             Instantiates the layout, runs the room loop
+scenes/pickups/pickup.tscn / .gd           One scene, behaviour from PickupConfig
+scenes/ui/combat_hud.tscn / .gd            Integrity, dash, weapon, scrap, items, boss bar
+scenes/ui/run_summary.tscn / .gd         + Game over, victory, pause, and the Tab peek
+scenes/ui/minimap.tscn / .gd               Explored floor; unvisited types stay hidden
+scenes/ui/debug_hud.tscn / .gd             Developer diagnostics (F1)
 
-data/player/player_config.tres            Values from spec section 6
-data/projectiles/rivet.tres               Values from spec section 7
-data/projectiles/ticket_shot.tres         Slow, large, hostile
-data/weapons/rivet_blaster.tres           1 damage, 4/sec, 420 px/s, 1.4s
-data/weapons/ticket_spitter.tres          Enemy weapon
-data/enemies/ticket_bot.tres              Ticket Bot tuning
-data/settings/feedback_config.tres        Feedback intensity
-data/rooms/*.tres                         Six room templates (start, 4 combat, treasure)
-data/floors/floor_1_help_desk.tres        Floor 1 parts list and item pool
-data/pickups/scrap.tres, repair_cell.tres The two authored pickup types
-data/items/*.tres                       + Ten items from spec section 12
+data/player, data/projectiles, data/weapons    Player, shot, and weapon tuning
+data/enemies/*.tres                        Four enemies, each its own config type
+data/spawns/*.tres                       + The floor's weighted enemy roster
+data/bosses/merge_conflict.tres          + The boss's phases and attacks
+data/rooms/*.tres                          Eight templates (start, combat, treasure, shop, boss)
+data/floors/floor_1_help_desk.tres         Floor 1: parts, rosters, rewards, item pool
+data/items/*.tres                          Twelve items from spec section 12
+data/settings/feedback_config.tres         Feedback intensity
+data/settings/shop_config.tres           + Spec section 17's prices
 
-tests/test_runner.tscn / .gd              Aggregating runner; fails on empty suites
-tests/test_case.gd                        Suite base class
-tests/test_player_movement.gd             28 movement and dash checks
-tests/test_combat.gd                      101 data, component, and integration checks
-tests/test_player_input.gd                38 arrow-key shooting checks
-tests/test_floor.gd                       128 generation, invariant, and template checks
-tests/test_items.gd                     + 153 item, stack, inventory, and synergy checks
+tests/test_runner.tscn / .gd               Aggregating runner; fails on a vanished suite
+tests/test_case.gd                         Suite base class
+tests/test_player_movement.gd              28 movement and dash checks
+tests/test_combat.gd                       101 data, component, and integration checks
+tests/test_player_input.gd                 38 arrow-key shooting checks
+tests/test_floor.gd                        135 generation, invariant, and template checks
+tests/test_items.gd                        172 item, stack, inventory, and synergy checks
+tests/test_enemies.gd                    + 57 checks that each enemy poses its problem
+tests/test_run.gd                        + 64 statistics, state, and summary checks
+tests/test_shop.gd                       + 47 price, purchase, and refusal checks
+tests/test_boss.gd                       + 43 phase, terminal, and defeat checks
 
-tools/generate_input_map.gd               Regenerates project.godot's [input]
-tools/generate_placeholder_art.py         Regenerates placeholder PNGs, including item icons
-tools/generate_placeholder_audio.py       Synthesizes placeholder WAVs
+tools/generate_input_map.gd                Regenerates project.godot's [input]
+tools/generate_placeholder_art.py          Regenerates every placeholder PNG
+tools/generate_placeholder_audio.py        Synthesizes placeholder WAVs
 ```
 
 ---
@@ -353,93 +454,89 @@ Executed on this machine, not assumed.
 - **`godot --headless --import`** completes with no errors.
 - **Clean boot** (`--quit-after 300` on `main.tscn`) produces zero errors and zero
   warnings on stdout/stderr.
-- **448 checks across 5 suites pass, exit 0**, in 9.7s.
+- **685 checks across 9 suites pass, exit 0**, in 42s.
 - **The floor generator is swept across 120 seeds per run**, asserting every spec section 9
   requirement on each: exactly the requested room count, no disconnected rooms, no two rooms
-  in one cell, exactly one start and one treasure room, every door symmetric and between
-  adjacent cells, and every room assigned a template. The treasure room is checked two ways —
-  that it is a dead end, and that removing it from the graph leaves everything else still
-  reachable, which is the actual meaning of "must not block progression".
+  in one cell, exactly one of each special room, every door symmetric and between adjacent
+  cells, and every room assigned a template. **All three special rooms — treasure, shop, and
+  boss — are checked two ways**: that each is a dead end, and that removing it from the graph
+  leaves everything else still reachable, which is the actual meaning of "must not block
+  progression". The boss room is separately confirmed to be the furthest room from the start
+  on every seed.
 - **Generation is deterministic**: the same seed reproduces the same floor, different seeds
   produce different floors, and floors branch rather than degenerating into one corridor.
-- **A bad config is refused, not half-built**: a one-room floor and a floor with no templates
-  both return nothing and report why.
 - **Room templates are checked against the door geometry** — no obstacle may straddle a
-  doorway corridor at the wall it opens through, no enemy may spawn inside an obstacle or
-  outside the interior, and the reward point must be reachable. This check was written
-  *because* one template was found sitting across the only straight line between two doors.
-- **Five pinned seeds played end to end** (`11`, `2027`, `5150`, `30313`, `918273`), each
-  exploring **7/7 rooms** with every room-loop assertion holding: the start room leaves its
-  doors open, every combat room seals *all* its doors on entry, unseals them on clear, and
-  drops a reward; the treasure room pays out on first entry; re-entering a cleared room does
-  not re-seal it; and enemies in every room the player is not standing in are confirmed
-  dormant. Backtracking through cleared rooms to reach a far branch works.
-
-Milestone 4 adds:
-
-- **Every projectile behaviour is exercised through real physics, not asserted on a config.**
-  Fork Bomb is checked by counting the projectiles that actually entered the world (a parent
-  and two children) and reading the children's damage off their own configs. Magnetic
-  Guidance is checked *against a control*: the identical shot with no homing is confirmed to
-  miss an enemy 26px off-axis first, so the homing check is measuring the item rather than
-  the geometry. Return Protocol's target is placed in the lane **after** the shot has already
-  passed it, so only a projectile travelling back can possibly reach it. Explosions are
-  checked three ways at once — the enemy hit directly is *not* also caught by its own blast,
-  its neighbour is, and an enemy past the radius is not.
-- **Spec section 13's worked synergy is a test.** Ricochet Driver plus Fork Bomb fires at a
-  wall, and the assertions are that the bounce event fired exactly once, that an enemy
-  standing *behind the shooter* took damage (unreachable without the bounce), and that three
-  projectiles existed in total (unreachable without the split). Neither item's resource
-  mentions the other and neither is named in `projectile.gd`.
+  doorway corridor, no enemy may spawn inside an obstacle, and the reward point must be
+  reachable.
+- **Every projectile behaviour is exercised through real physics**, including spec section
+  13's worked synergy: Ricochet Driver plus Fork Bomb fired at a wall must hit an enemy
+  standing *behind the shooter* (unreachable without the bounce) and leave three projectiles
+  in the world (unreachable without the split). Neither item's resource mentions the other.
 - **Every modifier key of every shipped item is asserted against `ProjectileConfig`'s real
-  property list.** This is the check that makes string-keyed item data safe to ship; a
-  deliberately mistyped key is also confirmed to be reported and to change nothing.
-- **Spec section 12's numbers are pinned** — Fork Bomb's 60%, Capacitor Leak's 5 shots / 3
-  jumps / 0.7 per jump, Cooling Fan's +20%, Unsafe Overclock's +35%/+25%/−2 — so an inspector
-  edit cannot silently rebalance the game.
-- **Five full floors played end to end with the item loop live** (same pinned seeds). Every
-  run explored 7/7 rooms, dropped **4 items** (three from room clears, one from the treasure
-  vault), and the robot collected all four — dropped and collected matched on every run, with
-  no item offered twice. The resulting weapons:
+  property list**, which is what makes string-keyed item data safe to ship.
+- **Spec section 12's and section 17's numbers are pinned** — Fork Bomb's 60%, Capacitor
+  Leak's 5 shots / 3 jumps / 0.7, common 12 / uncommon 20 / rare 32, heal 6, reroll 4 +2 —
+  so an inspector edit cannot silently rebalance the game.
+- **Each of the four enemies is checked for posing its own problem**, not for running. The
+  Pop Up Drone must actually appear somewhere else, never within the player's guard and
+  never inside a wall — verified in a real room against real geometry. The Memory Leech must
+  hold still through its windup and must *not* steer once committed, checked by moving the
+  target mid-charge. The Firewall Node's beams must sweep, must damage a player standing in
+  one, and must never reach a player behind a wall.
+- **The boss's phases trip where the spec says**, its synchronisation rule is confirmed to
+  cost the player damage until the terminals are down and to stop the moment they are, and
+  the fight is confirmed to end exactly once under overkill delivered twice.
+- **Spec section 17's "the player should not be able to buy everything" is asserted against
+  the floor's own reward numbers**, computed rather than typed in, so rebalancing the drops
+  re-runs the argument. It failed when first written, which is how milestone 3's drop rates
+  came to be lowered.
+- **Five pinned seeds played end to end, start room to victory screen** (`11`, `2027`,
+  `5150`, `30313`, `918273`). Every run explored **10/10 rooms**, made shop purchases,
+  fought the boss through **all three phases**, took a reward, and finished in the
+  **VICTORY** state with 5–6 items and 26–28 kills:
 
-  | Seed | Loadout | Resulting shot |
-  | --- | --- | --- |
-  | 11 | overclock, guidance, leak, fan | dmg 1.35, homing 3.0, chain 3 |
-  | 2027 | fan, leak, battery, ricochet | bounce 1, chain 3 |
-  | 5150 | overclock, battery, return, fan | dmg 1.35, return |
-  | 30313 | chassis, guidance, kernel, ricochet | bounce 1, homing 3.0 |
-  | 918273 | guidance, fork bomb, ricochet, return | bounce 1, split 2, homing 3.0, return |
+  | Seed | Rooms | Items | Scrap held/collected | Buys | Kills |
+  | --- | --- | --- | --- | --- | --- |
+  | 11 | 10/10 | 6 | 11 / 43 | 1 | 28 |
+  | 2027 | 10/10 | 5 | 29 / 33 | 1 | 27 |
+  | 5150 | 10/10 | 6 | 0 / 36 | 2 | 28 |
+  | 30313 | 10/10 | 6 | 21 / 37 | 2 | 27 |
+  | 918273 | 10/10 | 5 | 37 / 41 | 1 | 26 |
 
-  **Five distinct loadouts and five distinct weapons out of five runs**, which is the
-  milestone's success condition — *two runs produce noticeably different combat styles* —
-  measured rather than asserted. Seed 918273 produced spec section 13's second worked example
-  unprompted: a shot that homes, bounces, splits, and comes back.
-- **Rendered frames inspected** to confirm room framing, doorway gaps, the minimap, the item
-  bar along the bottom of the HUD, the item pickup banner (`REINFORCED CHASSIS // ADDS TWO
-  MAXIMUM INTEGRITY AND REPAIRS TWO INTEGRITY.`), the integrity pips rebuilding from 6 to 8,
-  and the cannon taking the accent colour of the item just collected.
+- **Rendered frames inspected** of the shop (four stands showing `COOLING FAN 12`,
+  `RICOCHET DRIVER 12`, `REPAIR 6`, `REROLL 4`, amber because affordable), the boss arena
+  mid-phase-two (two versions, four corner terminals, sealed door, health bar at ~62%), and
+  the run summary. Looking at those frames is how the placement bug below was found.
 
 ### Honest limits of that verification
 
-The room-loop sweep moves the robot with **genuine synthetic input** through the named
-actions, but it does **not** win the fights: enemies are killed by applying damage to their
-`HealthComponent`, which is the same death path a projectile triggers. An 8-way-aiming bot
-standing in the open dies to four Ticket Bots long before it clears a floor, and whether the
-robot can shoot straight is already covered by the combat and input suites. What the sweep
-tests is the room loop, not marksmanship.
+**Nobody has played this by hand.** That is the important one, and it now covers more
+ground than it did: whether four enemy types produce interesting rooms together, whether
+the Memory Leech's 0.42-second windup is enough warning, whether the boss's phase two is a
+puzzle or a wall, and whether the shop's prices bite are all open questions that need a
+controller and a person.
 
-The **item sweep is weaker still on movement**: the robot is teleported room to room and onto
-each pickup, and it is made unkillable for the duration. That harness measures the reward
-loop — what dropped, whether it could be collected, what the weapon became — and nothing
-about whether any of it is survivable. It was a throwaway script, run and recorded, not
-committed; what is committed is the item suite, which does use real physics.
+**The end-to-end harness proves the loop closes, not that the game is good.** It teleports
+the robot between rooms, kills enemies by applying damage to their `HealthComponent`, and
+makes the player unkillable. What it measures is that a floor can be walked from the start
+room to a victory screen, that the shop takes money and hands over goods, that the boss
+reaches all three phases and dies, and that the statistics add up. It measures nothing
+about difficulty.
 
-**Nobody has played a full floor by hand.** Whether four items per floor is generous or
-stingy, whether Unsafe Overclock's −2 integrity is a real decision or an obvious yes, and
-whether a bouncing splitting shot is fun or unreadable are all open questions that need a
-controller and a person. **The item pool has had no balance pass at all** — the numbers are
-spec section 12's, transcribed, and spec section 12 was written before anything existed to
-balance against.
+**Spec section 28's success condition for this milestone is "a complete eight to twelve
+minute run is playable", and only the first half of that is verified.** The run is
+complete and it is playable. Whether it takes eight minutes or three is unknown, because
+nothing in the harness moves at human speed.
+
+**The item pool and the economy have had one balance pass between them**, and it was
+arithmetic rather than play: the drop rates were lowered until a typical floor could no
+longer afford the whole shop. Whether the result is *tense* rather than merely *stingy* is
+untested.
+
+**Enemy suites drive a stand-in for the player** — a Node2D in the player group with a
+HealthComponent — rather than the real robot, because everything an enemy asks of the
+player is "where is it" and "hurt it". Real-robot behaviour is covered by the combat and
+input suites instead.
 
 ### Bugs found during verification
 
@@ -506,85 +603,112 @@ fixed. Each now has a regression check in the combat suite.
    the same condition Godot uses to remove them from the space. The regression check covers
    both halves, so neither can drift into the other's blind spot.
 
+### Bugs found during milestone 5
+
+9. **Nodes positioned before `add_child`.** Shop stands, boss bodies, and boss terminals
+   were all given a `global_position` while still parentless, which sets a *local* offset —
+   so every one of them landed displaced by its room's place on the floor grid, in practice
+   outside the room. **Every automated check passed throughout**, because the fixtures built
+   their shops and bosses at the origin, where local and global agree. It took a rendered
+   frame of a visibly empty shop to see it. Both suites now build an *offset* shop and an
+   *offset* arena; reverting the fix with those checks in place fails five of them.
+10. **A free item could never be taken.** `RunManager.try_spend_scrap` refuses a zero
+    charge — correctly, since spending nothing is not a transaction — and the boss reward
+    was gated on it, so the reward was unclaimable and the run could never be won. Found by
+    the end-to-end harness, which is exactly the class of bug a unit test does not reach.
+11. **Two edits that silently did nothing.** `FloorConfig.templates_for` never gained its
+    SHOP and BOSS branches and `FloorController` never gained its shop-stocking call,
+    because both patches were written against the wrong indentation and applied to nothing.
+    The first meant shop and boss rooms were being built from the *combat* template pool,
+    complete with enemy spawns in the shop. Caught by writing the shop suite and by probing
+    the built floor's contents, respectively.
+12. **Destroyed terminals kept protecting the boss** until `queue_free` landed at the end of
+    the frame, refunding damage the player had already earned.
+13. **A drone claimed the player's `%Weapon`.** A drone instantiated into the player at
+    runtime has no owner of its own, so its unique node name was claimed in the *player's*
+    scene scope and taken off the player's own weapon.
+14. **A flaky enemy check.** The Firewall Node was allowed to sweep before the wall it was
+    meant to be blocked by had entered the physics space, so whether the check passed
+    depended on the random angle its beams started at.
+
+The pattern worth naming: **four of these were invisible to the test suite and visible the
+moment something actually ran.** The suite is 685 checks and it did not catch a shop whose
+stands were in another room. Rendered frames and a harness that plays the game are not
+redundant with unit tests; they fail differently.
+
 ---
 
 ## Known limitations
 
-1. **Pacing and balance are untested by a human.** See above. This now covers the item pool
-   as well as the room count.
-2. **Placeholder art and audio**, including the ten item icons. Spec section 20's chunky
-   pixel art and CRT glow, and section 22's music, are milestone 6.
-3. **Only one enemy type.** Pop Up Drone, Memory Leech, and Firewall Node are milestone 5.
-   One data point is a weak basis for trusting `EnemyConfig`'s shape — and it also caps how
-   much the item pool can be judged, since every item is currently evaluated against the same
-   range-keeping shooter.
-4. **No shop and no boss.** Milestone 5. Scrap accumulates with nothing to spend it on, which
-   makes Scrap Magnet pointless to ship until there is.
-5. **Two of spec section 12's twelve items are missing.** Scrap Magnet needs pickups to be
-   attractable and a shop to make scrap worth attracting; Debug Drone is a second actor that
-   fires. Both are milestone 5.
-6. **An item's visible change is one tinted cannon.** Spec section 20 asks for sprite changes
-   from major items, and the honest version of that is per-item art, which is milestone 6.
-   The accent shows only the most recently collected item that declares one, because a robot
-   tinted by four items at once is a robot tinted brown.
-7. **Nothing removes an item.** The inventory has no `remove`, so Corrupted Firmware items
-   are permanent decisions. That is arguably correct for a roguelite, but it is untested and
-   undecided rather than designed.
-8. **All rooms are the same size**, so there are no large boss arenas yet. The boss room in
-   milestone 5 will need either a multi-cell room or a separate framing path.
-9. **Rooms are built from `WallBlock` bodies, not a TileMap**, so there is no tile variety or
-   autotiling. Deliberate — see the architecture note — but it does cap how good a room can
-   look until milestone 6.
-10. **The HUD strip is not always empty behind it.** The camera frames one room and the strip
-    below it shows whatever is there — usually black, but the top wall of the room below when
-    the floor has one. Legible today because the strip's text sits on dark tiles, but it is
-    luck rather than design.
-11. **`Escape`, `Tab`, and `E` still do nothing.** No pause state, no run statistics screen,
-    nothing to interact with. `Tab` is the natural home for a full item list once the bar
-    stops fitting.
-12. **Gamepad is untested** — no controller was available. The right stick has its own
-    `aim_stick_*` actions so it keeps analogue precision, but nothing on a pad has been run.
-13. **No save system or settings menu.** Spec sections 21 and 24 are milestone 6.
-14. **Doors seal one frame after the trigger fires**, because the collision change is
-    deferred. Safe in practice: the entry trigger is inset well inside the room, so the robot
-    is never in the doorway at that moment. Split children spawn one frame late for the same
-    reason, and are invisible at 60fps.
-15. **Hand-authored `NodePath` literals do not resolve into exported `Node` properties.**
-    Godot only wires those when the editor writes them, so text-authored scenes must pass
-    node references explicitly — `RoomCombat.begin()` takes its container as an argument, and
-    the room hands it over from its own `_ready`.
+1. **Nobody has played this by hand.** See above. This is the limitation that matters and
+   it now covers difficulty, pacing, the enemy mix, the boss, and the economy.
+2. **Placeholder art and audio throughout.** Spec section 20's chunky pixel art and CRT
+   glow, and section 22's music, are milestone 6. The Merge Conflict in particular is a
+   24x24 placeholder that does not read as a boss so much as a slightly larger enemy.
+3. **One floor.** Spec section 8's remaining floors, and the run structure that spans them,
+   are beyond milestone 5. Winning means clearing Floor 1, and `RunManager.floor_number`
+   has only ever been 1.
+4. **No elite modifiers.** Spec section 15 lists six and says not to add them until the
+   base enemies feel good, which is a judgement nobody has been in a position to make yet.
+5. **No risk-and-reward rooms.** Spec section 19's Challenge Room, Corrupted Terminal,
+   Repair Bay, Compiler Shrine, and Debug Room are all explicitly optional for the
+   prototype, and none exist. The generator's `_attach_dead_end` is the hook they would use.
+6. **`ProjectileConfig.status_effects` is still declared and unread.** No shipped item needs
+   it; freezing and burning belong to a second floor's pool.
+7. **An item's visible change is one tinted cannon**, showing only the most recently
+   collected item that declares an accent. Spec section 20 asks for sprite changes from
+   major items, and the honest version of that is per-item art in milestone 6.
+8. **Nothing removes an item**, so Corrupted Firmware choices are permanent. Arguably right
+   for a roguelite, but undecided rather than designed.
+9. **No save system or settings menu.** Spec sections 21 and 24 are milestone 6, which is
+   also where `FeedbackConfig` finally gets a UI.
+10. **Four of spec section 23's twelve game states exist** — run, paused, game over,
+    victory. Boot, main menu, item selection, and the rest have nothing to show yet.
+11. **All rooms are the same size**, including the boss arena. Deliberate — see the
+    architecture note — but it does mean the boss fight is a single screen.
+12. **Rooms are built from `WallBlock` bodies, not a TileMap**, so there is no tile variety
+    or autotiling. Deliberate, and it caps how good a room can look until milestone 6.
+13. **The HUD strip is not always empty behind it.** The camera frames one room and the
+    strip below shows whatever is there — usually black, sometimes the top wall of the room
+    below. Legible today by luck rather than design.
+14. **Gamepad is untested** — no controller was available.
+15. **Physics changes made during physics callbacks must be deferred**, and this project has
+    now been bitten by it four times (doors, loot, split projectiles, boss spawning). Every
+    site is deferred and commented; the trap is Godot's, but the count is worth recording.
+16. **Hand-authored `NodePath` literals do not resolve into exported `Node` properties**, so
+    text-authored scenes pass node references explicitly.
 
 ---
 
 ## Next recommended task
 
-**Milestone 5: Floor 1.** The item system needs things to be used against, and the run needs
-an ending.
+**Milestone 6: Polish.** Spec section 28's last milestone, and the first one whose success
+condition is about a person rather than a system: *a new player can understand and enjoy
+the game without developer explanation.*
 
-1. **A second enemy type, first and before anything else.** This was the recommendation at
-   the end of milestone 3 and it is more true now, not less: every item in the pool has been
-   judged against exactly one enemy behaviour. Pop Up Drone (teleports, then fires a spread)
-   exercises completely different `EnemyConfig` fields than a range-keeper does, and it is
-   the only way to find out whether that resource's shape survives contact with a second
-   data point before three more are built on it.
-2. **The shop, and with it a reason for scrap to exist.** `RunManager.try_spend_scrap` has
-   been waiting since milestone 3 with no caller. A shop is also what makes Scrap Magnet and
-   the "shops become more expensive" half of a corrupted item worth writing.
-3. **Debug Drone**, and with it the one *explicit* synergy spec section 13 asks for: drone
-   shots counting toward Capacitor Leak's fifth-shot trigger. This one is **not** free.
-   `shot_interval` is checked against `WeaponController._shots_fired`, which is per
-   controller, so a drone with its own weapon would keep its own tally and the spec's
-   example would quietly not work. The counter is the right place to fix it — a shared shot
-   count, not a rule about drones — but it is a change, and it is the first case where an
-   item pairing needs code rather than composition.
-4. **The Merge Conflict boss and a game-over screen**, which is what turns seven rooms into a
-   run. Note limitation 8: the boss needs an arena larger than one grid cell, so this is a
-   change to how rooms are framed, not only new content.
-5. **Run statistics** (spec section 25), which `Tab` is already bound to and `RunManager` is
-   already the right home for.
+Before any of it, though:
 
-Worth doing at some point and cheap: **a balance pass on item drop frequency.** Four items in
-a seven-room floor was chosen to make synergies visible during milestone 4, not because it is
-right. It is one array in `floor_1_help_desk.tres`.
+1. **Play the game.** Every milestone since the third has ended with "nobody has played
+   this by hand", and the list of open questions that only a controller can answer is now
+   longer than the list of features. Is the Memory Leech's windup readable? Is the boss's
+   phase two a puzzle or a wall? Does the shop bite? None of these are answerable by adding
+   more checks, and several of the numbers in `data/` are placeholders wearing the
+   confidence of tested code.
+2. **Then balance**, with what playing teaches. The economy, the enemy roster weights, the
+   boss's health, and the item drop schedule are all one `.tres` edit each — that is by
+   design, and it is the payoff for putting tuning in resources.
+3. **Pixel art and audio** (spec sections 20 and 22). The boss most of all: it is the one
+   thing in the game that should look like an event.
+4. **The settings menu** (spec section 21), which is what `FeedbackConfig` has been shaped
+   for since milestone 2 — screen shake, flash intensity, damage numbers, and volume all
+   already read from it.
+5. **Save data** (spec section 24): settings, unlocks, bosses defeated, and best run
+   statistics. `RunStats` is already the shape the last of those wants.
 
-Success condition: a complete eight to twelve minute run is playable.
+Worth doing whenever, and cheap: **a second floor.** `FloorConfig` was built so that a new
+floor is a `.tres` and not new code, and nothing has ever tested that claim. Floor 2 would
+be the first evidence either way, and finding out that it needs code is much better news
+now than in milestone 6.
+
+Success condition: a new player can understand and enjoy the game without developer
+explanation.
