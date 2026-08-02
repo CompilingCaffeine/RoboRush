@@ -18,6 +18,9 @@ const SEED_COUNT := 120
 var _config: FloorConfig
 
 
+const FLOOR_SCENE := preload("res://scenes/floors/floor.tscn")
+const PLAYER_SCENE := preload("res://scenes/player/player.tscn")
+
 func run() -> void:
 	_config = load(FLOOR_CONFIG_PATH) as FloorConfig
 	if not require(_config, "floor_1_help_desk.tres loads as a FloorConfig"):
@@ -30,6 +33,7 @@ func run() -> void:
 	_test_templates_keep_doorways_clear()
 	_test_layout_rejects_overlap()
 	_test_generator_refuses_impossible_configs()
+	await _test_repair_cells_drop_on_every_third_clear()
 
 
 func _test_config_has_content() -> void:
@@ -347,3 +351,73 @@ func _describe(layout: FloorLayout) -> String:
 			"|".join(directions),
 		])
 	return ";".join(parts)
+
+
+## Reported: repair cells dropped on clears 1 and 4 instead of 3 and 6.
+##
+## The cause was an ordering assumption across two objects. RoomCombat emits its own `cleared`
+## signal — the one that runs FloorController's handler — *before* the EventBus signal that
+## RunManager counts, so `RunManager.rooms_cleared` was still one behind while the drop was
+## being decided. Clear 1 read 0, and 0 % 3 == 0, so the very first room paid out a repair cell
+## to a player still on full integrity who could not use it.
+##
+## The check drives clears in the same order the real signals fire, because that order *is* the
+## bug: anything that steps a counter itself and then asks would pass over it.
+func _test_repair_cells_drop_on_every_third_clear() -> void:
+	var arena := Node2D.new()
+	add_child(arena)
+	var floor_node: FloorController = FLOOR_SCENE.instantiate()
+	arena.add_child(floor_node)
+
+	var player: Player = PLAYER_SCENE.instantiate()
+	arena.add_child(player)
+	await advance_physics(1)
+
+	RunManager.begin_run(4242)
+	var built := floor_node.build(player, 4242)
+	check(built, "the floor builds")
+	if not built:
+		arena.queue_free()
+		await advance_physics(1)
+		return
+
+	var ids: Array[int] = []
+	for plan: RoomPlan in floor_node.layout.rooms:
+		ids.append(plan.id)
+
+	var repairs_on: Array[int] = []
+	for clear_index: int in range(1, 8):
+		var before := _count_repair_cells()
+		# The two emissions in RoomCombat's order: the local signal first, the EventBus one
+		# after. Reversing these two lines is the entire defect.
+		floor_node._on_room_cleared(ids[clear_index % ids.size()])
+		EventBus.room_cleared.emit()
+		await advance_physics(1)
+		if _count_repair_cells() > before:
+			repairs_on.append(clear_index)
+
+	# Derived from the constant rather than typed as 3 and 6, so retuning the cadence moves the
+	# expectation with it instead of turning this into a failure to explain.
+	var expected: Array[int] = [
+		FloorController.REPAIR_EVERY_CLEARS, FloorController.REPAIR_EVERY_CLEARS * 2
+	]
+	check(
+		repairs_on == expected,
+		"repair cells drop on clears %s, got %s" % [expected, repairs_on],
+	)
+	check(
+		not (1 in repairs_on),
+		"nothing drops on the first clear, when the player is still at full integrity",
+	)
+
+	arena.queue_free()
+	await advance_physics(1)
+
+
+func _count_repair_cells() -> int:
+	var found := 0
+	for node: Node in get_tree().get_nodes_in_group(Pickup.GROUP):
+		var pickup: Pickup = node
+		if pickup.config != null and pickup.config.kind == PickupConfig.Kind.REPAIR_CELL:
+			found += 1
+	return found

@@ -33,6 +33,11 @@ const ROOM_TOP_MARGIN := 4
 ## scrap that drops alongside it.
 const ITEM_REWARD_OFFSET := Vector2(0.0, -18.0)
 
+## How many room clears between repair cells. Named rather than inlined because it is the one
+## number deciding how recoverable a bad run is — over a ten-room floor the difference between
+## 3 and 2 is an extra integrity point, which is a sixth of the player's whole pool.
+const REPAIR_EVERY_CLEARS := 3
+
 @export var config: FloorConfig
 
 var layout: FloorLayout
@@ -321,7 +326,14 @@ func _on_room_cleared(id: int) -> void:
 	var room := _rooms[id]
 	# Every third room clear also drops a repair cell, so integrity is recoverable without
 	# making it so plentiful that damage stops mattering.
-	var include_repair := RunManager.rooms_cleared % 3 == 0
+	#
+	# Counted from `_clears` above, not from `RunManager.rooms_cleared`. RoomCombat emits its
+	# local `cleared` signal — which is what brought us here — *before* the EventBus one that
+	# RunManager counts, so that value is still one behind while this runs. Reading it dropped
+	# repair cells on clears 1 and 4 instead of 3 and 6: the first arriving while the player
+	# was still at full integrity and could not use it. The line below already used `_clears`,
+	# so two counters for one idea sat next to each other, one of them wrong.
+	var include_repair := _clears % REPAIR_EVERY_CLEARS == 0
 	_loot.spawn_room_reward(room.get_reward_position(), include_repair)
 
 	# Items are the reason to keep fighting rather than to run for the exit, so most of a

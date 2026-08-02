@@ -851,7 +851,14 @@ resulting frames, and by nothing else. The suite was green for all of them.
     away, with the enemy's own steering left fighting the remains. Both now move the body as a
     separate decaying motion, so `velocity` stays purely what the actor is doing under its own
     power.
-15. **The boss's central mechanic was very nearly a trap.** Destroying all four
+15. **Repair cells dropped on the wrong clears.** Reported: clears 1 and 4 instead of 3 and 6,
+    because `FloorController` read `RunManager.rooms_cleared` while deciding, and RoomCombat
+    emits its local `cleared` signal — the one that runs that handler — before the EventBus
+    signal RunManager counts. So the value was always one behind, clear 1 read 0, and the very
+    first room paid out a repair cell to a player still on full integrity who could not use it.
+    The line immediately below it already used the controller's own `_clears`; two counters for
+    one idea sat next to each other, one of them wrong.
+16. **The boss's central mechanic was very nearly a trap.** Destroying all four
    synchronisation terminals saved two seconds out of thirteen — an eighteen percent return
    for crossing the arena four times under fire. Found by the balance suite computing what
    the numbers mean rather than asserting they are unchanged; the refund is now 0.75 and
