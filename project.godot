@@ -154,6 +154,7 @@ EventBus="*res://autoload/event_bus.gd"
 GameManager="*res://autoload/game_manager.gd"
 RunManager="*res://autoload/run_manager.gd"
 AudioManager="*res://autoload/audio_manager.gd"
+SaveManager="*res://autoload/save_manager.gd"
 
 [layer_names]
 

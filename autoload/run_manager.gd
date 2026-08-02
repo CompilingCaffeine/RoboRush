@@ -9,6 +9,11 @@ extends Node
 ## Spec section 24 is explicit that a run in progress is not saved, so nothing here is
 ## persisted. Spec section 25's statistics live in `stats`, and this node is where the EventBus
 ## is translated into them — a RefCounted cannot sit in the tree and listen for itself.
+##
+## The run's *result* does outlive it. Beginning and ending a run are the two moments the
+## lifetime record changes, and they are both here rather than in SaveManager because this is
+## the node that knows when a run actually starts — `GameManager.start_run` is also called by
+## a restart, one scene reload before the run it is restarting into.
 
 ## Emitted when scrap changes, so the HUD does not have to poll a number that rarely moves.
 signal scrap_changed(total: int)
@@ -35,9 +40,17 @@ var offered_item_ids: Array[StringName] = []
 ## statistic added later cannot be forgotten in the reset.
 var stats := RunStats.new()
 
+## Labels of the lifetime records this run beat, filled in when it ends. The summary screen
+## marks these rows rather than working it out itself, because by the time it is shown the
+## record has already been overwritten with this run's number.
+var records_beaten: PackedStringArray = []
+
 ## Counts up only while the game is actually being played, which is what makes the duration
 ## on the summary screen a measure of the run rather than of how long the window was open.
 var _is_timing := false
+
+## Set once the run has been filed into the lifetime record, so it cannot be filed twice.
+var _is_finished := false
 
 
 func _ready() -> void:
@@ -64,14 +77,25 @@ func begin_run(seed_value: int) -> void:
 	floor_seed = seed_value
 	offered_item_ids.clear()
 	stats = RunStats.new()
+	records_beaten = []
 	_is_timing = true
+	_is_finished = false
+	SaveManager.record_run_started()
 	scrap_changed.emit(scrap)
 	rooms_cleared_changed.emit(rooms_cleared)
 
 
-## Stops the clock. Called when the run ends, whichever way it ended.
-func end_run() -> void:
+## Stops the clock and files the result. Called when the run ends, whichever way it ended.
+##
+## Guarded by its own flag rather than by the clock: `GameManager` stops the clock before it
+## announces the ending, and a run counted twice would corrupt a record the player cannot
+## repair.
+func end_run(won: bool) -> void:
+	if _is_finished:
+		return
+	_is_finished = true
 	_is_timing = false
+	records_beaten = SaveManager.record_run_finished(stats, won)
 
 
 ## Pauses the clock without ending the run.

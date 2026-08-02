@@ -115,11 +115,19 @@ func is_synchronised() -> bool:
 	return _phase == Phase.DUPLICATED and get_terminal_count() > 0
 
 
+## The bodies still standing. Either may already be freed — the clone dies first by design,
+## and both are gone for the frame between the killing blow and the boss freeing itself.
+##
+## The candidates are deliberately untyped. Binding a freed instance to a `BossPart` loop
+## variable makes Godot validate it *before* the loop body can check it, which spams
+## "attempted to set an invalid (previously freed?) object instance" on every call — a
+## message the player must never see (spec section 31.10) and one that buried real errors in
+## the test output until it was found.
 func get_parts() -> Array[BossPart]:
 	var parts: Array[BossPart] = []
-	for part: BossPart in [_primary, _clone]:
-		if is_instance_valid(part):
-			parts.append(part)
+	for candidate: Variant in [_primary, _clone]:
+		if is_instance_valid(candidate):
+			parts.append(candidate as BossPart)
 	return parts
 
 

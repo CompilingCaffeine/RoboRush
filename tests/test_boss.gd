@@ -242,7 +242,8 @@ func _test_the_boss_fights_inside_its_arena() -> void:
 	for part: BossPart in _boss.get_parts():
 		check(
 			arena_rect.has_point(part.global_position),
-			"the boss stands inside its arena (at %v, arena %v)" % [
+			# %s, not %v: the position is a vector but the arena is a Rect2, and %v rejects it.
+			"the boss stands inside its arena (at %v, arena %s)" % [
 				part.global_position, arena_rect,
 			],
 		)

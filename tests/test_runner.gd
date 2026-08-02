@@ -12,6 +12,14 @@ const TIMEOUT_SECONDS := 120.0
 
 
 func _ready() -> void:
+	# The suites begin and end real runs, which would otherwise fold made-up statistics into
+	# the save file of whoever is running the tests — and, worse, make the tests pass or fail
+	# differently depending on what that file already said.
+	SaveManager.persistence_enabled = false
+	SaveManager.settings = GameSettings.new()
+	SaveManager.best = BestRunStats.new()
+	SaveManager.apply_settings()
+
 	var start := Time.get_ticks_msec()
 	var suites: Array[TestCase] = []
 	var failures: PackedStringArray = []

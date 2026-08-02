@@ -7,6 +7,11 @@ extends Resource
 ## pool. What changes between them is which attacks are in rotation and how fast they come,
 ## and both of those are here.
 
+## Stable identifier, used by the save file to record that this boss has been beaten. Kept
+## separate from `display_name` for the same reason `ItemConfig` does: the name on screen is
+## allowed to change without invalidating everyone's save.
+@export var id: StringName = &"merge_conflict"
+
 @export var display_name: String = "Merge Conflict"
 
 @export_group("Durability")

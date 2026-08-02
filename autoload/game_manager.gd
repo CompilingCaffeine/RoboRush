@@ -137,7 +137,7 @@ func _set_state(new_state: State) -> void:
 	get_tree().paused = state != State.RUN
 	RunManager.set_timing(state == State.RUN)
 	if is_run_over():
-		RunManager.end_run()
+		RunManager.end_run(state == State.VICTORY)
 	state_changed.emit(state)
 
 
