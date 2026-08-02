@@ -111,6 +111,7 @@ func _buy_item(player: Player) -> bool:
 
 	is_sold = true
 	refresh()
+	EventBus.purchase_made.emit(price)
 	if shop != null:
 		shop.on_item_taken(self)
 	return true
@@ -124,6 +125,7 @@ func _buy_heal(player: Player) -> bool:
 	if not RunManager.try_spend_scrap(price):
 		return false
 	health.heal(_heal_amount())
+	EventBus.purchase_made.emit(price)
 	return true
 
 
@@ -131,6 +133,7 @@ func _buy_reroll() -> bool:
 	if shop == null or not RunManager.try_spend_scrap(price):
 		return false
 	shop.reroll()
+	EventBus.purchase_made.emit(price)
 	return true
 
 

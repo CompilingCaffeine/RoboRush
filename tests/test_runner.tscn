@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://tests/test_runner.gd" id="1_runner"]
 [ext_resource type="Script" path="res://tests/test_player_movement.gd" id="2_movement"]
@@ -11,6 +11,7 @@
 [ext_resource type="Script" path="res://tests/test_shop.gd" id="9_shop"]
 [ext_resource type="Script" path="res://tests/test_boss.gd" id="10_boss"]
 [ext_resource type="Script" path="res://tests/test_save.gd" id="11_save"]
+[ext_resource type="Script" path="res://tests/test_audio.gd" id="12_audio"]
 
 [node name="TestRunner" type="Node"]
 script = ExtResource("1_runner")
@@ -44,3 +45,6 @@ script = ExtResource("10_boss")
 
 [node name="Save" type="Node" parent="."]
 script = ExtResource("11_save")
+
+[node name="Audio" type="Node" parent="."]
+script = ExtResource("12_audio")

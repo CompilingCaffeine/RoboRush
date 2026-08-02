@@ -64,6 +64,13 @@ signal pickup_collected(kind: int, amount: float, position: Vector2)
 ## because both listeners — the HUD banner and the item bar — want its name and icon.
 signal item_collected(item: ItemConfig)
 
+# --- Shop ---
+
+## Scrap changed hands. Earns its place by the usual test: buying something has to sound
+## different from finding it, and the shop must not know what a sound is. `cost` is zero for
+## the boss reward, which is a stand the player takes from without paying.
+signal purchase_made(cost: int)
+
 # --- Enemies and rooms ---
 
 signal enemy_damaged(enemy: Node, info: DamageInfo, remaining: float)

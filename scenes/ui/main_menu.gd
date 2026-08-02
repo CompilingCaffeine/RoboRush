@@ -40,6 +40,8 @@ func _ready() -> void:
 	UIPalette.style(_tagline, UIPalette.TEXT_DIM)
 	_tagline.text = "SHIFT ONE  //  HELP DESK  //  NO OVERTIME AUTHORISED"
 
+	AudioManager.play_music(&"menu")
+
 	_build_buttons()
 	_refresh_records()
 

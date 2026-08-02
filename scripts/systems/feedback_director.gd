@@ -29,6 +29,10 @@ const SHAKE_PLAYER_DIED := 0.85
 ## one would make the item feel like a screen fault rather than a payoff.
 const SHAKE_EXPLOSION := 0.16
 
+## The boss changing shape. Larger than a kill, smaller than the player dying: it is the most
+## significant thing that happens in the fight that is not somebody's death.
+const SHAKE_BOSS_PHASE := 0.5
+
 ## The explosion particle scene is built around a 36px blast (Volatile Kernel's radius), so
 ## this converts a requested radius into a scale for anything else.
 const EXPLOSION_REFERENCE_RADIUS := 36.0
@@ -60,6 +64,10 @@ func _ready() -> void:
 	EventBus.projectile_bounced.connect(_on_projectile_bounced)
 	EventBus.explosion_triggered.connect(_on_explosion_triggered)
 	EventBus.chain_jumped.connect(_on_chain_jumped)
+	EventBus.room_entered.connect(_on_room_entered)
+	EventBus.purchase_made.connect(_on_purchase_made)
+	EventBus.boss_phase_changed.connect(_on_boss_phase_changed)
+	EventBus.boss_defeated.connect(_on_boss_defeated)
 
 
 ## Wired by main.gd, which owns scene composition.
@@ -123,6 +131,37 @@ func _on_player_damaged(_info: DamageInfo, remaining: float) -> void:
 func _on_player_died() -> void:
 	_add_trauma(SHAKE_PLAYER_DIED)
 	GameManager.hit_pause()
+	# The power-down sound and the summary screen need the room to themselves.
+	AudioManager.stop_music()
+
+
+## Which music plays is decided here rather than by the floor, for the same reason every other
+## sound is: the room should not know what a soundtrack is. Two tracks and one rule — the boss
+## arena gets the boss loop, everywhere else gets the explore loop — and `play_music` ignores a
+## request for the track already playing, so walking through a door does not restart it.
+func _on_room_entered(type: int, _room_id: int) -> void:
+	var wants_boss := type == RoomTemplate.Type.BOSS
+	AudioManager.play_music(&"boss" if wants_boss else &"explore")
+
+
+## Distinct from the item fanfare, because buying something and finding it are different
+## events even when the item is the same. Zero-cost stands are the boss reward, which is a
+## gift rather than a transaction and keeps the fanfare it already had.
+func _on_purchase_made(cost: int) -> void:
+	if cost > 0:
+		AudioManager.play_sfx(&"purchase")
+
+
+## Spec section 22 lists the boss phase transition among its priority sounds. Phase one is the
+## fight starting, which the boss music already announced.
+func _on_boss_phase_changed(phase: int) -> void:
+	if phase > 1:
+		AudioManager.play_sfx(&"boss_phase")
+		_add_trauma(SHAKE_BOSS_PHASE)
+
+
+func _on_boss_defeated(_boss: Node) -> void:
+	AudioManager.stop_music()
 
 
 func _on_player_dash_started(_direction: Vector2) -> void:
