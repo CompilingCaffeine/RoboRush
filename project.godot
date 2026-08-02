@@ -15,6 +15,11 @@ config/name="Robo Rush"
 ; `--seed=` debugging both do it — and starts a run immediately when it is.
 run/main_scene="res://scenes/ui/main_menu.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
+; Drawn at 32x32 and scaled up eightfold by tools/generate_art.py, so the icon looks like the
+; game rather than like a smooth logo bolted onto it. The project had none until milestone 6,
+; which is also what made the macOS export fail: that exporter builds an .icns from this and
+; reports its absence only as "configuration errors".
+config/icon="res://art/ui/icon.png"
 
 [display]
 
@@ -198,4 +203,8 @@ ScreenEffects="*res://autoload/screen_effects.gd"
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 textures/canvas_textures/default_texture_filter=0
+; Required by the macOS exporter for universal and arm64 builds, which refuse to export
+; without it. Nothing in this game is VRAM-compressed — every texture is a handful of
+; nearest-filtered pixels imported losslessly — so this costs import time and nothing else.
+textures/vram_compression/import_etc2_astc=true
 environment/defaults/default_clear_color=Color(0.043137, 0.050980, 0.070588, 1)

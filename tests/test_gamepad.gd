@@ -221,12 +221,19 @@ func _test_a_released_stick_stops_firing() -> void:
 
 ## Godot tracks joypad axes as absolute positions, so setting one to 0.0 is how a stick is
 ## released — there is no separate "up" event as there is for a button.
+##
+## Every synthetic event is flushed immediately. `parse_input_event` only *queues*: without
+## the flush the event is delivered whenever the engine next drains its buffer, which is not
+## guaranteed to be before the poll on the following physics frame. This suite passed for an
+## afternoon and then failed four checks with no input change at all, which is exactly what
+## a race looks like from the outside.
 func _axis(axis: JoyAxis, value: float) -> void:
 	var event := InputEventJoypadMotion.new()
 	event.device = 0
 	event.axis = axis
 	event.axis_value = value
 	Input.parse_input_event(event)
+	Input.flush_buffered_events()
 
 
 func _button(button: JoyButton, pressed: bool) -> void:
@@ -235,6 +242,7 @@ func _button(button: JoyButton, pressed: bool) -> void:
 	event.button_index = button
 	event.pressed = pressed
 	Input.parse_input_event(event)
+	Input.flush_buffered_events()
 
 
 ## Leaves the virtual controller at rest. Called between checks and on the way out, because

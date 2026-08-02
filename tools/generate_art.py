@@ -772,6 +772,68 @@ def floor_tile() -> list[str]:
     return compose_sheet(FLOOR_LAYOUT, floor_panel)
 
 
+
+# --- Application icon -------------------------------------------------------------
+#
+# The project shipped without one, so the window, the dock, and every exported build used
+# Godot's default. It is also what broke the macOS export: that exporter needs an icon to
+# build an .icns from and reports its absence only as "configuration errors".
+#
+# Drawn at 32x32 and scaled up by whole numbers, because the icon of a pixel-art game should
+# look like the game rather than like a smooth logo bolted onto it.
+
+ICON_SOURCE = [
+    "................................",
+    "................................",
+    "...oooooooooooooooooooooooooo...",
+    "..ollllllllllllllllllllllllllo..",
+    "..olmmmmmmmmmmmmmmmmmmmmmmmmlo..",
+    "..olmddddddddddddddddddddddmlo..",
+    "..olmdoooooooooooooooooooodmlo..",
+    "..olmdoeeeeeeeeeeeeeeeeeeodmlo..",
+    "..olmdoeeEEEEEEEEEEEEEEeeodmlo..",
+    "..olmdoeeEEEEEEEEEEEEEEeeodmlo..",
+    "..olmdoeeEEoooEEEEoooEEeeodmlo..",
+    "..olmdoeeEEoooEEEEoooEEeeodmlo..",
+    "..olmdoeeEEoooEEEEoooEEeeodmlo..",
+    "..olmdoeeEEEEEEEEEEEEEEeeodmlo..",
+    "..olmdoeeEEEEEEEEEEEEEEeeodmlo..",
+    "..olmdoeeEEEEEEEEEEEEEEeeodmlo..",
+    "..olmdoeeEEEEoooooooEEEEeodmlo..",
+    "..olmdoeeEEEEoooooooEEEEeodmlo..",
+    "..olmdoeeEEEEEEEEEEEEEEeeodmlo..",
+    "..olmdoeeeeeeeeeeeeeeeeeeodmlo..",
+    "..olmdoooooooooooooooooooodmlo..",
+    "..olmddddddddddddddddddddddmlo..",
+    "..olmmmmmmmmmmmmmmmmmmmmmmmmlo..",
+    "..ollllllllllllllllllllllllllo..",
+    "..oooooooooooooooooooooooooooo..",
+    "..odddaaaaddddddddddddaaaaddo...",
+    "..odllddddddddddddddddddddlldo..",
+    "..odllddddddddddddddddddddlldo..",
+    "..oooooooooooooooooooooooooooo..",
+    "................................",
+    "................................",
+    "................................",
+]
+
+## Whole-number upscale, so every source pixel stays a hard square.
+ICON_SCALE = 8
+
+
+def scale_grid(grid: list[str], factor: int) -> list[str]:
+    scaled: list[str] = []
+    for row in grid:
+        wide = "".join(ch * factor for ch in row)
+        for _ in range(factor):
+            scaled.append(wide)
+    return scaled
+
+
+def icon() -> list[str]:
+    return scale_grid(ICON_SOURCE, ICON_SCALE)
+
+
 SPRITES = {
     "art/characters/player.png": PLAYER,
     "art/characters/player_cannon.png": CANNON,
@@ -804,6 +866,7 @@ def main() -> int:
         write_png(os.path.join(root, relative), grid)
     for item_id, grid in ITEM_ICONS.items():
         write_png(os.path.join(root, f"art/items/{item_id}.png"), grid)
+    write_png(os.path.join(root, "art/ui/icon.png"), icon())
     write_png(os.path.join(root, "art/environments/wall.png"), wall_tile())
     write_png(os.path.join(root, "art/environments/door.png"), door_tile())
     write_png(os.path.join(root, "art/environments/floor.png"), floor_tile())

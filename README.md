@@ -64,21 +64,32 @@ godot --path . res://main.tscn -- --seed=918273
 ### Building it
 
 Export presets for macOS, Windows, Linux, and Web are in
-[`export_presets.cfg`](export_presets.cfg). Building needs Godot's export templates for
-this exact engine version, which are a separate ~1 GB download and are not in this
-repository:
+[`export_presets.cfg`](export_presets.cfg). All four have been built and the macOS app has
+been run; see [what was actually verified](#what-was-actually-verified).
+
+Building needs Godot's export templates for this exact engine version — a separate ~1 GB
+download that is not in this repository. **There is no CLI flag to install them**
+(`--install-export-templates` does not exist; only the Android build template has one).
+Either use the editor's *Editor > Manage Export Templates > Download and Install*, or:
 
 ```bash
-godot --headless --install-export-templates
+curl -L -o templates.tpz https://github.com/godotengine/godot/releases/download/4.7.1-stable/Godot_v4.7.1-stable_export_templates.tpz
+unzip -q templates.tpz -d tpz
+mkdir -p "$HOME/Library/Application Support/Godot/export_templates/4.7.1.stable"
+cp -R tpz/templates/. "$HOME/Library/Application Support/Godot/export_templates/4.7.1.stable/"
 ```
 
-Then, for example:
+Then:
 
 ```bash
 godot --headless --export-release "Linux" build/linux/robo_rush.x86_64
+godot --headless --export-release "Windows" build/windows/robo_rush.exe
+godot --headless --export-release "macOS" build/macos/robo_rush.zip
+godot --headless --export-release "Web" build/web/index.html
 ```
 
-The presets exclude `tests/` and `tools/`, and the macOS bundle identifier is a
+The presets exclude `tests/` and `tools/`, `build/` carries a `.gdignore` so exported
+output is never re-imported as project content, and the macOS bundle identifier is a
 placeholder that needs changing before publishing anywhere that cares.
 
 ### Assets
@@ -607,6 +618,13 @@ Executed on this machine, not assumed.
   first launch, title screen, settings, a setting being changed, pause, pause-settings,
   resume — and the resulting frames looked at. Four of the bugs below were found that way and
   by nothing else.
+- **All four targets export clean, and the macOS build was run.** Linux (71 MB), Windows
+  (105 MB), macOS (58 MB) and Web (39 MB), each with zero errors. The exported `.app` was
+  unzipped and launched for 240 frames with zero errors and zero warnings, and the packed
+  data is confirmed to contain the game and *no* reference to `res://tests/`. Two real
+  problems surfaced only by doing this rather than by writing the presets: the project had no
+  icon at all, and macOS refuses a universal or arm64 export unless ETC2 ASTC import is
+  enabled — which it reports only as the word "errors".
 - **Rendered frames inspected** of the shop (four stands showing `COOLING FAN 12`,
   `RICOCHET DRIVER 12`, `REPAIR 6`, `REROLL 4`, amber because affordable), the boss arena
   mid-phase-two (two versions, four corner terminals, sealed door, health bar at ~62%), and
@@ -788,7 +806,12 @@ resulting frames, and by nothing else. The suite was green for all of them.
 8. **`MergeConflict.get_parts` bound freed instances to a typed loop variable**, spamming
    "attempted to set an invalid object instance" on every call. Harmless, but it buried real
    errors in the test output until it was found and fixed.
-9. **The boss's central mechanic was very nearly a trap.** Destroying all four
+9. **The gamepad suite was racing its own input.** `Input.parse_input_event` only queues;
+   without an explicit flush the event arrives whenever the engine next drains its buffer,
+   which is not guaranteed to be before the poll on the next physics frame. It passed for an
+   afternoon and then failed four checks with no input change at all. Every synthetic event
+   is flushed immediately now, and the suite was run three times over to confirm it.
+10. **The boss's central mechanic was very nearly a trap.** Destroying all four
    synchronisation terminals saved two seconds out of thirteen — an eighteen percent return
    for crossing the arena four times under fire. Found by the balance suite computing what
    the numbers mean rather than asserting they are unchanged; the refund is now 0.75 and
@@ -806,10 +829,12 @@ resulting frames, and by nothing else. The suite was green for all of them.
    binding and every code path, which caught a real blocker. What it cannot tell you is
    whether a particular controller reports the axes Godot's abstraction claims, or whether
    the deadzones feel right in the hand.
-3. **No build has been produced.** `export_presets.cfg` is written and the Linux preset
-   resolves completely, stopping only at the missing export templates — a separate ~1 GB
-   download that is not in this repository. One command installs them; nothing else is known
-   to be in the way.
+3. **The builds are unsigned and untested off this machine.** All four targets build and the
+   macOS app runs here, but nothing is code-signed or notarised, so macOS and Windows will
+   both warn on first launch. The Windows, Linux, and Web builds have not been *run* at all —
+   there was no machine or browser to run them on — and the web build in particular is the
+   one most likely to behave differently, since it is the only target where the audio driver
+   and the file system are not the ones every other check used.
 4. **The art is generated, not drawn.** Every sprite is an ASCII grid or a few lines of
    Python, which makes it reviewable in a diff and rebuildable from text, and caps how good
    it can get. The environment, the boss, and the upgrade attachments were the three things
