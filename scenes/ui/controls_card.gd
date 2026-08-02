@@ -23,7 +23,7 @@ const ROWS: Array = [
 	["AIM AND FIRE", "ARROW KEYS", "RIGHT STICK"],
 	["DASH", "SPACE", "A"],
 	["BUY / TAKE", "E", "X"],
-	["DIAGNOSTICS", "TAB (HOLD)", "--"],
+	["DIAGNOSTICS", "TAB (HOLD)", "L1 (HOLD)"],
 	["PAUSE", "ESCAPE", "START"],
 	["RESTART", "R", "Y"],
 ]

@@ -50,11 +50,29 @@ func _initialize() -> void:
 		# --- Verbs ---
 		"dash": _action([_key(KEY_SPACE), _button(JOY_BUTTON_A)], STICK_DEADZONE),
 		"interact": _action([_key(KEY_E), _button(JOY_BUTTON_X)], STICK_DEADZONE),
-		"run_stats": _action([_key(KEY_TAB)], STICK_DEADZONE),
+		# Spec section 5's controller list does not mention the statistics peek, but a
+		# function reachable only from a keyboard is a function a gamepad player does not
+		# have. A shoulder button, because it is held rather than tapped.
+		"run_stats": _action([_key(KEY_TAB), _button(JOY_BUTTON_LEFT_SHOULDER)], STICK_DEADZONE),
 		"pause": _action([_key(KEY_ESCAPE), _button(JOY_BUTTON_START)], STICK_DEADZONE),
 
 		# Spec section 31.8: losing must immediately permit a new run.
 		"restart": _action([_key(KEY_R), _button(JOY_BUTTON_Y)], STICK_DEADZONE),
+
+		# --- Menu navigation ---
+		# Godot's built-in ui_* actions already reach the d-pad and the left stick for the
+		# four directions, but ui_accept and ui_cancel ship keyboard-only. That is a gamepad
+		# player who can move the selection in the pause menu and never activate anything —
+		# found by the gamepad suite, which is the entire reason it enumerates these.
+		#
+		# Overriding an action replaces its defaults outright, so the keyboard events are
+		# repeated here rather than merged: leaving them out would take Enter and Space away
+		# from every menu in the game.
+		"ui_accept": _action(
+			[_key(KEY_ENTER), _key(KEY_KP_ENTER), _key(KEY_SPACE), _button(JOY_BUTTON_A)],
+			STICK_DEADZONE,
+		),
+		"ui_cancel": _action([_key(KEY_ESCAPE), _button(JOY_BUTTON_B)], STICK_DEADZONE),
 
 		# --- Debug ---
 		"debug_toggle_hud": _action([_key(KEY_F1)], STICK_DEADZONE),
