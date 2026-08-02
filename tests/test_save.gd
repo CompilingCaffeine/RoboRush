@@ -5,9 +5,11 @@ extends TestCase
 ## build that predates a field. None of that can be checked by playing the game once, which
 ## makes it the part of milestone 6 most worth having a suite for.
 ##
-## Nothing here writes to disk. `SaveManager.persistence_enabled` is false for the whole test
-## run (see the runner), and the round-trip checks go through `to_dict`/`from_dict` directly,
-## which is the pair a file would exercise anyway.
+## Almost nothing here writes to disk. `SaveManager.persistence_enabled` is false for the whole
+## test run (see the runner), and the round-trip checks go through `to_dict`/`from_dict` directly,
+## which is the pair a file would exercise anyway. The one exception is the failed-write check,
+## which has to touch a real file to be worth anything — it points the manager at a disposable
+## path first, because a test that wrote to the real one would clobber the save of whoever ran it.
 
 ## Restored in `_teardown`, because the suite mutates the live manager and every suite after
 ## this one shares it.
@@ -29,6 +31,7 @@ func run() -> void:
 	_test_best_stats_round_trip()
 	_test_unlocks_are_recorded_once()
 	await _test_a_finished_run_files_exactly_one_result()
+	await _test_a_failed_write_stays_pending_and_recovers()
 
 	_teardown()
 
@@ -278,4 +281,82 @@ func _test_a_finished_run_files_exactly_one_result() -> void:
 
 	# Left in a clean state: the suites that follow begin their own runs.
 	RunManager.begin_run(1)
+	await advance_physics(1)
+
+
+## Reported: a transient save failure cleared the "needs saving" flag before the write
+## succeeded, suppressing retries.
+##
+## `save_game` set `_dirty = false` on its first line, before it had even opened the file. Both
+## failure paths then returned with the flag already down, and the flag is the only thing that
+## makes anything try again — `_process` retries while dirty, and so does the flush on quit. So
+## one blip lost every setting, record and unlock for the rest of the session, with nothing but
+## a warning to show for it.
+##
+## The failure here is real rather than mocked: a directory sitting where the temporary file
+## needs to go, which makes FileAccess.open fail exactly as a permissions problem or a full disk
+## would, and which can then be cleared to prove the retry recovers.
+func _test_a_failed_write_stays_pending_and_recovers() -> void:
+	var was_enabled := SaveManager.persistence_enabled
+	var real_save: String = SaveManager._save_path
+	var real_temp: String = SaveManager._temp_path
+
+	# Never the real paths: a test that wrote there would clobber the save of whoever ran it.
+	SaveManager._save_path = "user://test_only_save.json"
+	SaveManager._temp_path = SaveManager._save_path + ".tmp"
+	SaveManager.persistence_enabled = true
+
+	var blocker := ProjectSettings.globalize_path(SaveManager._temp_path)
+	DirAccess.remove_absolute(blocker)
+	check(
+		DirAccess.make_dir_absolute(blocker) == OK,
+		"a directory can be put in the way of the temporary file",
+	)
+
+	SaveManager.request_save()
+	SaveManager.save_game()
+
+	check(SaveManager._dirty, "a failed write leaves the save pending rather than forgetting it")
+	check(
+		not FileAccess.file_exists(SaveManager._save_path),
+		"and nothing was written",
+	)
+	# Without a backoff, _process would call save_game every frame from here on.
+	check(
+		SaveManager._save_countdown > SaveManager.SAVE_DEBOUNCE_SECONDS,
+		"the retry is backed off (%.1fs) rather than run every frame"
+			% SaveManager._save_countdown,
+	)
+
+	# A second failure must not multiply the warnings, and must stay pending.
+	SaveManager.save_game()
+	check(SaveManager._dirty, "still pending after a second failure")
+
+	# Clear the condition: the next attempt should land.
+	DirAccess.remove_absolute(blocker)
+	SaveManager.save_game()
+
+	check(not SaveManager._dirty, "the retry succeeds once the condition clears")
+	check(
+		FileAccess.file_exists(SaveManager._save_path),
+		"and the save file is actually there",
+	)
+
+	var written: Variant = JSON.parse_string(
+		FileAccess.get_file_as_string(SaveManager._save_path)
+	)
+	check(written is Dictionary, "what landed is readable JSON")
+	if written is Dictionary:
+		check(
+			(written as Dictionary).get("save_version") == SaveManager.SAVE_VERSION,
+			"and it is a save file, not a half-written one",
+		)
+
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SaveManager._save_path))
+	DirAccess.remove_absolute(blocker)
+	SaveManager._save_path = real_save
+	SaveManager._temp_path = real_temp
+	SaveManager.persistence_enabled = was_enabled
+	SaveManager._dirty = false
+	SaveManager._failed_writes = 0
 	await advance_physics(1)

@@ -865,7 +865,15 @@ resulting frames, and by nothing else. The suite was green for all of them.
     shot has definitively *missed*: on a wall, once its bounces are spent. A first attempt
     capped how far it flew before turning, which its own test rejected — a shot that turns at
     140 pixels can never reach an enemy at 300, making the item a range downgrade.
-17. **The boss's central mechanic was very nearly a trap.** Destroying all four
+17. **One failed save stopped the game saving for the rest of the session.** Reported.
+    `save_game` cleared the "needs saving" flag on its first line, before it had even opened the
+    file, and that flag is the only thing that makes anything try again — `_process` retries
+    while dirty, and so does the flush on quit. So a transient failure (a full disk, a file held
+    open, a rename losing a race) silently discarded every setting, record and unlock from that
+    point on, with nothing but a warning nobody reads. The flag is now cleared only once a write
+    has landed, with a five-second backoff — because the naive repair is worse than the bug:
+    leaving the flag up with the countdown already expired retries every single frame.
+18. **The boss's central mechanic was very nearly a trap.** Destroying all four
    synchronisation terminals saved two seconds out of thirteen — an eighteen percent return
    for crossing the arena four times under fire. Found by the balance suite computing what
    the numbers mean rather than asserting they are unchanged; the refund is now 0.75 and

@@ -30,6 +30,11 @@ const SAVE_VERSION := 1
 ## value every frame it is dragged; without this, one drag is sixty file writes.
 const SAVE_DEBOUNCE_SECONDS := 0.5
 
+## Seconds before a failed write is attempted again. Far longer than the debounce on purpose: a
+## write that just failed will probably still fail a frame later, and the point is to survive a
+## transient condition rather than to hammer a full disk sixty times a second.
+const SAVE_RETRY_SECONDS := 5.0
+
 signal settings_changed(settings: GameSettings)
 
 var settings := GameSettings.new()
@@ -54,6 +59,16 @@ var persistence_enabled := true
 
 var _dirty := false
 var _save_countdown := 0.0
+
+## Consecutive failed writes. Only the first one warns: a disk that stays full would otherwise
+## fill the log with the same line every five seconds for the rest of the session.
+var _failed_writes := 0
+
+## Where the save lives. Variables rather than constants *only* so the suite can point them at
+## something disposable — nothing in the game ever reassigns them, and a test that wrote to the
+## real path would clobber the save file of whoever ran it.
+var _save_path := SAVE_PATH
+var _temp_path := SAVE_TEMP_PATH
 
 
 func _ready() -> void:
@@ -191,11 +206,43 @@ func request_save() -> void:
 	_save_countdown = SAVE_DEBOUNCE_SECONDS
 
 
+## Writes the save, or leaves it pending and tries again later.
+##
+## `_dirty` is cleared only once a write has actually landed. It used to be cleared on the first
+## line of this function, before the write was even attempted, so a single transient failure — a
+## full disk, a file held open by something else, a rename losing a race — silently stopped the
+## game saving for the rest of the session: `_process` only retries while dirty, and so does the
+## flush on quit. Everything after that point was lost with nothing but a warning nobody reads.
+##
+## The naive repair is worse than the bug: leaving `_dirty` set with the countdown already
+## expired makes `_process` call this every single frame. Hence the backoff.
 func save_game() -> void:
-	_dirty = false
 	if not persistence_enabled:
+		# Not a failure. The suite runs with writes off, and there is nothing left pending.
+		_dirty = false
 		return
 
+	var failure := _write_save_file()
+	if not failure.is_empty():
+		_failed_writes += 1
+		_save_countdown = SAVE_RETRY_SECONDS
+		if _failed_writes == 1:
+			# A save that cannot be written is worth a log line and nothing else. The player is
+			# mid-run and there is nothing useful to tell them (spec section 31.10).
+			push_warning("SaveManager: %s. Retrying in %.0fs." % [failure, SAVE_RETRY_SECONDS])
+		return
+
+	if _failed_writes > 0:
+		print("SaveManager: save recovered after %d failed attempt(s)." % _failed_writes)
+	_dirty = false
+	_failed_writes = 0
+
+
+## Returns an empty string on success, or a description of what went wrong.
+##
+## Written to a temporary file and renamed over the real one, so a crash mid-write costs the
+## temporary rather than the player's records.
+func _write_save_file() -> String:
 	var payload := {
 		"save_version": SAVE_VERSION,
 		"settings": settings.to_dict(),
@@ -205,24 +252,22 @@ func save_game() -> void:
 		"tutorial_completed": tutorial_completed,
 	}
 
-	var file := FileAccess.open(SAVE_TEMP_PATH, FileAccess.WRITE)
+	var file := FileAccess.open(_temp_path, FileAccess.WRITE)
 	if file == null:
-		# A save that cannot be written is worth a log line and nothing else. The player is
-		# mid-run and there is nothing useful to tell them (spec section 31.10).
-		push_warning(
-			"SaveManager: could not write %s (%s)."
-			% [SAVE_TEMP_PATH, error_string(FileAccess.get_open_error())]
-		)
-		return
+		return "could not write %s (%s)" % [
+			_temp_path, error_string(FileAccess.get_open_error())
+		]
 	file.store_string(JSON.stringify(payload, "  "))
 	file.close()
 
 	var error := DirAccess.rename_absolute(
-		ProjectSettings.globalize_path(SAVE_TEMP_PATH),
-		ProjectSettings.globalize_path(SAVE_PATH),
+		ProjectSettings.globalize_path(_temp_path),
+		ProjectSettings.globalize_path(_save_path),
 	)
 	if error != OK:
-		push_warning("SaveManager: could not replace %s (%s)." % [SAVE_PATH, error_string(error)])
+		return "could not replace %s (%s)" % [_save_path, error_string(error)]
+
+	return ""
 
 
 ## Reads the save file if there is one, then applies whatever came back. A first run, a
@@ -239,16 +284,16 @@ func load_game() -> void:
 
 
 func _read_save_file() -> Dictionary:
-	if not FileAccess.file_exists(SAVE_PATH):
+	if not FileAccess.file_exists(_save_path):
 		return {}
 
-	var text := FileAccess.get_file_as_string(SAVE_PATH)
+	var text := FileAccess.get_file_as_string(_save_path)
 	if text.is_empty():
 		return {}
 
 	var parsed: Variant = JSON.parse_string(text)
 	if not (parsed is Dictionary):
-		push_warning("SaveManager: %s is not valid JSON; starting from defaults." % SAVE_PATH)
+		push_warning("SaveManager: %s is not valid JSON; starting from defaults." % _save_path)
 		return {}
 
 	return _migrate(parsed)
@@ -269,7 +314,7 @@ func _migrate(data: Dictionary) -> Dictionary:
 	if version > SAVE_VERSION:
 		push_warning(
 			"SaveManager: %s was written by a newer build (version %d); reading what is recognised."
-			% [SAVE_PATH, version]
+			% [_save_path, version]
 		)
 	return data
 
