@@ -58,6 +58,17 @@ const MUSIC_LIBRARY := {
 ## walking into the boss room feels like it caused something.
 const MUSIC_FADE_SECONDS := 1.2
 
+## How many mix cycles to wait for at teardown (see `_drain_mixer`). A stopped playback is faded
+## out on one mix and released on a later one, so one is not enough.
+const MIXER_DRAIN_MIXES := 2
+
+## Gives up after this long. A driver that has already been torn down will never mix again, and an
+## untidy exit is a much better outcome than an exit that hangs.
+const MIXER_DRAIN_TIMEOUT_MS := 500
+
+## Polling interval, short against the shortest mix period worth waiting for.
+const MIXER_POLL_MS := 1
+
 var _streams: Dictionary[StringName, AudioStream] = {}
 var _music_streams: Dictionary[StringName, AudioStream] = {}
 var _pool: Array[AudioStreamPlayer] = []
@@ -159,6 +170,8 @@ func _process(delta: float) -> void:
 ## frames after ordinary gameplay sounds was measured and did *not* leak, because those are
 ## short enough to have ended. This is kept anyway as the general guard, since "no audio is
 ## mid-playback at teardown" is a cheaper thing to guarantee than to audit call by call.
+##
+## Stopping is only half of it, though: see `_drain_mixer`.
 func stop_all() -> void:
 	for player: AudioStreamPlayer in _pool:
 		player.stop()
@@ -170,6 +183,35 @@ func stop_all() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_EXIT_TREE:
 		stop_all()
+	# The stopping above is not enough on its own, and this is the last moment it can be
+	# corrected — nothing gets another frame after this.
+	if what == NOTIFICATION_EXIT_TREE:
+		_drain_mixer()
+
+
+## Waits for the mixer to run, because stopping a stream does not release it: it marks the
+## playback for deletion and the audio thread does the deleting on its next mix. On the quit paths
+## the game controls that mix has already happened, since `get_tree().quit()` only takes effect at
+## the end of the frame. On an exit the game gets no notice of — `--quit-after`, the editor's stop
+## button — the tree tears down between mixes and the marked playback is still in the audio
+## server's list when the engine counts leaked objects, which is the same
+## "1 resources still in use at exit" and two leaked instances as before, reported for the music
+## rather than for a menu sound.
+##
+## Waiting on the mixer's own clock rather than sleeping a fixed span, because the mix period is
+## the driver's business and differs by an order of magnitude between them: ~3 ms of CoreAudio
+## here against ~93 ms of the Dummy driver the headless test runs use.
+func _drain_mixer() -> void:
+	var deadline := Time.get_ticks_msec() + MIXER_DRAIN_TIMEOUT_MS
+	var mixes := 0
+	var previous := AudioServer.get_time_since_last_mix()
+	while mixes < MIXER_DRAIN_MIXES and Time.get_ticks_msec() < deadline:
+		OS.delay_msec(MIXER_POLL_MS)
+		var since := AudioServer.get_time_since_last_mix()
+		# The clock counts up from each mix, so it only ever goes down by starting again.
+		if since < previous:
+			mixes += 1
+		previous = since
 
 
 func set_bus_volume_db(bus: StringName, volume_db: float) -> void:
@@ -207,11 +249,17 @@ func _load_library() -> void:
 		# Set here rather than trusted from the .import file. A loop flag lost in a reimport
 		# turns a twenty-second loop into twenty seconds of music followed by silence, which
 		# is the kind of bug that gets reported as "the music is broken sometimes".
+		#
+		# `loop_end` is a frame index and must be the end of the sample, not 0. A zero-length
+		# loop region is not "loop the whole thing" — the playback hits the end of the loop on
+		# its first mix and goes inactive, so every track was silent from the moment it started.
+		# The importer spells the same idea as -1, but that is wrapped to the length at import
+		# time only; the property itself has no such convenience.
 		var wav := stream as AudioStreamWAV
 		if wav != null:
 			wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
 			wav.loop_begin = 0
-			wav.loop_end = 0
+			wav.loop_end = roundi(wav.get_length() * wav.mix_rate)
 		_music_streams[id] = stream
 
 

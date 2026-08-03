@@ -21,10 +21,12 @@ func run() -> void:
 	_test_every_priority_sound_from_the_spec_exists()
 	_test_unknown_ids_are_survivable()
 	_test_music_loops()
+	await _test_music_keeps_playing()
 	await _test_music_crossfades()
 	await _test_repeating_a_track_does_not_restart_it()
 	await _test_stopping_music_fades_it_out()
 	await _test_stop_all_leaves_nothing_playing()
+	_test_the_mixer_drain_ends_on_the_mixer()
 
 	_teardown()
 
@@ -92,6 +94,30 @@ func _test_music_loops() -> void:
 			"track '%s' is set to loop forward" % id,
 		)
 		check(wav.get_length() > 4.0, "track '%s' is long enough to be a loop, not a sting" % id)
+		# A loop region has to contain something. `loop_end` is a frame index, and leaving it
+		# at 0 means the loop ends where it begins, which is not "loop the whole track".
+		check(
+			wav.loop_end > wav.loop_begin,
+			"track '%s' loops over the sample rather than over nothing (frames %d..%d)"
+					% [id, wav.loop_begin, wav.loop_end],
+		)
+
+
+## The one the loop flags were supposed to protect, from the other side: not "is the resource
+## configured to loop" but "did the stream get anywhere". This is the check that was missing when
+## every track was silent for a whole milestone — `loop_end` was left at 0, so the loop region was
+## empty, the playback went inactive on its first mix, and nothing in the manager's own state said
+## so. `_music_id` was right, the fade ran to full volume, and the game played no music at all.
+func _test_music_keeps_playing() -> void:
+	AudioManager.stop_music()
+	AudioManager.play_music(&"explore")
+	var player := AudioManager._music[AudioManager._music_active]
+
+	await advance_physics(30)
+
+	check(player.playing, "the track is still playing, not stopped on its first mix")
+	var position := player.get_playback_position()
+	check(position > 0.0, "the playback position has advanced (%.3fs in)" % position)
 
 
 func _test_music_crossfades() -> void:
@@ -193,3 +219,24 @@ func _test_stop_all_leaves_nothing_playing() -> void:
 			still_playing += 1
 	check(still_playing == 0, "stop_all leaves nothing playing (%d still going)" % still_playing)
 	check(AudioManager._music_id.is_empty(), "stop_all forgets the current track")
+
+
+## Stopping a stream only marks its playback for deletion; the audio thread releases it on a later
+## mix, and an exit that arrives in between leaks it. The guard is therefore a wait for the mixer,
+## and a wait that times out is indistinguishable from one that worked except in how long the game
+## takes to close. This pins the part that can quietly stop being true: that the mixer's clock is
+## observable, so the wait ends on the mixer rather than on its own timeout.
+func _test_the_mixer_drain_ends_on_the_mixer() -> void:
+	AudioManager.play_sfx(&"fire")
+	AudioManager.stop_all()
+
+	var started := Time.get_ticks_msec()
+	AudioManager._drain_mixer()
+	var elapsed := Time.get_ticks_msec() - started
+
+	check(
+		elapsed < AudioManager.MIXER_DRAIN_TIMEOUT_MS,
+		"waiting for %d mixes returns before the %d ms timeout (took %d ms)" % [
+			AudioManager.MIXER_DRAIN_MIXES, AudioManager.MIXER_DRAIN_TIMEOUT_MS, elapsed,
+		],
+	)

@@ -394,9 +394,9 @@ would have exactly one implementation:
   explosions and chain lightning now actually populate (`explosion`, `electric`).
 - **StatusEffectController** — `ProjectileConfig.status_effects` is declared and
   carried; nothing reads it yet. It is the last field left in the "declared, not yet
-  honoured" group, and no shipped item needs it: freezing and burning are milestone 6's
-  polish pass or a second floor's item pool, and building the controller before either
-  exists would be building it for one imaginary caller.
+  honoured" group, and no shipped item needs it. Cold Cache and Hot Reload in the
+  Development plan below are the first two real callers, which is when the controller earns
+  its place.
 
 `ShotContext` was considered and rejected. `ProjectileFactory.spawn` now takes nine
 parameters, four of them optional, and bundling the trailing ones into an object would
@@ -546,7 +546,11 @@ Executed on this machine, not assumed.
 - **`godot --headless --import`** completes with no errors.
 - **Clean boot on both entry paths** (`--quit-after 300`, on the title screen and directly
   on `main.tscn`) produces zero errors and zero warnings on stdout/stderr.
-- **936 checks across 13 suites pass, exit 0**, in 48s.
+- **The milestone 6 snapshot's 936 checks across 13 suites passed, exit 0**, in 48s. That
+  assertion result was not a clean engine log: the doorway-template diagnostic still emits
+  `Rect2i` formatting errors without failing its checks. The Development gate below treats
+  removing that noise — and making unexpected engine errors visible as failures — as required
+  baseline work.
 - **The floor generator is swept across 120 seeds per run**, asserting every spec section 9
   requirement on each: exactly the requested room count, no disconnected rooms, no two rooms
   in one cell, exactly one of each special room, every door symmetric and between adjacent
@@ -812,7 +816,7 @@ resulting frames, and by nothing else. The suite was green for all of them.
    afternoon and then failed four checks with no input change at all. Every synthetic event
    is flushed immediately now, and the suite was run three times over to confirm it.
 10. **Quitting from a menu leaked the sound it played on the way out.** Reported from a real
-    playthrough as "2 ObjectDB instances were leaked" and "1 resources still in use". The
+    application run as "2 ObjectDB instances were leaked" and "1 resources still in use". The
     pause menu's QUIT button played `ui_back` and called `quit()` on the same frame, so the
     stream was still playing — and therefore still referenced — when the engine checked for
     leaks. The sound could never have been heard either, since the window closes at the end
@@ -911,8 +915,10 @@ resulting frames, and by nothing else. The suite was green for all of them.
    from major items and an eleven-pixel robot has room for about that many before it stops
    being a robot. The other nine still get only a tinted cannon.
 7. **One floor.** Spec section 8's remaining floors are beyond this milestone. `FloorConfig`
-   was built so a new floor is a `.tres` and not new code, and nothing has ever tested that
-   claim.
+   makes most of a floor data, but the claim that a second floor is only a new `.tres` is not
+   true end to end yet: `floor.tscn` assigns Help Desk directly, `FloorController` owns the
+   Merge Conflict and turns its reward into victory, and the HUD, room art, and music all
+   assume one floor. The Development plan below is where those seams become real.
 8. **Five of spec section 23's twelve game states exist** — main menu, run, paused, game
    over, victory. Settings and the shop are deliberately *not* states: one is a panel over
    whichever screen opened it, the other is a room the player walks into.
@@ -920,7 +926,8 @@ resulting frames, and by nothing else. The suite was green for all of them.
    these optional for the prototype. The generator's `_attach_dead_end` is the hook the rooms
    would use.
 10. **`ProjectileConfig.status_effects` is still declared and unread.** No shipped item needs
-    it; freezing and burning belong to a second floor's pool.
+    it; freezing and burning are planned for Development's pool, but the status system does
+    not exist yet.
 11. **Nothing removes an item**, so Corrupted Firmware choices are permanent. Arguably right
     for a roguelite, but still undecided rather than designed.
 12. **All rooms are the same size**, including the boss arena — deliberate, see the
@@ -948,6 +955,157 @@ resulting frames, and by nothing else. The suite was green for all of them.
 
 ---
 
+## Floor 2: Development plan
+
+Spec section 8 calls the next system layer **Development**. It should be a continuous second
+floor, not a separate level selected from a menu: taking the Merge Conflict reward descends
+into Development with the same robot, build, integrity, scrap, shot counter, and run
+statistics. The first boss is then a floor boundary; only the second boss can end the run in
+victory.
+
+This work begins after the playtest gate below. The Help Desk still has to prove that its
+movement, economy, and boss are enjoyable before a second floor compounds them.
+
+### The floor's job
+
+The Help Desk teaches the player to react to four readable movement problems. Development
+asks them to **predict**. Its shared visual language is the **compile lane**: a row or column
+flashes amber, waits long enough to read, then executes in red. The same warning must mean the
+same thing when it comes from an enemy or the boss, and every pattern must leave a visible safe
+answer.
+
+Start with the Help Desk's ten-room shape — a start, six combat rooms, a treasure room, a
+shop, and a boss — because it keeps the generator and economy comparable while the new floor
+is proved. If human-paced two-floor runs drag, reduce Development to nine rooms before adding
+or removing whole systems.
+
+The presentation should read as an unfinished development lab rather than another Help Desk:
+cyan and violet machinery, amber warnings, red execution errors, broken IDE windows, temporary
+build scaffolds, and a distinct exploration and boss loop. Rooms stay the existing 26-by-12
+tile single-screen arenas.
+
+### Encounter curve
+
+Two enemies return and two are new:
+
+| Enemy | Job |
+| --- | --- |
+| Ticket Bot | Familiar ranged pressure and a stable reference point for the harder floor |
+| Pop Up Drone | Re-aiming pressure while the player is also reading floor warnings |
+| Code Runner | Strafes across sight lines and fires while moving, forcing sustained tracking |
+| Compiler | Paints one row or column, telegraphs it, then sends a fast pulse through the lane |
+
+The two combat rooms nearest the start introduce the Code Runner beside Ticket Bots. The
+middle distance tier teaches the Compiler in layouts with obvious cover. The deepest combat
+rooms may combine both new enemies with Pop Up Drones. Do not add Firewall Nodes to that mix
+until playtesting proves that two kinds of area denial remain readable together.
+
+The current floor chooses every spawn independently, so weights alone cannot promise that a
+teaching room contains the enemy it teaches. Development templates need one or more fixed
+signature spawns, or a small encounter-pack equivalent, while their remaining points continue
+to draw from the weighted roster.
+
+`RoomTemplate.difficulty` already exists, but templates are currently chosen without regard
+to distance from the start. Development should make the first rooms draw from its gentler
+templates and reserve the hardest templates and roster combinations for rooms nearer the boss.
+
+### Floor boss: Runtime Error
+
+Runtime Error is a pattern fight, not a second terminal puzzle. It remains damageable through
+all three phases:
+
+1. One compile lane at a time, alternating with aimed spreads.
+2. Two staggered lanes, alternating with projectile rings that have visible gaps.
+3. Alternating checkerboard execution zones and projectile walls with a traversable opening.
+
+The boss must use the same amber-then-red warning language as the Compiler. Randomly combining
+attacks is allowed only after authored combinations prove they cannot erase every safe route.
+
+### Six new items
+
+Floor 1 can reserve nine unique item ids before it ends: two shop offers, three combat rewards,
+one treasure reward, and three boss choices. Only three of the current twelve remain unseen.
+Development's planned two combat rewards, two shop offers, treasure reward, and three boss
+choices need eight unseen items. Five additions are the mathematical minimum; six leave one
+spare rather than balancing the final reward on an exact-capacity edge.
+
+| Item | Effect |
+| --- | --- |
+| Memory Spike | Adds one projectile pierce; the behaviour already exists |
+| Core Dump | Makes projectile impacts explode; the behaviour already exists |
+| Cold Cache | Repeated hits chill, then briefly freeze the target |
+| Hot Reload | Every fifth shot applies burning |
+| Breakpoint | Dashing emits a short slowing pulse |
+| Stack Overflow | Corrupted: larger, harder-hitting projectiles travel more slowly |
+
+Cold Cache and Hot Reload are the reason to implement the small status system already implied
+by `ProjectileConfig.status_effects`. Multiple statuses must compose rather than overwrite one
+another, and boss resistance should shorten control effects rather than make those items do
+nothing in the fight.
+
+Development drops items on combat clears two and five, grants one treasure item, uses the same
+learned shop prices, and ends with three boss choices. Tune its scrap income before introducing
+floor-specific inflation: a common item should not silently cost more because the elevator went
+down one level.
+
+### The multi-floor seam
+
+Build the transition before building Development content. A small run-level owner holds the
+ordered `FloorConfig` resources; one `FloorController` builds one injected floor and emits
+`floor_completed`, while the run owner decides whether to descend or win. `FloorConfig` gains
+the boss scene and floor theme, and boss identity becomes data consumed by the HUD instead of
+the literal text `MERGE CONFLICT`.
+
+The same `Player` node crosses the boundary. Integrity, inventory, scrap, shared shot count,
+offered item ids, and statistics survive; dash charges refill, and Development's start room
+provides one guaranteed repair cell rather than a free full heal. The old floor, its pickups,
+and its projectiles must be gone before the next floor becomes active, so there is never more
+than one projectile container or one room graph in the tree. The minimap and
+`FloorController._clears` reset; cumulative `RunManager.rooms_cleared` and run statistics do
+not, so the HUD and final summary still describe the whole run.
+
+Derive a deterministic seed for each floor from the run seed so one `--seed` reproduces the
+whole run. Prove this seam first by configuring Help Desk twice. A repeated floor is ugly but
+diagnostically clean: if the transition fails, no new enemy, boss, item, or texture can be the
+reason.
+
+### Delivery order
+
+1. Play several complete Help Desk runs with a controller and record duration, damage, shop
+   decisions, boss comprehension, and common builds. Tune from those observations.
+2. Restore a trustworthy automated baseline: remove the doorway test's formatting errors,
+   give the runner a real watchdog, and isolate save-test paths so parallel runs cannot collide.
+3. Build the two-floor spine and pass Help Desk into Help Desk without losing run state or
+   entering victory after the first boss.
+4. Add a Development greybox: its floor resource, four combat templates, returning enemies,
+   placeholder Runtime Error, and a developer-only direct-start path.
+5. Add the Code Runner, Compiler, compile lanes, finished boss, six items, status effects,
+   environment art, and music.
+6. Play full two-floor runs with keyboard and controller, tune against the carried Help Desk
+   build rather than a fresh debug character, then verify the exported builds.
+
+### Acceptance criteria
+
+- The first boss reward advances the run; only Runtime Error's reward produces victory.
+- The exact same player reaches Development with the same integrity, items, scrap, shot count,
+  and accumulated statistics.
+- One run seed reproduces both layouts, and each floor passes the structural sweep across at
+  least 120 seeds.
+- Combat difficulty rises with distance from the start instead of being random room to room.
+- The item pool can always fill every planned offer, including the final three choices.
+- The floor name, minimap, room theme, music, boss name, boss bar, and
+  `FloorController._clears` change or reset at the transition; the HUD's run-wide room total
+  remains cumulative.
+- Compile lanes and boss patterns always telegraph a reachable safe answer.
+- Restarting or dying on Development files one result and begins the next run on Help Desk.
+- The complete run works in exported builds with both keyboard and controller.
+
+Elite modifiers, challenge and secret rooms, larger arenas, a new weapon core, meta-progression,
+and additional playable characters are deliberately outside this floor. They can follow once
+Development proves that the run can grow without weakening the room combat already present.
+
+---
+
 ## Next recommended task
 
 **Play it.** Not a milestone, not a feature — an hour with a controller and the game as it
@@ -967,11 +1125,12 @@ taught, rather than deleting it.
 
 After that, in rough order of value:
 
-1. **Produce and run an actual build.** Install the export templates and export all four
-   targets. The web build in particular is the one most likely to surface something the
-   editor never does.
-2. **A second floor**, which is cheap and tests the claim that `FloorConfig` makes a floor
-   data rather than code. Finding out it needs code is much better news now than later.
+1. **Run the remaining builds on their target environments.** All four export and the macOS
+   app runs here; Windows, Linux, and especially Web still need the execution test that an
+   export succeeding cannot provide.
+2. **Build the [Floor 2 spine and Development plan](#floor-2-development-plan)**, beginning
+   with Help Desk configured twice. Most floor content is data; the run transition, boss,
+   presentation, and victory path are not yet.
 3. **Longer music.** The tracker takes patterns; the tracks are short because writing more
    bars is the only cost.
 4. **Elite modifiers** (spec section 15), which the spec says to add once the base enemies
