@@ -33,6 +33,7 @@ func run() -> void:
 	_test_prices_match_the_spec()
 	_test_reroll_price_climbs()
 	_test_the_shop_template_has_stands()
+	_test_stand_labels_cannot_overlap()
 
 	await _test_buying_an_item()
 	await _test_an_item_cannot_be_bought_twice()
@@ -78,6 +79,98 @@ func _test_the_shop_template_has_stands() -> void:
 			template.enemy_spawns.is_empty(),
 			"%s spawns no enemies — a shop is not a fight" % template.id,
 		)
+
+
+## Reported from play: the names above the stands overlapped, in the shop and again on the three
+## stands the boss's reward stands on, and the shop became unreadable at exactly the moment the
+## player was deciding what to spend a floor's scrap on.
+##
+## Overlap is geometry, so it is checkable, and the three numbers that produce it live in three
+## different files — the label's width in ShopStand, the stand tiles in a room template, and
+## FloorController.BOSS_REWARD_SPACING. This is the one place they are compared. It also measures the
+## real font against the real item pool, so an item named later than this test cannot quietly bring
+## the overlap back: the twelfth name is the one that overflowed.
+func _test_stand_labels_cannot_overlap() -> void:
+	var font := (load("res://data/ui/theme.tres") as Theme).default_font
+	if not require(font, "the UI theme has a font to measure with") or font == null:
+		return
+
+	var widest := 0.0
+	var widest_label := ""
+	for item: ItemConfig in _floor_config.item_pool:
+		# The label is the name and the price together, so it is the pair that has to fit.
+		var label := "%s  %d" % [item.display_name.to_upper(), _shop_config.price_for(item)]
+		var width := font.get_string_size(
+			label, HORIZONTAL_ALIGNMENT_CENTER, -1, ShopStand.LABEL_FONT_SIZE
+		).x
+		if width > widest:
+			widest = width
+			widest_label = label
+
+	# Wider than its slot is survivable — the label wraps — but only up to a point: a name that needs
+	# three lines is a name that has grown past what wrapping can hide.
+	check(
+		widest <= ShopStand.LABEL_WIDTH * float(ShopStand.LABEL_LINES),
+		"the longest tag in the pool fits its label in %d lines ('%s' is %.0fpx of %.0fpx)" % [
+			ShopStand.LABEL_LINES, widest_label, widest, ShopStand.LABEL_WIDTH,
+		],
+	)
+
+	for template: RoomTemplate in _floor_config.templates_for(RoomTemplate.Type.SHOP):
+		_check_row_fits(template.id, _stand_x_positions(template))
+
+	# The boss reward is laid out in code instead of by a template, centred on the arena's reward
+	# tile, so the same two questions are asked of the numbers that produce it.
+	for template: RoomTemplate in _floor_config.templates_for(RoomTemplate.Type.BOSS):
+		var centre := float(template.reward_spawn.x * Room.TILE_SIZE + Room.TILE_SIZE / 2)
+		var row: Array[float] = []
+		for index: int in FloorController.BOSS_REWARD_COUNT:
+			var offset := (float(index) - float(FloorController.BOSS_REWARD_COUNT - 1) * 0.5)
+			row.append(centre + offset * FloorController.BOSS_REWARD_SPACING)
+		_check_row_fits("%s reward" % template.id, row)
+
+
+## Asserts that no two labels in a row of stands can touch, and that none of them is written into a
+## wall. Stands on different rows are compared by row only — the shop's fourth stand sits a row below
+## the shelf and shares no space with it.
+func _check_row_fits(what: String, xs: Array[float]) -> void:
+	xs.sort()
+	for index: int in xs.size() - 1:
+		var gap := xs[index + 1] - xs[index]
+		check(
+			gap >= ShopStand.LABEL_WIDTH,
+			"%s: stands %.0fpx apart clear a %.0fpx label" % [what, gap, ShopStand.LABEL_WIDTH],
+		)
+
+	if xs.is_empty():
+		return
+	var left := xs[0] - ShopStand.LABEL_WIDTH * 0.5
+	var right := xs[xs.size() - 1] + ShopStand.LABEL_WIDTH * 0.5
+	check(
+		left >= 0.0 and right <= float(Room.INTERIOR_SIZE.x),
+		"%s: the row's labels stay inside the room (%.0f to %.0f of 0 to %d)" % [
+			what, left, right, Room.INTERIOR_SIZE.x,
+		],
+	)
+
+
+## Stand tiles grouped into rows, as label-centre x positions in room pixels. Only the widest row is
+## returned: it is the one that constrains the others, and rows cannot collide with each other.
+func _stand_x_positions(template: RoomTemplate) -> Array[float]:
+	var rows: Dictionary[int, Array] = {}
+	for tile: Vector2i in template.shop_stands:
+		var x := float(tile.x * Room.TILE_SIZE + Room.TILE_SIZE / 2)
+		if not rows.has(tile.y):
+			rows[tile.y] = []
+		rows[tile.y].append(x)
+
+	var widest: Array[float] = []
+	for row: int in rows:
+		var xs: Array[float] = []
+		xs.assign(rows[row])
+		if xs.size() > widest.size():
+			widest = xs
+	return widest
 
 
 # --- Buying -------------------------------------------------------------------

@@ -23,7 +23,12 @@ const BOSS_SCENE := preload("res://scenes/bosses/merge_conflict.tscn")
 ## How many rare items the boss offers, and where they stand relative to the reward point.
 ## Spec section 16: choose one of three.
 const BOSS_REWARD_COUNT := 3
-const BOSS_REWARD_SPACING := 56.0
+
+## Wide enough for the stands' labels, which is the only thing that decides it: at the 56 pixels this
+## used to be, three item names written above three stands 56 pixels apart overlapped into something
+## unreadable, and the reward the fight is for was the one choice in the run the player could not
+## read. `ShopStand.LABEL_WIDTH` plus a gutter, and tests/test_shop.gd holds the two together.
+const BOSS_REWARD_SPACING := 128.0
 
 ## How far below the top of the screen a room's outer wall sits. The remaining space at the
 ## bottom is the HUD strip, so the HUD never covers playable floor.

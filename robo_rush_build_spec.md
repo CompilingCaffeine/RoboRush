@@ -788,11 +788,13 @@ Do not add elites until the base enemies feel good.
 
 # 16. Boss Design
 
-## Floor 1 Boss: Merge Conflict
+## Floor 1 Boss: The Scrap King
 
 Theme:
 
-A corrupted code integration machine that splits into incompatible versions of itself.
+A machine assembled from everything the megacorp discarded, which splits into two rival copies of itself and drags them back together wrong.
+
+Named the Merge Conflict until the rename. Code, scene, and resource paths still spell it `merge_conflict`, and so does `BossConfig.id`, which is what a save file records as beaten.
 
 Arena:
 
@@ -806,7 +808,7 @@ The boss fires alternating red and green projectile patterns.
 
 ## Phase 2
 
-At 70 percent health, the boss duplicates into two versions.
+At 70 percent health, the boss duplicates into two rival versions.
 
 One version uses red attacks.
 
@@ -816,7 +818,7 @@ Damage to one partially heals the other unless the player destroys one of the fo
 
 ## Phase 3
 
-At 35 percent health, the two versions merge incorrectly into a larger unstable form.
+At 35 percent health, the two versions collapse back together into a larger unstable form.
 
 The boss uses:
 
@@ -1291,7 +1293,7 @@ Deliver:
 4. Scrap economy
 5. Twelve initial items
 6. Floor generation
-7. Merge Conflict boss
+7. The Scrap King boss
 8. Game over screen
 9. Run statistics
 

@@ -187,9 +187,11 @@ not each item in turn. That makes the result independent of the order items were
 up in, which is asserted, and it is why two `+1 bounce` items would be two bounces
 rather than one.
 
-**A boss has one health pool and several bodies.** Spec section 16 has the Merge Conflict
+**A boss has one health pool and several bodies.** Spec section 16 has The Scrap King
 *duplicating* into two versions of itself, and two copies of one thing share what it has
-left. So [merge_conflict.gd](scenes/bosses/merge_conflict.gd) owns the fight and the
+left. So [merge_conflict.gd](scenes/bosses/merge_conflict.gd) — the file keeps the name the
+boss had before it was renamed, as do the scene, the resource, and `BossConfig.id`, which is
+what a save records as beaten — owns the fight and the
 things the player shoots at are [boss_part.gd](scenes/bosses/boss_part.gd)s that carry a
 `HealthComponent` purely as a *receiver* — it is what makes a projectile register a hit at
 all — and forward every hit to the controller. The alternative was teaching projectiles
@@ -431,7 +433,7 @@ scripts/resources/pop_up_drone_config.gd  + Teleport interval, arrival pause, pl
 scripts/resources/memory_leech_config.gd  + Windup, charge speed, recovery
 scripts/resources/firewall_node_config.gd + Beam count, reach, sweep, damage
 scripts/resources/enemy_spawn.gd        + One roster entry: what, how often, how early
-scripts/resources/boss_config.gd        + The Merge Conflict's phases and attacks
+scripts/resources/boss_config.gd        + The Scrap King's phases and attacks
 scripts/resources/shop_config.gd        + Spec section 17's prices
 scripts/resources/feedback_config.gd      Shake, flash, damage numbers, hit pause
 scripts/resources/room_template.gd        One handcrafted room layout, in tiles
@@ -478,7 +480,7 @@ scenes/enemies/ticket_bot.tscn / .gd       Range-keeping shooter
 scenes/enemies/pop_up_drone.tscn / .gd   + Teleports, pauses, fires a spread
 scenes/enemies/memory_leech.tscn / .gd   + Commits to a charge it will not steer
 scenes/enemies/firewall_node.tscn / .gd  + Stationary; sweeps rotating beams
-scenes/bosses/merge_conflict.tscn / .gd  + The Floor 1 boss and its three phases
+scenes/bosses/merge_conflict.tscn / .gd  + The Scrap King and its three phases
 scenes/bosses/boss_part.tscn / .gd       + A shootable body that forwards its hits
 scenes/bosses/boss_terminal.tscn / .gd   + A synchronization terminal
 scenes/shop/shop_room.tscn / .gd         + A shop's stock, rerolls, and exclusive choices
@@ -916,8 +918,8 @@ resulting frames, and by nothing else. The suite was green for all of them.
    being a robot. The other nine still get only a tinted cannon.
 7. **One floor.** Spec section 8's remaining floors are beyond this milestone. `FloorConfig`
    makes most of a floor data, but the claim that a second floor is only a new `.tres` is not
-   true end to end yet: `floor.tscn` assigns Help Desk directly, `FloorController` owns the
-   Merge Conflict and turns its reward into victory, and the HUD, room art, and music all
+   true end to end yet: `floor.tscn` assigns Help Desk directly, `FloorController` owns The
+   Scrap King and turns its reward into victory, and the HUD, room art, and music all
    assume one floor. The Development plan below is where those seams become real.
 8. **Five of spec section 23's twelve game states exist** — main menu, run, paused, game
    over, victory. Settings and the shop are deliberately *not* states: one is a panel over
@@ -958,7 +960,7 @@ resulting frames, and by nothing else. The suite was green for all of them.
 ## Floor 2: Development plan
 
 Spec section 8 calls the next system layer **Development**. It should be a continuous second
-floor, not a separate level selected from a menu: taking the Merge Conflict reward descends
+floor, not a separate level selected from a menu: taking The Scrap King's reward descends
 into Development with the same robot, build, integrity, scrap, shot counter, and run
 statistics. The first boss is then a floor boundary; only the second boss can end the run in
 victory.
@@ -1054,7 +1056,8 @@ Build the transition before building Development content. A small run-level owne
 ordered `FloorConfig` resources; one `FloorController` builds one injected floor and emits
 `floor_completed`, while the run owner decides whether to descend or win. `FloorConfig` gains
 the boss scene and floor theme, and boss identity becomes data consumed by the HUD instead of
-the literal text `MERGE CONFLICT`.
+`CombatHUD.BOSS_NAME`, which is the literal string `THE SCRAP KING` kept in step with the
+resource's `display_name` by a test rather than by a reference.
 
 The same `Player` node crosses the boundary. Integrity, inventory, scrap, shared shot count,
 offered item ids, and statistics survive; dash charges refill, and Development's start room

@@ -16,6 +16,26 @@ extends Node2D
 const GROUP := &"interactable"
 
 const LABEL_FONT_SIZE := 8
+
+## How wide a stand's label is allowed to be, and therefore the closest two stands may ever be
+## placed. Both the shop template's stand tiles and FloorController.BOSS_REWARD_SPACING are set from
+## this, and tests/test_shop.gd measures the whole item pool against it.
+##
+## The number is what a 26-tile room can afford: three labels plus gutters plus a margin off each
+## wall inside 416 pixels. The shipped pool's longest tag is "REINFORCED CHASSIS  40" at 132 pixels
+## of six-pixel characters, which is wider than that, so it wraps to a second line — a two-line tag
+## is legible and a tag written across the one beside it is not. Widening this instead is not
+## available: three 132-pixel labels do not fit in the room at all.
+const LABEL_WIDTH := 120.0
+
+## How far the label's baseline sits above the stand. It grows upward from here, so wrapping a long
+## name never pushes text down over the stand it belongs to.
+const LABEL_BOTTOM := -14.0
+const LABEL_LINES := 2
+
+## Draws the tag over room scenery rather than under it. Below the HUD, which lives on its own
+## CanvasLayer and is unaffected either way.
+const LABEL_Z_INDEX := 10
 const AFFORDABLE := Color("f2a13c")
 const TOO_EXPENSIVE := Color("6d7a8c")
 const SOLD := Color("3c4654")
@@ -44,7 +64,25 @@ var shop: ShopRoom
 func _ready() -> void:
 	add_to_group(GROUP)
 	_label.add_theme_font_size_override("font_size", LABEL_FONT_SIZE)
+	_size_label()
 	refresh()
+
+
+## The label's box, from code rather than from the scene, because `LABEL_WIDTH` is also what decides
+## how far apart the stands stand — two numbers that have to agree should be one number.
+func _size_label() -> void:
+	_label.offset_left = -LABEL_WIDTH * 0.5
+	_label.offset_right = LABEL_WIDTH * 0.5
+	_label.offset_bottom = LABEL_BOTTOM
+	_label.offset_top = LABEL_BOTTOM - float(LABEL_FONT_SIZE * LABEL_LINES + 4)
+	# Wrapped and bottom-aligned: a name too long for its slot costs a line above the stand rather
+	# than running into the stand next to it.
+	_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	# Above the room. A tag is as wide as the label, and the room's scenery sits wherever the
+	# template put it: the shop's corner blocks were drawn over the first two letters of
+	# "REINFORCED CHASSIS", which reads as a shorter item rather than as an obscured one.
+	_label.z_index = LABEL_Z_INDEX
 
 
 ## Called by the shop when anything changes — a purchase, a reroll, or the player's scrap

@@ -6,10 +6,10 @@
 script = ExtResource("1_template")
 id = &"shop_bay"
 type = 4
-obstacles = Array[Rect2i]([Rect2i(2, 2, 1, 1), Rect2i(23, 2, 1, 1), Rect2i(2, 9, 1, 1), Rect2i(23, 9, 1, 1)])
+obstacles = Array[Rect2i]([Rect2i(2, 1, 1, 1), Rect2i(23, 1, 1, 1), Rect2i(2, 9, 1, 1), Rect2i(23, 9, 1, 1)])
 enemy_spawns = Array[Vector2i]([])
 reward_spawn = Vector2i(13, 9)
-shop_stands = Array[Vector2i]([Vector2i(7, 4), Vector2i(13, 4), Vector2i(19, 4), Vector2i(13, 8)])
+shop_stands = Array[Vector2i]([Vector2i(5, 4), Vector2i(13, 4), Vector2i(21, 4), Vector2i(13, 8)])
 difficulty = 0
 floor_tags = Array[StringName]([&"help_desk"])
 min_floor = 1
