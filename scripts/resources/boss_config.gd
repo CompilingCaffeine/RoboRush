@@ -1,6 +1,6 @@
 class_name BossConfig
 extends Resource
-## Tuning for the Merge Conflict, spec section 16's Floor 1 boss.
+## Tuning for The Scrap King, spec section 16's Floor 1 boss.
 ##
 ## One resource for a fight with three phases, because the phases are the same machine at
 ## different settings — the same two projectile colours, the same arena, the same health
@@ -10,9 +10,15 @@ extends Resource
 ## Stable identifier, used by the save file to record that this boss has been beaten. Kept
 ## separate from `display_name` for the same reason `ItemConfig` does: the name on screen is
 ## allowed to change without invalidating everyone's save.
+##
+## That is not hypothetical any more — this boss was called the Merge Conflict and is now The Scrap
+## King, and the id is the one part of it that did not change. Renaming it would have made every save
+## that has beaten the boss report that it has not.
 @export var id: StringName = &"merge_conflict"
 
-@export var display_name: String = "Merge Conflict"
+## The name the player reads. CombatHUD.BOSS_NAME is the same name in the HUD's own casing, and
+## tests/test_boss.gd asserts the two agree.
+@export var display_name: String = "The Scrap King"
 
 @export_group("Durability")
 

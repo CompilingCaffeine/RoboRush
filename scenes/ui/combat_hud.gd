@@ -18,6 +18,17 @@ extends Control
 ## walk. What each item *does* is never stated on screen — an item that has to be read about is an
 ## item the player never noticed working.
 
+## The floor boss, as the player reads it. Named here rather than taken from `BossConfig` because
+## nothing hands the HUD the boss's config — the phase signal carries an integer — and a name is
+## cheaper to keep in step than a reference to plumb. tests/test_boss.gd asserts it matches
+## `display_name` in the boss's own resource, which is what stops the two drifting apart.
+const BOSS_NAME := "THE SCRAP KING"
+
+## Shown when the boss dies, and shown again *before* it dies: the feigned death at the end of every
+## phase uses the same words on purpose (see MergeConflict._begin_feint). One constant rather than
+## two strings, so the lie cannot drift out of step with the truth it is imitating.
+const BOSS_DEFEAT_BANNER := "THE KING IS DEAD"
+
 const PIP_SIZE := Vector2(5, 8)
 const PIP_SEPARATION := 1
 const FONT_SIZE := UIPalette.FONT_SIZE
@@ -219,25 +230,29 @@ func _on_boss_health_changed(ratio: float) -> void:
 ## coming, and the bar above it is built to convince them there are none left — see
 ## MergeConflict._begin_feint. What each phase gets instead is a name, which says what changed
 ## without saying how much is left.
+##
+## The two of them are also the answer to the lie below. "THE KING IS DEAD" is a complete sentence
+## and the player is meant to believe it; the only thing that can follow that is the rest of the
+## saying.
 func _on_boss_phase_changed(phase: int) -> void:
-	_boss_label.text = "MERGE CONFLICT"
+	_boss_label.text = BOSS_NAME
 	match phase:
 		2:
-			_show_banner("CONFLICT REOPENED  //  TWO VERSIONS", BANNER_BOSS)
+			_show_banner("LONG LIVE THE KING  //  TWO CLAIMANTS", BANNER_BOSS)
 		3:
-			_show_banner("FORCE MERGE  //  ONE UNSTABLE VERSION", BANNER_BOSS)
+			_show_banner("THE KING REASSEMBLES  //  ONE UNSTABLE HEAP", BANNER_BOSS)
 
 
 ## The one place the HUD lies to the player: the same words and the same colour as a real victory,
 ## minus the reward line they would go looking for and not find. The bar has already emptied itself
 ## through `_on_boss_health_changed`, which is what hides it.
 func _on_boss_feigned_defeat(_boss: Node, _at: Vector2) -> void:
-	_show_banner("CONFLICT RESOLVED", BANNER_CLEAR)
+	_show_banner(BOSS_DEFEAT_BANNER, BANNER_CLEAR)
 
 
 func _on_boss_defeated(_boss: Node) -> void:
 	_boss_bar.visible = false
-	_show_banner("CONFLICT RESOLVED  //  CHOOSE ONE REWARD", BANNER_CLEAR)
+	_show_banner("%s  //  CHOOSE ONE REWARD" % BOSS_DEFEAT_BANNER, BANNER_CLEAR)
 
 
 ## The name and nothing else. The item's effect is deliberately not stated anywhere on screen: what

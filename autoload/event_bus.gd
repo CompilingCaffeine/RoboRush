@@ -85,7 +85,7 @@ signal room_cleared()
 signal boss_defeated(boss: Node)
 
 ## Boss health changed, for the boss bar. `ratio` is 0..1 of the *current phase*, not of the
-## fight: the Merge Conflict's bar empties at the end of every phase and refills when the next one
+## fight: The Scrap King's bar empties at the end of every phase and refills when the next one
 ## begins, which is deliberate (see MergeConflict._begin_feint). Nothing reading this signal can
 ## tell how much fight is left, and that is the intent.
 signal boss_health_changed(ratio: float)

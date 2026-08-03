@@ -6,7 +6,7 @@
 
 [resource]
 script = ExtResource("1_boss")
-display_name = "Merge Conflict"
+display_name = "The Scrap King"
 max_health = 60.0
 duplicate_at = 0.7
 merge_at = 0.35

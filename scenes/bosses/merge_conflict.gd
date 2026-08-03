@@ -1,7 +1,13 @@
 class_name MergeConflict
 extends Node2D
-## Spec section 16's Floor 1 boss: a corrupted integration machine that splits into
-## incompatible versions of itself and then merges them back together wrong.
+## Spec section 16's Floor 1 boss, **The Scrap King**: a machine built out of everything the
+## megacorp threw away, which splits into two rival copies of itself and then drags them back
+## together into something worse.
+##
+## The class, the scene, and the config id are all still spelled `merge_conflict`, which was the
+## boss's name until it was renamed. Left alone deliberately: `BossConfig.id` is what a save file
+## records as "beaten", and file paths are what half the project's `preload`s point at. The name the
+## player reads lives in `BossConfig.display_name` and in CombatHUD.BOSS_NAME.
 ##
 ## The controller owns the fight; the bodies the player shoots at are `BossPart`s that
 ## forward their hits here. That split is what lets phase two put two bodies in the arena
@@ -228,9 +234,9 @@ func _advance_phase() -> void:
 ## like one the player has just won: an empty bar, no bodies left to shoot, no attacks, and the
 ## boss theme fading out. Then the boss stands up with a full bar and a new phase.
 ##
-## The deception is the point. It is a fight called Merge Conflict — the thing it is named after
-## does not resolve on the first attempt either — and the player who has just watched a health bar
-## reach zero is the player least ready for the phase that follows.
+## The deception is the point. A king made of scrap is a king made of parts that can be picked back
+## up, and the player who has just watched a health bar reach zero is the player least ready for the
+## phase that follows.
 ##
 ## Built out of the same events a real death uses (`_die` emits `boss_defeated`, this emits
 ## `boss_feigned_defeat`) so that the HUD and FeedbackDirector present the lie with the same code

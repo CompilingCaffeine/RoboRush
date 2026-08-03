@@ -1,5 +1,8 @@
 extends TestCase
-## Checks for spec section 16's Merge Conflict.
+## Checks for spec section 16's Floor 1 boss, The Scrap King.
+##
+## Everything in code still spells it `merge_conflict` — the class, the scene, the config id — which
+## was its name before it was renamed and is deliberately left alone (see MergeConflict's header).
 ##
 ## A boss is the one fight in the game the player cannot avoid, so the checks here are
 ## about the fight being *winnable and honest* rather than about it looking right. Three
@@ -42,6 +45,7 @@ func run() -> void:
 		return
 
 	_test_config_matches_the_spec()
+	_test_the_hud_calls_it_by_its_name()
 
 	await _test_the_boss_starts_alone_and_alternating()
 	await _test_duplicates_at_seventy_percent()
@@ -79,6 +83,23 @@ func _test_config_matches_the_spec() -> void:
 		"for long enough that the music actually goes quiet (%.1fs against a %.1fs fade)" % [
 			_config.feigned_death_seconds, AudioManager.MUSIC_FADE_SECONDS,
 		],
+	)
+
+
+## The boss's name exists in two places — its resource and the HUD constant that draws it — because
+## nothing hands the HUD a `BossConfig`. Two copies of a name is exactly the arrangement that ends
+## with a boss bar labelled with the name the boss used to have, so the two are checked against each
+## other here. Casing aside: the HUD shouts, the resource does not.
+func _test_the_hud_calls_it_by_its_name() -> void:
+	check(
+		CombatHUD.BOSS_NAME == _config.display_name.to_upper(),
+		"the boss bar says '%s' and the boss is called '%s'" % [
+			CombatHUD.BOSS_NAME, _config.display_name,
+		],
+	)
+	check(
+		not _config.display_name.is_empty() and _config.display_name != "Unnamed Boss",
+		"and it is a name someone chose",
 	)
 
 
