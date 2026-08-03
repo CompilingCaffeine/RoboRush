@@ -12,11 +12,11 @@ extends Control
 ## They are built in code from the player's actual maximum and rebuilt whenever an item
 ## moves that maximum, so Reinforced Chassis and Unsafe Overclock need no HUD code.
 ##
-## Items get two readouts, because they answer two different questions. The banner names
-## the item and what it does, once, when it is picked up — the only time the game ever
-## explains an item. The bar along the bottom is the standing answer to "what am I
-## running", which is the question the player asks before deciding whether the next
-## treasure room is worth the walk.
+## Items get two readouts, and neither of them explains anything. The banner names the item once,
+## when it is picked up; the bar along the bottom is the standing answer to "what am I running",
+## which is the question the player asks before deciding whether the next treasure room is worth the
+## walk. What each item *does* is never stated on screen — an item that has to be read about is an
+## item the player never noticed working.
 
 const PIP_SIZE := Vector2(5, 8)
 const PIP_SEPARATION := 1
@@ -240,12 +240,14 @@ func _on_boss_defeated(_boss: Node) -> void:
 	_show_banner("CONFLICT RESOLVED  //  CHOOSE ONE REWARD", BANNER_CLEAR)
 
 
-## Name and effect together, because an item the player cannot read is an item they cannot
-## build around — and the description is the only place the game ever states what the thing
-## does. One line rather than two: the banner sits over playable floor, and a two-line
-## banner hides enemies during the seconds after a room clears.
+## The name and nothing else. The item's effect is deliberately not stated anywhere on screen: what
+## a piece of salvaged hardware does is for the player to notice in the next room, not to read in a
+## banner. Naming it still matters — a nameless pickup cannot be recognised, talked about, or
+## remembered as the thing that made the last run work.
+##
+## `ItemConfig.description` is still authored for every item; it is a design note now, not copy.
 func _on_item_collected(item: ItemConfig) -> void:
-	_show_banner("%s  //  %s" % [item.display_name.to_upper(), item.description.to_upper()], BANNER_ITEM)
+	_show_banner(item.display_name.to_upper(), BANNER_ITEM)
 	_rebuild_capacity_pips()
 	_add_item_icon(item)
 
@@ -253,11 +255,15 @@ func _on_item_collected(item: ItemConfig) -> void:
 ## Items accumulate left to right in the order they were found, which is the order the
 ## player remembers them in. No icon for an item without one, rather than a blank slot that
 ## reads as a bug.
+##
+## The tooltip names the icon and stops there, for the same reason the pickup banner does. A
+## description here would put the answer one hover away and make the discovery optional, which for
+## anyone playing with a mouse on the screen is no discovery at all.
 func _add_item_icon(item: ItemConfig) -> void:
 	if item.icon == null:
 		return
 	var icon := TextureRect.new()
 	icon.texture = item.icon
-	icon.tooltip_text = "%s: %s" % [item.display_name, item.description]
+	icon.tooltip_text = item.display_name
 	icon.custom_minimum_size = item.icon.get_size()
 	_item_bar.add_child(icon)

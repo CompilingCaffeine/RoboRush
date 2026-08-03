@@ -44,7 +44,12 @@ enum Category {
 
 @export var display_name: String = "Unnamed Item"
 
-## Shown on the pickup banner. Written as the effect, not as the numbers.
+## What the item actually does, written as the effect rather than as the numbers.
+##
+## Not shown to the player anywhere, deliberately: an item explains itself by being used, and the
+## pickup banner gives the name only. This is the design record — the one place a reader can find
+## out what an item is supposed to do without reading `ItemEffects` — and it is required of every
+## shipped item for that reason, not for the player's benefit.
 @export_multiline var description: String = ""
 
 @export var rarity: Rarity = Rarity.COMMON

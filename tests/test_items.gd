@@ -85,9 +85,11 @@ func _test_items_load() -> void:
 	for id: StringName in _items:
 		var item := _items[id]
 		check(not item.display_name.is_empty(), "%s has a display name" % id)
-		# The description is the only place the game ever states what an item does, so an
-		# empty one is a shipped item nobody can understand.
-		check(not item.description.is_empty(), "%s has a description" % id)
+		# The player is never told what an item does — that is the point of the pickup banner
+		# carrying a name and nothing else. This is the only place a *reader* is told, which is
+		# why it is still required: an item with no description is one whose intended effect
+		# exists nowhere outside ItemEffects.
+		check(not item.description.is_empty(), "%s has a description on record" % id)
 		check(item.icon != null, "%s has an icon" % id)
 		check(not item.tags.is_empty(), "%s is tagged" % id)
 
