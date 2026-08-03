@@ -16,6 +16,10 @@ extends Node2D
 ##
 ## The terminals are the fight's one idea. While any survives, damage is partly refunded,
 ## so the phase-two answer is not "aim better" — it is "stop shooting the boss".
+##
+## The bar is the fight's other idea, and it lies. It reports the phase rather than the pool, so
+## it empties completely three times: twice on a boss that then gets back up, and once for real.
+## See `_begin_feint`.
 
 const PART_SCENE := preload("res://scenes/bosses/boss_part.tscn")
 const TERMINAL_SCENE := preload("res://scenes/bosses/boss_terminal.tscn")
@@ -54,6 +58,13 @@ var _terminals: Array[BossTerminal] = []
 ## and a refund that lapsed for that frame would be a refund the player did not earn.
 var _terminals_remaining := 0
 
+## Counts down the beat at the end of a phase where the boss plays dead. Zero whenever the fight
+## is actually happening.
+var _feign_left := 0.0
+
+## The phase the current feint is on its way to. Only meaningful while `_feign_left` is positive.
+var _next_phase := Phase.DUPLICATED
+
 var _arena: Rect2
 var _player: Node2D
 var _attack_left := 0.0
@@ -85,6 +96,12 @@ func _physics_process(delta: float) -> void:
 		return
 
 	_player = _find_player()
+	# Nothing else runs while it is playing dead. A corpse that drifted toward the player would
+	# give the whole thing away before the player had time to believe it.
+	if is_feigning_defeat():
+		_step_feint(delta)
+		return
+
 	_step_charge(delta)
 	_step_drift(delta)
 	_step_attacks(delta)
@@ -103,6 +120,43 @@ func get_health() -> float:
 
 func get_health_ratio() -> float:
 	return _health / maxf(config.max_health, 0.001)
+
+
+## What the boss bar shows, and it is not `get_health_ratio`: how much of *this phase* is left.
+## Each phase drains a full bar and the next one refills it, so the player watching the bar sees
+## the fight end three times.
+func get_phase_health_ratio() -> float:
+	var bottom := _phase_floor()
+	var span := _phase_ceiling() - bottom
+	return clampf((get_health_ratio() - bottom) / maxf(span, 0.001), 0.0, 1.0)
+
+
+## True during the beat at the end of a phase where the boss is pretending the fight is over.
+## Nothing can be damaged and nothing is fired.
+func is_feigning_defeat() -> bool:
+	return _feign_left > 0.0
+
+
+## The health fraction the current phase ends on — the next threshold down, and zero in the last
+## phase, where the end of the bar really is the end of the fight.
+func _phase_floor() -> float:
+	match _phase:
+		Phase.ALTERNATING:
+			return config.duplicate_at
+		Phase.DUPLICATED:
+			return config.merge_at
+		_:
+			return 0.0
+
+
+func _phase_ceiling() -> float:
+	match _phase:
+		Phase.ALTERNATING:
+			return 1.0
+		Phase.DUPLICATED:
+			return config.duplicate_at
+		_:
+			return config.merge_at
 
 
 func get_terminal_count() -> int:
@@ -137,7 +191,7 @@ func get_parts() -> Array[BossPart]:
 ## Every hit on either body arrives here, so there is exactly one place that decides what a
 ## hit is worth and exactly one place the fight can end.
 func _on_part_damaged(info: DamageInfo) -> void:
-	if _is_dead:
+	if _is_dead or is_feigning_defeat():
 		return
 
 	var dealt := info.amount
@@ -147,7 +201,11 @@ func _on_part_damaged(info: DamageInfo) -> void:
 		# stops being true the moment they break the last terminal.
 		dealt *= 1.0 - config.desync_heal_fraction
 
-	_health = maxf(_health - dealt, 0.0)
+	# Floored at the end of the current phase rather than at zero, so overkill is absorbed at the
+	# boundary instead of carrying into the next phase. That costs a strong build a fraction of one
+	# shot and buys the fight its structure: every phase is entered on a full bar and left on an
+	# empty one, and no build is powerful enough to skip a phase and with it the trick.
+	_health = maxf(_health - dealt, _phase_floor() * config.max_health)
 	EventBus.enemy_damaged.emit(self, DamageInfo.new(dealt, info.source), _health)
 	_announce_health()
 
@@ -161,23 +219,70 @@ func _on_part_damaged(info: DamageInfo) -> void:
 func _advance_phase() -> void:
 	var ratio := get_health_ratio()
 	if _phase == Phase.ALTERNATING and ratio <= config.duplicate_at:
-		_enter_duplicated()
+		_begin_feint(Phase.DUPLICATED)
 	elif _phase == Phase.DUPLICATED and ratio <= config.merge_at:
+		_begin_feint(Phase.MERGED)
+
+
+## Ends the phase without ending the fight. For `feigned_death_seconds` the arena reads exactly
+## like one the player has just won: an empty bar, no bodies left to shoot, no attacks, and the
+## boss theme fading out. Then the boss stands up with a full bar and a new phase.
+##
+## The deception is the point. It is a fight called Merge Conflict — the thing it is named after
+## does not resolve on the first attempt either — and the player who has just watched a health bar
+## reach zero is the player least ready for the phase that follows.
+##
+## Built out of the same events a real death uses (`_die` emits `boss_defeated`, this emits
+## `boss_feigned_defeat`) so that the HUD and FeedbackDirector present the lie with the same code
+## that presents the truth. A fake death assembled from different parts is a fake death the player
+## can spot.
+func _begin_feint(next: Phase) -> void:
+	_next_phase = next
+	_feign_left = config.feigned_death_seconds
+	# Whatever it was in the middle of is abandoned: a telegraph that resolved into a ring of
+	# projectiles out of a dead boss would answer the question the feint is asking.
+	_telegraph_left = 0.0
+	_charge_left = 0.0
+
+	var where := global_position
+	for part: BossPart in get_parts():
+		where = part.global_position
+		part.set_inert(true)
+	EventBus.boss_feigned_defeat.emit(self, where)
+
+
+## The far side of the feint. The bodies that were hidden come back — `_enter_merged` throws the
+## clone away a moment later, and it is cheaper to un-hide both than to reason about which of them
+## the next phase wants.
+func _step_feint(delta: float) -> void:
+	_feign_left -= delta
+	if _feign_left > 0.0:
+		return
+
+	_feign_left = 0.0
+	for part: BossPart in get_parts():
+		part.set_inert(false)
+	if _next_phase == Phase.MERGED:
 		_enter_merged()
+	else:
+		_enter_duplicated()
 
 
 ## The phase itself changes immediately; the bodies it brings arrive next frame.
 ##
-## A phase change is reached from a projectile's hit callback, and registering a new body's
-## collision shape while the physics server is flushing queries is refused outright — the
-## fifth time this project has met that trap. Splitting it this way keeps every piece of
-## *state* the fight depends on correct within the frame the threshold was crossed, and
-## defers only the part Godot will not accept yet.
+## The trap this deferral was written for is no longer reachable: a phase change used to happen
+## inside a projectile's hit callback, where registering a new body's collision shape is refused
+## outright — the fifth time this project met that error — and it now happens on the far side of the
+## feint, on an ordinary physics frame. The deferral stays because it costs one frame nobody can
+## see and this is the file that has paid for that lesson five times.
 func _enter_duplicated() -> void:
 	_phase = Phase.DUPLICATED
 	_terminals_remaining = config.terminal_count
 	_primary.set_tint(RED)
 	_attack_left = config.phase_two_interval
+	# Before the signal, so anything reacting to the new phase reads the refilled bar and not the
+	# empty one the phase before it ended on.
+	_announce_health()
 	EventBus.boss_phase_changed.emit(int(_phase))
 	_build_duplicate.call_deferred()
 
@@ -202,6 +307,7 @@ func _enter_merged() -> void:
 	_primary.set_tint(Color(1.0, 0.75, 0.55, 1.0))
 	_clear_terminals()
 	_attack_left = config.phase_three_interval
+	_announce_health()
 	EventBus.boss_phase_changed.emit(int(_phase))
 
 
@@ -456,7 +562,7 @@ func _gap_index(count: int) -> int:
 
 
 func _announce_health() -> void:
-	EventBus.boss_health_changed.emit(get_health_ratio())
+	EventBus.boss_health_changed.emit(get_phase_health_ratio())
 
 
 func _find_player() -> Node2D:

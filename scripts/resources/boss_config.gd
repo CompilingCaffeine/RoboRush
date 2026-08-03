@@ -26,6 +26,12 @@ extends Resource
 ## Health fraction at which the two versions merge. Spec section 16: 35 percent.
 @export_range(0.0, 1.0) var merge_at: float = 0.35
 
+## Seconds the boss spends playing dead at the end of each phase, with an empty bar and nothing
+## to shoot at. Two seconds because the music has to actually go quiet for the trick to land, and
+## AudioManager.MUSIC_FADE_SECONDS is 1.2 — a shorter beat is a boss that stumbles rather than a
+## boss that dies. Longer than about three and the player stops waiting and starts leaving.
+@export var feigned_death_seconds: float = 2.0
+
 ## Fraction of damage refunded while the versions are still synchronised. This is spec
 ## section 16's "damage to one partially heals the other", and destroying a terminal is how
 ## the player turns it off.

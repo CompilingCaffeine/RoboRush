@@ -99,6 +99,7 @@ func _ready() -> void:
 	EventBus.item_collected.connect(_on_item_collected)
 	EventBus.boss_health_changed.connect(_on_boss_health_changed)
 	EventBus.boss_phase_changed.connect(_on_boss_phase_changed)
+	EventBus.boss_feigned_defeat.connect(_on_boss_feigned_defeat)
 	EventBus.boss_defeated.connect(_on_boss_defeated)
 	# Scrap and floor progress are pushed rather than polled: unlike integrity they change
 	# rarely, so a signal is both cheaper and easier to reason about than a per-frame read.
@@ -214,10 +215,24 @@ func _on_boss_health_changed(ratio: float) -> void:
 	_boss_fill.anchor_right = clampf(ratio, 0.0, 1.0)
 
 
+## No phase number anywhere on screen, deliberately. "PHASE 1" tells the player there are more
+## coming, and the bar above it is built to convince them there are none left — see
+## MergeConflict._begin_feint. What each phase gets instead is a name, which says what changed
+## without saying how much is left.
 func _on_boss_phase_changed(phase: int) -> void:
-	_boss_label.text = "MERGE CONFLICT    PHASE %d" % phase
-	if phase > 1:
-		_show_banner("MERGE CONFLICT  //  PHASE %d" % phase, BANNER_BOSS)
+	_boss_label.text = "MERGE CONFLICT"
+	match phase:
+		2:
+			_show_banner("CONFLICT REOPENED  //  TWO VERSIONS", BANNER_BOSS)
+		3:
+			_show_banner("FORCE MERGE  //  ONE UNSTABLE VERSION", BANNER_BOSS)
+
+
+## The one place the HUD lies to the player: the same words and the same colour as a real victory,
+## minus the reward line they would go looking for and not find. The bar has already emptied itself
+## through `_on_boss_health_changed`, which is what hides it.
+func _on_boss_feigned_defeat(_boss: Node, _at: Vector2) -> void:
+	_show_banner("CONFLICT RESOLVED", BANNER_CLEAR)
 
 
 func _on_boss_defeated(_boss: Node) -> void:

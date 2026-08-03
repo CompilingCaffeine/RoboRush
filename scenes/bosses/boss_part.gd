@@ -37,6 +37,18 @@ func set_tint(tint: Color) -> void:
 		_sprite.modulate = tint
 
 
+## Takes this body out of the fight without ending it: invisible, and nothing a projectile can
+## find. Used for the beat where the boss plays dead between phases.
+##
+## Hidden rather than freed and rebuilt, because the same body has to get up in the same place —
+## a boss that came back somewhere else would read as a second enemy. The collision layer goes
+## with the sprite deliberately: an invisible body that still stopped shots would have the player
+## fighting something they cannot see, which is a worse trick than the one intended.
+func set_inert(inert: bool) -> void:
+	visible = not inert
+	collision_layer = 0 if inert else Teams.body_layer(Teams.Id.ENEMY)
+
+
 func get_sprite() -> Sprite2D:
 	return _sprite
 

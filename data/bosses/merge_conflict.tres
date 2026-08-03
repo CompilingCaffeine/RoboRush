@@ -10,6 +10,7 @@ display_name = "Merge Conflict"
 max_health = 60.0
 duplicate_at = 0.7
 merge_at = 0.35
+feigned_death_seconds = 2.0
 desync_heal_fraction = 0.75
 terminal_count = 4
 terminal_health = 6.0

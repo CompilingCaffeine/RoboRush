@@ -67,6 +67,7 @@ func _ready() -> void:
 	EventBus.room_entered.connect(_on_room_entered)
 	EventBus.purchase_made.connect(_on_purchase_made)
 	EventBus.boss_phase_changed.connect(_on_boss_phase_changed)
+	EventBus.boss_feigned_defeat.connect(_on_boss_feigned_defeat)
 	EventBus.boss_defeated.connect(_on_boss_defeated)
 
 
@@ -154,10 +155,31 @@ func _on_purchase_made(cost: int) -> void:
 
 ## Spec section 22 lists the boss phase transition among its priority sounds. Phase one is the
 ## fight starting, which the boss music already announced.
+##
+## Every phase after the first begins on the far side of a feigned death, so this is also where the
+## music comes back. Restarting it *here* rather than on a timer is what makes the boss theme
+## returning read as the boss standing up, and it is the one thing the player has left to go on
+## after the bar refilled.
 func _on_boss_phase_changed(phase: int) -> void:
 	if phase > 1:
 		AudioManager.play_sfx(&"boss_phase")
 		_add_trauma(SHAKE_BOSS_PHASE)
+		AudioManager.play_music(&"boss")
+
+
+## The boss playing dead gets exactly what dying gets: the death burst, the death sound, a kill's
+## worth of shake, and the music going out. Deliberately not a softer version of it — a fake death
+## the player can tell apart from the real one is only a pause in the fight, and this fight is
+## built to be believed. The lie is corrected by `_on_boss_phase_changed` two seconds later.
+func _on_boss_feigned_defeat(_boss: Node, at: Vector2) -> void:
+	var burst: OneShotBurst = DEATH_BURST.instantiate()
+	burst.position = at
+	add_child(burst)
+
+	AudioManager.play_sfx(&"enemy_death")
+	AudioManager.stop_music()
+	_add_trauma(SHAKE_ENEMY_KILLED)
+	GameManager.hit_pause()
 
 
 func _on_boss_defeated(_boss: Node) -> void:

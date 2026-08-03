@@ -10,6 +10,12 @@ extends TestCase
 ## The boss is damaged through its parts rather than by reaching into its health, because
 ## the parts are the only thing a projectile can hit and the forwarding between them is
 ## precisely what could break.
+##
+## The fight also lies to the player: its bar reports the phase rather than the pool, and each phase
+## ends with the boss playing dead for a couple of seconds. That is a deliberate deception of the
+## *player*, so it has to be an undeceived certainty here — the checks below pin that the bar really
+## does empty and refill, that the feigned death costs the player nothing except the wait, and that
+## the fight still ends exactly once when it finally does end.
 
 const BOSS_SCENE := preload("res://scenes/bosses/merge_conflict.tscn")
 const BOSS_CONFIG_PATH := "res://data/bosses/merge_conflict.tres"
@@ -17,6 +23,13 @@ const PLAYER_SCENE := preload("res://scenes/player/player.tscn")
 
 const ARENA := Rect2(Vector2.ZERO, Vector2(416.0, 192.0))
 const RIVET_PATH := "res://data/projectiles/rivet.tres"
+
+## What the feigned death is shortened to for the tests. The shipped two seconds are tuned for a
+## player's patience and the music fade, and every phase end here would wait them out in real time —
+## which is a suite that takes half a minute longer to make exactly the same assertions. The shipped
+## value is checked as a value, in `_test_config_matches_the_spec`; what these tests exercise is
+## that the beat happens, blocks damage, and ends in the next phase, and 0.2s does that faithfully.
+const TEST_FEINT_SECONDS := 0.2
 
 var _config: BossConfig
 var _arena: Node2D
@@ -38,6 +51,9 @@ func run() -> void:
 	await _test_the_fight_ends_once()
 	await _test_the_boss_actually_attacks()
 	await _test_health_is_announced()
+	await _test_the_bar_empties_and_refills_for_every_phase()
+	await _test_playing_dead_is_not_a_free_hit()
+	await _test_no_single_hit_skips_a_phase()
 	await _test_the_boss_fights_inside_its_arena()
 	await _test_real_projectiles_drive_the_whole_fight()
 
@@ -52,6 +68,18 @@ func _test_config_matches_the_spec() -> void:
 		"damage to one version partially heals the other while they are synchronised",
 	)
 	check(_config.wall_gap > 0, "its projectile walls have a gap to run through")
+	check(
+		_config.feigned_death_seconds > 0.0,
+		"it spends a moment playing dead at the end of each phase",
+	)
+	# The music going quiet is most of what sells the fake death, and a feint shorter than the
+	# crossfade would end before the boss theme finished leaving.
+	check(
+		_config.feigned_death_seconds >= AudioManager.MUSIC_FADE_SECONDS,
+		"for long enough that the music actually goes quiet (%.1fs against a %.1fs fade)" % [
+			_config.feigned_death_seconds, AudioManager.MUSIC_FADE_SECONDS,
+		],
+	)
 
 
 ## Phase one: one body, alternating patterns, and no terminals to break yet.
@@ -62,6 +90,8 @@ func _test_the_boss_starts_alone_and_alternating() -> void:
 	check(_boss.get_terminal_count() == 0, "with no terminals yet")
 	check(not _boss.is_synchronised(), "and nothing to synchronise with")
 	check_near(_boss.get_health_ratio(), 1.0, "at full health")
+	check_near(_boss.get_phase_health_ratio(), 1.0, "showing a full bar")
+	check(not _boss.is_feigning_defeat(), "and fighting rather than playing dead")
 	await _teardown()
 
 
@@ -73,30 +103,29 @@ func _test_duplicates_at_seventy_percent() -> void:
 	check(_boss.get_parts().size() == 1, "above 70 percent it stays single")
 
 	_hurt(_config.max_health * 0.1)
+	# Crossing the threshold does not start the next phase — it starts the feigned death that
+	# hides it, and the phase the player thinks was the whole fight is still the current one.
+	check(_boss.is_feigning_defeat(), "crossing 70 percent makes it play dead")
+	check(_boss.get_phase() == MergeConflict.Phase.ALTERNATING, "with the phase not yet changed")
+	check_near(_boss.get_phase_health_ratio(), 0.0, "and an empty bar")
+	check(_boss.get_parts().size() == 1, "and no second body given away early")
+
+	await _wait_out_the_feint()
 	check(
 		_boss.get_phase() == MergeConflict.Phase.DUPLICATED,
-		"crossing 70 percent duplicates it",
+		"and then it duplicates rather than dying",
 	)
-	# The state changes in the frame the threshold is crossed, even though the bodies it
-	# brings cannot be added until the next one. The refund must not lapse in between.
-	check(_boss.get_terminal_count() == 4, "and its terminals count immediately")
+	check(_boss.get_terminal_count() == 4, "with its four terminals")
 	check(_boss.is_synchronised(), "so the two are in sync from the moment they split")
-	# Deliberately asserting the *deferral*, not just the outcome. A phase change is
-	# reached from inside a projectile's hit callback, where Godot refuses to register a
-	# new body's collision shape; building the clone there prints a wall of errors. This
-	# check fails if anyone makes the spawn immediate again.
-	check(_boss.get_parts().size() == 1, "the second body is not built inside the hit callback")
-
-	await advance_physics(2)
-	check(_boss.get_parts().size() == 2, "and arrives on the next frame instead")
+	check(_boss.get_parts().size() == 2, "and the second body has arrived")
+	check_near(_boss.get_phase_health_ratio(), 1.0, "on a bar that has refilled")
 	await _teardown()
 
 
 ## The rule that makes phase two a puzzle rather than a longer phase one.
 func _test_synchronised_damage_is_refunded() -> void:
 	await _begin()
-	_hurt(_config.max_health * 0.35)
-	await advance_physics(2)
+	await _end_the_phase()
 	var synchronised := _boss.is_synchronised()
 	check(synchronised, "the boss reached its synchronised phase")
 	if not synchronised:
@@ -116,9 +145,7 @@ func _test_synchronised_damage_is_refunded() -> void:
 
 func _test_breaking_terminals_stops_the_refund() -> void:
 	await _begin()
-	_hurt(_config.max_health * 0.35)
-	# The terminals exist as nodes a frame later; they cannot be shot before that.
-	await advance_physics(2)
+	await _end_the_phase()
 	var synchronised := _boss.is_synchronised()
 	check(synchronised, "the boss reached its synchronised phase")
 	if not synchronised:
@@ -145,8 +172,12 @@ func _test_merges_at_thirty_five_percent() -> void:
 	await _begin()
 	await _destroy_terminals_after_duplication()
 
-	_hurt_to_ratio(0.2)
-	check(_boss.get_phase() == MergeConflict.Phase.MERGED, "crossing 35 percent merges it")
+	_hurt(_config.max_health * 10.0)
+	check(_boss.is_feigning_defeat(), "crossing 35 percent plays dead a second time")
+	check(_boss.get_phase() == MergeConflict.Phase.DUPLICATED, "still in the phase it is ending")
+
+	await _wait_out_the_feint()
+	check(_boss.get_phase() == MergeConflict.Phase.MERGED, "and then merges")
 	check(_boss.get_health() > 0.0, "and is still alive to fight in it")
 	check(_boss.get_parts().size() == 1, "back into one larger body")
 	check(_boss.get_terminal_count() == 0, "with the terminals gone")
@@ -157,7 +188,7 @@ func _test_merges_at_thirty_five_percent() -> void:
 ## it again — and would count as two bosses in the run statistics.
 func _test_the_fight_ends_once() -> void:
 	await _begin()
-	await _destroy_terminals_after_duplication()
+	await _reach_the_last_phase()
 
 	var defeats := [0]
 	var handler := func(_boss_node: Node) -> void: defeats[0] += 1
@@ -193,8 +224,7 @@ func _test_the_boss_actually_attacks() -> void:
 	check(fired[0] > 0, "phase one fires (spawned %d)" % fired[0])
 
 	var after_phase_one: int = fired[0]
-	await _destroy_terminals_after_duplication()
-	_hurt_to_ratio(0.2)
+	await _reach_the_last_phase()
 	check(_boss.get_phase() == MergeConflict.Phase.MERGED, "the boss reached its last phase")
 
 	await advance_physics(400)
@@ -216,6 +246,97 @@ func _test_health_is_announced() -> void:
 	await _teardown()
 
 
+## The fight's deliberate deception, from the side the player sees it: the bar empties completely
+## three times and refills twice. It is worth pinning as a test rather than trusting to the phase
+## arithmetic, because a bar that stopped reaching zero would not break anything — it would just
+## quietly turn the fight back into an ordinary three-phase boss and nobody would get an error.
+func _test_the_bar_empties_and_refills_for_every_phase() -> void:
+	await _begin()
+
+	var ratios: Array[float] = []
+	var handler := func(ratio: float) -> void: ratios.append(ratio)
+	EventBus.boss_health_changed.connect(handler)
+
+	_hurt(_config.max_health * 10.0)
+	check_near(_last(ratios), 0.0, "phase one ends on an empty bar")
+	await _wait_out_the_feint()
+	check_near(_last(ratios), 1.0, "and phase two opens on a full one")
+
+	_destroy_all_terminals()
+	await advance_physics(2)
+	_hurt(_config.max_health * 10.0)
+	check_near(_last(ratios), 0.0, "phase two ends on an empty bar too")
+	await _wait_out_the_feint()
+	check_near(_last(ratios), 1.0, "and phase three opens on a full one")
+
+	var defeats := [0]
+	var defeat_handler := func(_boss_node: Node) -> void: defeats[0] += 1
+	EventBus.boss_defeated.connect(defeat_handler)
+
+	_hurt(_config.max_health * 10.0)
+	check_near(_last(ratios), 0.0, "and the third empty bar is the real one")
+	check(defeats[0] == 1, "which is the only one that ends the fight")
+
+	EventBus.boss_defeated.disconnect(defeat_handler)
+	EventBus.boss_health_changed.disconnect(handler)
+	await _teardown()
+
+
+## Playing dead is a beat, not an opening. A boss that could be damaged while inert would let a
+## player who kept firing skip the phase they were being set up for, and a boss whose bodies were
+## merely invisible would have them shooting a target they cannot see.
+func _test_playing_dead_is_not_a_free_hit() -> void:
+	await _begin()
+	var container := _arena.get_node("Projectiles")
+
+	_hurt(_config.max_health * 10.0)
+	var health := _boss.get_health()
+	var parts := _boss.get_parts()
+	check(_boss.is_feigning_defeat(), "the boss is playing dead")
+	for part: BossPart in parts:
+		check(not part.visible, "its body is gone from the arena")
+		check(part.collision_layer == 0, "and is not there to be shot at either")
+
+	var defeats := [0]
+	var handler := func(_boss_node: Node) -> void: defeats[0] += 1
+	EventBus.boss_defeated.connect(handler)
+
+	var fired_before := container.get_child_count()
+	for _hit: int in 5:
+		_hurt(_config.max_health)
+	await advance_physics(int(_feint_seconds() * 30.0))
+
+	check_near(_boss.get_health(), health, "damage dealt to it while inert does not land")
+	check(defeats[0] == 0, "and cannot end a fight that has two phases left")
+	check(
+		container.get_child_count() <= fired_before,
+		"and it fires nothing back while it is pretending to be dead",
+	)
+
+	EventBus.boss_defeated.disconnect(handler)
+	await _teardown()
+
+
+## The clamp that keeps the deception intact for every build. Health stops at the end of the phase
+## the damage was dealt in, so no single hit — however large the run has made it — can skip a phase
+## and the feigned death that ends it.
+func _test_no_single_hit_skips_a_phase() -> void:
+	await _begin()
+
+	_hurt(_config.max_health * 10.0)
+	check(_boss.get_health() > 0.0, "a hit for ten times the pool does not end the fight")
+	check_near(_boss.get_health_ratio(), _config.duplicate_at, "it stops where phase one does")
+	check(_boss.is_feigning_defeat(), "and plays dead there like any other phase end")
+
+	await _wait_out_the_feint()
+	check(_boss.get_phase() == MergeConflict.Phase.DUPLICATED, "then carries on into phase two")
+	await _teardown()
+
+
+func _last(values: Array[float]) -> float:
+	return values[values.size() - 1] if not values.is_empty() else -1.0
+
+
 ## The boss is a child of the room it fights in, and that room is offset onto the floor
 ## grid. A body positioned in local space when global was meant fights outside its own
 ## arena, with its terminals somewhere in the wall. Checked with the controller off the
@@ -234,7 +355,7 @@ func _test_the_boss_fights_inside_its_arena() -> void:
 	_arena.add_child(holder)
 
 	var arena_rect := Rect2(holder.global_position, ARENA.size)
-	_boss = BOSS_SCENE.instantiate()
+	_boss = _new_boss()
 	holder.add_child(_boss)
 	_boss.begin(arena_rect)
 	await advance_physics(2)
@@ -248,8 +369,8 @@ func _test_the_boss_fights_inside_its_arena() -> void:
 			],
 		)
 
-	_hurt(_config.max_health * 0.35)
-	await advance_physics(2)
+	_hurt(_config.max_health * 10.0)
+	await _wait_out_the_feint()
 
 	var terminals := 0
 	for node: Node in get_tree().get_nodes_in_group(Teams.GROUP_ENEMY):
@@ -278,6 +399,7 @@ func _test_real_projectiles_drive_the_whole_fight() -> void:
 	# One real hit, big enough to cross the duplication threshold from inside the callback.
 	_shoot(_boss.get_parts()[0], _config.max_health * 0.4)
 	await advance_physics(12)
+	await _wait_out_the_feint()
 
 	check(_boss.get_phase() == MergeConflict.Phase.DUPLICATED, "a real hit duplicates the boss")
 	check(_boss.get_parts().size() == 2, "and the second version arrives")
@@ -328,6 +450,17 @@ func _find_terminal() -> BossTerminal:
 # --- Fixtures -----------------------------------------------------------------
 
 
+## A boss configured like the shipped one except for a shortened feigned death. Duplicated rather
+## than edited: `config` is an ExtResource shared by every instance the process loads, and shortening
+## the original would leave the real fight two seconds shorter for whatever ran after this suite.
+func _new_boss() -> MergeConflict:
+	var boss: MergeConflict = BOSS_SCENE.instantiate()
+	var fast: BossConfig = _config.duplicate()
+	fast.feigned_death_seconds = TEST_FEINT_SECONDS
+	boss.config = fast
+	return boss
+
+
 func _begin() -> void:
 	RunManager.begin_run(31337)
 	_arena = Node2D.new()
@@ -343,7 +476,7 @@ func _begin() -> void:
 	_arena.add_child(player)
 	player.get_health_component().configure(9999.0, 0.0)
 
-	_boss = BOSS_SCENE.instantiate()
+	_boss = _new_boss()
 	_arena.add_child(_boss)
 	_boss.begin(ARENA)
 	await advance_physics(2)
@@ -354,14 +487,33 @@ func _teardown() -> void:
 	await advance_physics(2)
 
 
-## Damages the boss down to a given fraction of its maximum, computed from where it
-## actually is. A fixed amount risks asking for more than the boss has left and killing it
-## when the check wanted a phase change. Assumes the terminals are down, because a
-## synchronised boss only takes part of what it is dealt.
-func _hurt_to_ratio(ratio: float) -> void:
-	var needed := _boss.get_health() - _config.max_health * ratio
-	if needed > 0.0:
-		_hurt(needed)
+## Ends the phase the boss is in and waits out the feigned death that follows, leaving it fighting
+## in the next phase with whatever bodies that phase brings.
+##
+## Hitting it for ten times its pool rather than for a measured amount, because the boss floors its
+## own health at the phase boundary: overkill is absorbed there, so "more than it can survive"
+## always lands exactly at the end of the current phase. That also covers the synchronised phase,
+## which refunds three quarters of everything it is dealt.
+func _end_the_phase() -> void:
+	_hurt(_config.max_health * 10.0)
+	await _wait_out_the_feint()
+
+
+## The feigned death, plus a few frames for the bodies and terminals the next phase adds a frame
+## after it begins. Read off the boss's own config rather than the shipped one, since `_new_boss`
+## shortens it.
+func _wait_out_the_feint() -> void:
+	await advance_physics(int(_feint_seconds() * 60.0) + 6)
+
+
+func _feint_seconds() -> float:
+	return _boss.config.feigned_death_seconds
+
+
+## Into phase three, the only phase whose empty bar means anything.
+func _reach_the_last_phase() -> void:
+	await _destroy_terminals_after_duplication()
+	await _end_the_phase()
 
 
 ## Damages the boss the way a projectile does: through a part, which forwards it.
@@ -375,9 +527,7 @@ func _hurt(amount: float) -> void:
 ## Takes the boss into phase two and immediately breaks every terminal, so later checks are
 ## measuring the phase rather than the refund.
 func _destroy_terminals_after_duplication() -> void:
-	_hurt(_config.max_health * 0.35)
-	# Terminals are added a frame after the phase begins, so there is nothing to break yet.
-	await advance_physics(2)
+	await _end_the_phase()
 	_destroy_all_terminals()
 	await advance_physics(2)
 

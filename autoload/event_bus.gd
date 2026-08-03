@@ -84,11 +84,20 @@ signal room_cleared()
 ## one of them means "a thing died", the other means "the run is over".
 signal boss_defeated(boss: Node)
 
-## Boss health changed, for the boss bar. `ratio` is 0..1.
+## Boss health changed, for the boss bar. `ratio` is 0..1 of the *current phase*, not of the
+## fight: the Merge Conflict's bar empties at the end of every phase and refills when the next one
+## begins, which is deliberate (see MergeConflict._begin_feint). Nothing reading this signal can
+## tell how much fight is left, and that is the intent.
 signal boss_health_changed(ratio: float)
 
 ## The boss entered a new phase. `phase` is a one-based index.
 signal boss_phase_changed(phase: int)
+
+## The boss reached the end of a phase and is playing dead: empty bar, no bodies to shoot, and a
+## few seconds that look exactly like a fight the player has won. `boss_defeated` is the one that
+## means it. `at` is passed separately for the same reason `enemy_killed` does it — the bodies are
+## gone by the time anything reacts.
+signal boss_feigned_defeat(boss: Node, at: Vector2)
 
 ## `type` is a RoomTemplate.Type. Fires on every entry, including re-entering a cleared room.
 signal room_entered(type: int, room_id: int)

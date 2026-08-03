@@ -128,8 +128,13 @@ func _test_the_boss_is_a_fight_rather_than_a_bullet_sponge() -> void:
 	var terminals := _seconds_to_kill(_boss.terminal_health) * _boss.terminal_count
 	var phase_two_desynced := terminals + _seconds_to_kill(phase_two_health)
 
-	var fastest := phase_one + phase_two_desynced + phase_three
-	var slowest := phase_one + phase_two_synced + phase_three
+	# Two phase ends, each spent watching the boss play dead, in which no damage can be dealt at
+	# all. Counted because it is time the player spends in the fight, and the fight's length is
+	# what this test is about.
+	var feints := _boss.feigned_death_seconds * 2.0
+
+	var fastest := phase_one + phase_two_desynced + phase_three + feints
+	var slowest := phase_one + phase_two_synced + phase_three + feints
 
 	check(
 		fastest >= 10.0,
