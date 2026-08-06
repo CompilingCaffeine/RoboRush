@@ -49,6 +49,19 @@ extends Resource
 ## is worth solving. See tests/test_balance.gd, which now asserts that margin.
 @export_range(0.0, 1.0) var desync_heal_fraction: float = 0.75
 
+## Fraction of each hit that lands once the two versions have merged. Below one because the
+## thresholds alone make phase three the shortest phase of the fight rather than its climax:
+## phases two and three own the same 35 percent of the pool, but phase two also charges the
+## player four terminals at six health each, so its real cost is 21 + 24 damage against phase
+## three's 21. Scaling incoming damage is the one lever that closes that gap without moving
+## spec section 16's 70 and 35 percent thresholds, which the fight's structure is written to.
+##
+## 0.47 puts the merged form at 45 damage — the same 45 phase two costs a player who breaks the
+## terminals. The player is never shown the number, and the bar reports the phase rather than the
+## pool (see MergeConflict.get_phase_health_ratio), so a phase that takes twice as long to empty
+## simply reads as a phase with twice the health, which is what it is.
+@export_range(0.01, 1.0) var merged_damage_scale: float = 0.47
+
 @export_group("Terminals")
 
 ## Spec section 16: four destructible synchronization terminals.

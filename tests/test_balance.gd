@@ -118,7 +118,14 @@ func _test_the_boss_is_a_fight_rather_than_a_bullet_sponge() -> void:
 
 	var pool := _boss.max_health
 	var phase_one := _seconds_to_kill(pool * (1.0 - _boss.duplicate_at))
-	var phase_three := _seconds_to_kill(pool * _boss.merge_at)
+
+	# Phase three's share of the pool, divided by the fraction of each hit the merged form
+	# actually takes. Without that division this read 5.25s for a phase that lasts 11.25s, which
+	# is how the last phase of the fight was the shortest one for a milestone without anybody
+	# noticing: the two numbers this test compares were never the same kind of number.
+	var phase_three := _seconds_to_kill(
+		pool * _boss.merge_at / maxf(_boss.merged_damage_scale, 0.01)
+	)
 
 	# Worst case for phase two: the player never breaks a terminal, so every point of damage
 	# is refunded at desync_heal_fraction and costs 1/(1-fraction) times as much.
@@ -151,6 +158,16 @@ func _test_the_boss_is_a_fight_rather_than_a_bullet_sponge() -> void:
 		phase_two_synced >= phase_two_desynced * 1.5,
 		"breaking the terminals is worth the trip: %.1fs versus %.1fs ignoring them" % [
 			phase_two_desynced, phase_two_synced,
+		],
+	)
+	# The last phase should not be the shortest one. Phases two and three are handed the same
+	# share of the pool, so until `merged_damage_scale` existed phase two's four terminals made it
+	# twice the fight phase three was — a boss whose climax was over in five seconds. Measured
+	# against the player who breaks the terminals, because that is the phase two worth matching.
+	check(
+		phase_three >= phase_two_desynced * 0.9,
+		"the merged form lasts as long as the phase before it: %.1fs versus %.1fs" % [
+			phase_three, phase_two_desynced,
 		],
 	)
 	check(

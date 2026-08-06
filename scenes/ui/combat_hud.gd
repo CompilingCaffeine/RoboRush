@@ -24,10 +24,16 @@ extends Control
 ## `display_name` in the boss's own resource, which is what stops the two drifting apart.
 const BOSS_NAME := "THE SCRAP KING"
 
-## Shown when the boss dies, and shown again *before* it dies: the feigned death at the end of every
-## phase uses the same words on purpose (see MergeConflict._begin_feint). One constant rather than
-## two strings, so the lie cannot drift out of step with the truth it is imitating.
+## Shown when the boss dies, and shown again *before* it dies: the feigned death at the end of phase
+## one uses the same words on purpose (see MergeConflict._begin_feint). One constant rather than two
+## strings, so the lie cannot drift out of step with the truth it is imitating.
 const BOSS_DEFEAT_BANNER := "THE KING IS DEAD"
+
+## The other feigned death, at the end of phase two, where what falls is the two duplicated versions
+## and not the King himself — the phase that opened as "TWO CLAIMANTS" cannot end as a dead king.
+## Phase one's feint and the real defeat both keep BOSS_DEFEAT_BANNER: the first of those is the
+## King going down, and so is the last.
+const CLAIMANTS_DEFEAT_BANNER := "THE CLAIMANTS ARE DEAD"
 
 const PIP_SIZE := Vector2(5, 8)
 const PIP_SEPARATION := 1
@@ -78,6 +84,12 @@ const BANNER_SECONDS := 2.0
 var _player: Player
 var _banner_left := 0.0
 var _pulse_time := 0.0
+
+## The phase the boss is currently in, which is the phase a feigned death is ending — the feint
+## runs before the change, so this still reads 2 while the two claimants are falling. One is the
+## right default: a HUD that connected after the fight announced its first phase is still watching
+## phase one.
+var _boss_phase := 1
 
 
 func _ready() -> void:
@@ -235,6 +247,7 @@ func _on_boss_health_changed(ratio: float) -> void:
 ## and the player is meant to believe it; the only thing that can follow that is the rest of the
 ## saying.
 func _on_boss_phase_changed(phase: int) -> void:
+	_boss_phase = phase
 	_boss_label.text = BOSS_NAME
 	match phase:
 		2:
@@ -246,8 +259,13 @@ func _on_boss_phase_changed(phase: int) -> void:
 ## The one place the HUD lies to the player: the same words and the same colour as a real victory,
 ## minus the reward line they would go looking for and not find. The bar has already emptied itself
 ## through `_on_boss_health_changed`, which is what hides it.
+##
+## Which words depends on what just fell. Phase one's feint is the King, so it gets the King's own
+## epitaph and the player who believes it is believing something the fight will then take back.
+## Phase two's is the two claimants, which are not the King and cannot be announced as him.
 func _on_boss_feigned_defeat(_boss: Node, _at: Vector2) -> void:
-	_show_banner(BOSS_DEFEAT_BANNER, BANNER_CLEAR)
+	var epitaph := CLAIMANTS_DEFEAT_BANNER if _boss_phase == 2 else BOSS_DEFEAT_BANNER
+	_show_banner(epitaph, BANNER_CLEAR)
 
 
 func _on_boss_defeated(_boss: Node) -> void:

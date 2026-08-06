@@ -52,6 +52,7 @@ func run() -> void:
 	await _test_synchronised_damage_is_refunded()
 	await _test_breaking_terminals_stops_the_refund()
 	await _test_merges_at_thirty_five_percent()
+	await _test_the_merged_form_takes_reduced_damage()
 	await _test_the_fight_ends_once()
 	await _test_the_boss_actually_attacks()
 	await _test_health_is_announced()
@@ -100,6 +101,13 @@ func _test_the_hud_calls_it_by_its_name() -> void:
 	check(
 		not _config.display_name.is_empty() and _config.display_name != "Unnamed Boss",
 		"and it is a name someone chose",
+	)
+	# Phase two is two rival copies, and the King is not among them. The fake death that ends that
+	# phase used to borrow the King's own epitaph, which told the player something the fight then
+	# contradicted: he was still standing, and it was the claimants who fell.
+	check(
+		CombatHUD.CLAIMANTS_DEFEAT_BANNER != CombatHUD.BOSS_DEFEAT_BANNER,
+		"phase two's fake death is not announced as the King's",
 	)
 
 
@@ -202,6 +210,40 @@ func _test_merges_at_thirty_five_percent() -> void:
 	check(_boss.get_health() > 0.0, "and is still alive to fight in it")
 	check(_boss.get_parts().size() == 1, "back into one larger body")
 	check(_boss.get_terminal_count() == 0, "with the terminals gone")
+	await _teardown()
+
+
+## Phase three's health, expressed as the rule that produces it. Phases two and three are handed
+## the same 35 percent of the pool, but only phase two also charges the player four terminals — so
+## at full damage the last phase of the fight was its shortest, ending in half the time the phase
+## before it took. `merged_damage_scale` is what closes that gap without moving spec section 16's
+## thresholds, and it is checked here as a rule as well as in tests/test_balance.gd as a number: a
+## config field that nothing applies would satisfy the arithmetic and not the fight.
+func _test_the_merged_form_takes_reduced_damage() -> void:
+	await _begin()
+	await _reach_the_last_phase()
+	var merged := _boss.get_phase() == MergeConflict.Phase.MERGED
+	check(merged, "the boss reached its merged phase")
+	if not merged:
+		await _teardown()
+		return
+
+	check(not _boss.is_synchronised(), "with nothing left to synchronise with")
+
+	var before := _boss.get_health()
+	_hurt(10.0)
+	var lost := before - _boss.get_health()
+
+	check(lost < 10.0, "ten damage costs the merged form less than ten")
+	check_near(
+		lost,
+		10.0 * _config.merged_damage_scale,
+		"scaled by exactly merged_damage_scale, not by the phase-two refund",
+	)
+	check(
+		_config.merged_damage_scale < 1.0,
+		"which is a reduction rather than a field left at its ceiling",
+	)
 	await _teardown()
 
 

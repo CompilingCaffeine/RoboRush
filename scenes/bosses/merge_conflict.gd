@@ -206,6 +206,12 @@ func _on_part_damaged(info: DamageInfo) -> void:
 		# refund because there is one pool — the effect the player sees is the same, and it
 		# stops being true the moment they break the last terminal.
 		dealt *= 1.0 - config.desync_heal_fraction
+	elif _phase == Phase.MERGED:
+		# The merged form is the sturdier one, and this is the whole of why. Phase three owns the
+		# same share of the pool as phase two but charges nothing for the terminals, so at full
+		# damage it emptied in half the time — the last phase of the fight was its shortest.
+		# See BossConfig.merged_damage_scale for the arithmetic.
+		dealt *= config.merged_damage_scale
 
 	# Floored at the end of the current phase rather than at zero, so overkill is absorbed at the
 	# boundary instead of carrying into the next phase. That costs a strong build a fraction of one

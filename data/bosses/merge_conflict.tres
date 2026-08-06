@@ -12,6 +12,7 @@ duplicate_at = 0.7
 merge_at = 0.35
 feigned_death_seconds = 2.0
 desync_heal_fraction = 0.75
+merged_damage_scale = 0.47
 terminal_count = 4
 terminal_health = 6.0
 red_shot = ExtResource("2_red")
