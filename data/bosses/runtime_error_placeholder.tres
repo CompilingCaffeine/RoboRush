@@ -5,6 +5,7 @@
 
 [resource]
 script = ExtResource("1_boss")
+id = &"runtime_error"
 display_name = "Runtime Error"
 max_health = 30.0
 move_speed = 26.0

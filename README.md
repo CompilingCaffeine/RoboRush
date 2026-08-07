@@ -527,7 +527,7 @@ tests/test_enemies.gd                      84 checks that each enemy poses its p
 tests/test_run.gd                          64 statistics, state, and summary checks
 tests/test_shop.gd                         47 price, purchase, and refusal checks
 tests/test_boss.gd                         85 phase, terminal, and defeat checks
-tests/test_save.gd                      + 59 settings, save format, and record checks
+tests/test_save.gd                      + 72 settings, save format, and record checks
 tests/test_audio.gd                     + 55 library, loop, and crossfade checks
 tests/test_gamepad.gd                   + 67 checks driven by a synthesized controller
 tests/test_balance.gd                   + 63 checks on what the tuning numbers mean

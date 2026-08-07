@@ -30,6 +30,7 @@ func run() -> void:
 	_test_victory_time_is_a_lower_is_better_record()
 	_test_best_stats_round_trip()
 	_test_unlocks_are_recorded_once()
+	_test_boss_defeats_are_recorded_regardless_of_config_type()
 	await _test_a_finished_run_files_exactly_one_result()
 	await _test_a_failed_write_stays_pending_and_recovers()
 
@@ -257,6 +258,46 @@ func _test_unlocks_are_recorded_once() -> void:
 		"recording an unlock does not disturb the others",
 	)
 	SaveManager.unlocked_items.erase(&"__test_only_item")
+
+
+## Reported: defeating the (Floor 2) placeholder boss crashed instead of recording it.
+## `SaveManager._on_boss_defeated` statically typed the boss's config as `BossConfig`, which
+## `MergeConflict` carries but `RuntimeErrorPlaceholder` does not — it carries a
+## `SimpleBossConfig`, a sibling type, not a subclass. Every boss the game ships must be
+## checked here, not just the one that happened to exist when this suite was written.
+func _test_boss_defeats_are_recorded_regardless_of_config_type() -> void:
+	# Not asserted against a captured "before" count: test_boss.gd runs earlier in the suite
+	# order and its own checks can trigger a real Merge Conflict defeat, which this same
+	# always-connected handler already recorded. Idempotency (below) is the invariant that
+	# actually matters here, not how many entries existed when this suite started.
+	var merge_conflict := MergeConflict.new()
+	merge_conflict.config = load("res://data/bosses/merge_conflict.tres") as BossConfig
+	EventBus.boss_defeated.emit(merge_conflict)
+	merge_conflict.free()
+
+	var placeholder := RuntimeErrorPlaceholder.new()
+	placeholder.config = load("res://data/bosses/runtime_error_placeholder.tres") as SimpleBossConfig
+	EventBus.boss_defeated.emit(placeholder)
+	placeholder.free()
+
+	check(SaveManager.has_defeated_boss(&"merge_conflict"), "a BossConfig-typed boss is recorded")
+	check(
+		SaveManager.has_defeated_boss(&"runtime_error"),
+		"a SimpleBossConfig-typed boss is recorded too — this crashed before the fix",
+	)
+	check(
+		SaveManager.bosses_defeated.count(&"merge_conflict") == 1,
+		"recording is idempotent even if another suite already triggered a real defeat",
+	)
+	check(
+		SaveManager.bosses_defeated.count(&"runtime_error") == 1,
+		"and the new boss is recorded exactly once",
+	)
+
+	# Only the entry this test is certain it alone produced — erasing merge_conflict here
+	# could discard a real record test_boss.gd's own checks are relying on for the rest of
+	# the run.
+	SaveManager.bosses_defeated.erase(&"runtime_error")
 
 
 ## The end of a run has two callers on some frames — the player dying and the state machine

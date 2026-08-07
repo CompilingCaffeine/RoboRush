@@ -181,13 +181,23 @@ func mark_tutorial_completed() -> void:
 
 ## Read off the EventBus rather than reported by the boss, so no gameplay script has to know
 ## that a save file exists — the same rule that keeps enemies from spawning their own
-## particles. `config` is fetched dynamically because bosses share no base class yet.
+## particles.
+##
+## `config` is fetched fully dynamically — no static type, and `id` read via `get()` rather
+## than a typed member access — because `Boss` gives every boss a shared *behaviour* base but
+## deliberately no shared config type: `MergeConflict` carries a `BossConfig`,
+## `RuntimeErrorPlaceholder` a `SimpleBossConfig`, and they are siblings, not one a subclass of
+## the other. A statically-typed `var config: BossConfig` here crashed the instant a second
+## boss with its own config resource existed — this is that fix.
 func _on_boss_defeated(boss: Node) -> void:
 	if boss == null or not is_instance_valid(boss):
 		return
-	var config: BossConfig = boss.get("config")
-	if config != null:
-		record_boss_defeated(config.id)
+	var config: Variant = boss.get("config")
+	if config == null:
+		return
+	var id: Variant = config.get("id")
+	if id is StringName:
+		record_boss_defeated(id)
 
 
 func _on_item_collected(item: ItemConfig) -> void:

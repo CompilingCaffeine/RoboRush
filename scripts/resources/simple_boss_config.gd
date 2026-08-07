@@ -8,6 +8,10 @@ extends Resource
 ## get its own config shaped for its own gimmick, the same way Merge Conflict got its own
 ## rather than reusing a generic one.
 
+## Stable identifier the save file records as "beaten" — see `BossConfig.id`'s own doc
+## comment for why this is kept separate from `display_name` rather than derived from it.
+@export var id: StringName = &"unnamed_boss"
+
 @export var display_name: String = "Unnamed Boss"
 
 @export var max_health: float = 30.0
