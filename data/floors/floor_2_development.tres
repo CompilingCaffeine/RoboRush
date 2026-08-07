@@ -1,0 +1,49 @@
+[gd_resource type="Resource" script_class="FloorConfig" load_steps=26 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/floor_config.gd" id="1_floor"]
+[ext_resource type="Resource" path="res://data/rooms/start_bay.tres" id="2_start"]
+[ext_resource type="Resource" path="res://data/rooms/dev_server_row.tres" id="3_server_row"]
+[ext_resource type="Resource" path="res://data/rooms/dev_cubicles.tres" id="4_cubicles"]
+[ext_resource type="Resource" path="res://data/rooms/dev_cable_trench.tres" id="5_cable_trench"]
+[ext_resource type="Resource" path="res://data/rooms/dev_server_ring.tres" id="6_server_ring"]
+[ext_resource type="Resource" path="res://data/rooms/treasure_vault.tres" id="7_treasure"]
+[ext_resource type="Resource" path="res://data/rooms/shop_bay.tres" id="8_shop"]
+[ext_resource type="Resource" path="res://data/rooms/boss_arena.tres" id="9_boss_room"]
+[ext_resource type="Resource" path="res://data/settings/shop_config.tres" id="10_shop_cfg"]
+[ext_resource type="Resource" path="res://data/spawns/ticket_bot.tres" id="11_ticket_bot"]
+[ext_resource type="Resource" path="res://data/spawns/pop_up_drone.tres" id="12_pop_up_drone"]
+[ext_resource type="Resource" path="res://data/items/ricochet_driver.tres" id="13_ricochet_driver"]
+[ext_resource type="Resource" path="res://data/items/fork_bomb.tres" id="14_fork_bomb"]
+[ext_resource type="Resource" path="res://data/items/magnetic_guidance.tres" id="15_magnetic_guidance"]
+[ext_resource type="Resource" path="res://data/items/return_protocol.tres" id="16_return_protocol"]
+[ext_resource type="Resource" path="res://data/items/capacitor_leak.tres" id="17_capacitor_leak"]
+[ext_resource type="Resource" path="res://data/items/volatile_kernel.tres" id="18_volatile_kernel"]
+[ext_resource type="Resource" path="res://data/items/cooling_fan.tres" id="19_cooling_fan"]
+[ext_resource type="Resource" path="res://data/items/reinforced_chassis.tres" id="20_reinforced_chassis"]
+[ext_resource type="Resource" path="res://data/items/backup_battery.tres" id="21_backup_battery"]
+[ext_resource type="Resource" path="res://data/items/unsafe_overclock.tres" id="22_unsafe_overclock"]
+[ext_resource type="Resource" path="res://data/items/scrap_magnet.tres" id="23_scrap_magnet"]
+[ext_resource type="Resource" path="res://data/items/debug_drone.tres" id="24_debug_drone"]
+[ext_resource type="PackedScene" path="res://scenes/bosses/runtime_error_placeholder.tscn" id="25_boss_scene"]
+
+[resource]
+script = ExtResource("1_floor")
+display_name = "Development"
+floor_number = 2
+floor_tags = Array[StringName]([&"development"])
+room_count = 10
+start_templates = Array[RoomTemplate]([ExtResource("2_start")])
+combat_templates = Array[RoomTemplate]([ExtResource("3_server_row"), ExtResource("4_cubicles"), ExtResource("5_cable_trench"), ExtResource("6_server_ring")])
+treasure_templates = Array[RoomTemplate]([ExtResource("7_treasure")])
+shop_templates = Array[RoomTemplate]([ExtResource("8_shop")])
+boss_templates = Array[RoomTemplate]([ExtResource("9_boss_room")])
+enemy_spawns = Array[EnemySpawn]([ExtResource("11_ticket_bot"), ExtResource("12_pop_up_drone")])
+clear_scrap_range = Vector2i(1, 3)
+enemy_scrap_range = Vector2i(0, 2)
+item_pool = Array[ItemConfig]([ExtResource("13_ricochet_driver"), ExtResource("14_fork_bomb"), ExtResource("15_magnetic_guidance"), ExtResource("16_return_protocol"), ExtResource("17_capacitor_leak"), ExtResource("18_volatile_kernel"), ExtResource("19_cooling_fan"), ExtResource("20_reinforced_chassis"), ExtResource("21_backup_battery"), ExtResource("22_unsafe_overclock"), ExtResource("23_scrap_magnet"), ExtResource("24_debug_drone")])
+item_clear_indices = Array[int]([2, 5])
+shop = ExtResource("10_shop_cfg")
+treasure_grants_item = true
+boss_scene = ExtResource("25_boss_scene")
+boss_display_name = "RUNTIME ERROR"
+boss_defeat_banner = "THE PROCESS HAS TERMINATED"

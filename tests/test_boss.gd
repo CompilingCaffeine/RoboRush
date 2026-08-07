@@ -22,6 +22,7 @@ extends TestCase
 
 const BOSS_SCENE := preload("res://scenes/bosses/merge_conflict.tscn")
 const BOSS_CONFIG_PATH := "res://data/bosses/merge_conflict.tres"
+const FLOOR_1_CONFIG_PATH := "res://data/floors/floor_1_help_desk.tres"
 const PLAYER_SCENE := preload("res://scenes/player/player.tscn")
 
 const ARENA := Rect2(Vector2.ZERO, Vector2(416.0, 192.0))
@@ -87,15 +88,19 @@ func _test_config_matches_the_spec() -> void:
 	)
 
 
-## The boss's name exists in two places — its resource and the HUD constant that draws it — because
-## nothing hands the HUD a `BossConfig`. Two copies of a name is exactly the arrangement that ends
-## with a boss bar labelled with the name the boss used to have, so the two are checked against each
-## other here. Casing aside: the HUD shouts, the resource does not.
+## The boss's name exists in two places — its own resource and `FloorConfig.boss_display_name`,
+## which is what the HUD is actually bound to (see `FloorController.boss_encountered`) — because
+## nothing hands the HUD a `BossConfig` directly. Two copies of a name is exactly the arrangement
+## that ends with a boss bar labelled with the name the boss used to have, so the two are checked
+## against each other here. Casing aside: the HUD shouts, the resource does not.
 func _test_the_hud_calls_it_by_its_name() -> void:
+	var floor_config: FloorConfig = load(FLOOR_1_CONFIG_PATH) as FloorConfig
+	if not require(floor_config, "floor_1_help_desk.tres loads as a FloorConfig"):
+		return
 	check(
-		CombatHUD.BOSS_NAME == _config.display_name.to_upper(),
+		floor_config.boss_display_name == _config.display_name.to_upper(),
 		"the boss bar says '%s' and the boss is called '%s'" % [
-			CombatHUD.BOSS_NAME, _config.display_name,
+			floor_config.boss_display_name, _config.display_name,
 		],
 	)
 	check(

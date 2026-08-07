@@ -18,15 +18,18 @@ extends Control
 ## walk. What each item *does* is never stated on screen — an item that has to be read about is an
 ## item the player never noticed working.
 
-## The floor boss, as the player reads it. Named here rather than taken from `BossConfig` because
-## nothing hands the HUD the boss's config — the phase signal carries an integer — and a name is
-## cheaper to keep in step than a reference to plumb. tests/test_boss.gd asserts it matches
-## `display_name` in the boss's own resource, which is what stops the two drifting apart.
-const BOSS_NAME := "THE SCRAP KING"
+## The floor boss's name and defeat banner, as the player reads them. Bound at runtime via
+## `bind_boss()` rather than fixed here, since a second floor has a different boss — see
+## `FloorController.boss_encountered` and `FloorConfig.boss_display_name`. Defaults are
+## generic placeholders that should never actually reach the screen: `bind_boss()` runs
+## before the boss room is enterable.
+var _boss_name := "THE BOSS"
+var _boss_defeat_banner := "THE BOSS IS DEFEATED"
 
-## Shown when the boss dies, and shown again *before* it dies: the feigned death at the end of phase
-## one uses the same words on purpose (see MergeConflict._begin_feint). One constant rather than two
-## strings, so the lie cannot drift out of step with the truth it is imitating.
+## Merge Conflict's own feigned-death epitaph — distinct from the bound `_boss_defeat_banner`
+## above, which is the *real* defeat banner and varies per floor. This one is specific to
+## Merge Conflict's phase-one feint (see `_on_boss_feigned_defeat`) and never fires for a
+## boss that doesn't emit `boss_feigned_defeat`, so it stays a constant rather than data.
 const BOSS_DEFEAT_BANNER := "THE KING IS DEAD"
 
 ## The other feigned death, at the end of phase two, where what falls is the two duplicated versions
@@ -129,6 +132,13 @@ func _ready() -> void:
 	RunManager.scrap_changed.connect(_on_run_state_changed.unbind(1))
 	RunManager.rooms_cleared_changed.connect(_on_run_state_changed.unbind(1))
 	_refresh_top_label()
+
+
+## Called once per floor, before its boss room is reachable — see
+## `FloorController.boss_encountered`.
+func bind_boss(display_name: String, defeat_banner: String) -> void:
+	_boss_name = display_name
+	_boss_defeat_banner = defeat_banner
 
 
 func bind_player(player: Player) -> void:
@@ -248,7 +258,7 @@ func _on_boss_health_changed(ratio: float) -> void:
 ## saying.
 func _on_boss_phase_changed(phase: int) -> void:
 	_boss_phase = phase
-	_boss_label.text = BOSS_NAME
+	_boss_label.text = _boss_name
 	match phase:
 		2:
 			_show_banner("LONG LIVE THE KING  //  TWO CLAIMANTS", BANNER_BOSS)
@@ -270,7 +280,7 @@ func _on_boss_feigned_defeat(_boss: Node, _at: Vector2) -> void:
 
 func _on_boss_defeated(_boss: Node) -> void:
 	_boss_bar.visible = false
-	_show_banner("%s  //  CHOOSE ONE REWARD" % BOSS_DEFEAT_BANNER, BANNER_CLEAR)
+	_show_banner("%s  //  CHOOSE ONE REWARD" % _boss_defeat_banner, BANNER_CLEAR)
 
 
 ## The name and nothing else. The item's effect is deliberately not stated anywhere on screen: what

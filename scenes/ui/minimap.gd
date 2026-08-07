@@ -31,6 +31,10 @@ var reveal_all := false
 
 
 func bind_floor(floor_controller: FloorController) -> void:
+	# Guarded because a floor advance rebinds the same controller a second time: without this,
+	# room_entered would end up double-connected and every room entry would redraw twice.
+	if _floor != null and _floor.room_entered.is_connected(_on_room_entered):
+		_floor.room_entered.disconnect(_on_room_entered)
 	_floor = floor_controller
 	_layout = floor_controller.layout
 	floor_controller.room_entered.connect(_on_room_entered)

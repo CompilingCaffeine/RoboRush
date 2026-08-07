@@ -15,10 +15,19 @@ extends Node2D
 ## Emitted when the player enters a room for any reason, including re-entering a cleared one.
 signal room_entered(plan: RoomPlan)
 
+## Emitted after this controller has torn down and rebuilt itself for a new floor. Plain
+## signal, not EventBus: only main.gd needs it, and main.gd already owns this node directly —
+## the same reasoning that keeps `room_entered` a plain signal too.
+signal floor_advanced(config: FloorConfig)
+
+## Emitted once the boss is in its arena, carrying this floor's boss identity — plain signal
+## for the same reason `floor_advanced` is: only main.gd needs it, to hand the HUD a name it
+## has no other way to learn (see `FloorConfig.boss_display_name`).
+signal boss_encountered(display_name: String, defeat_banner: String)
+
 const ROOM_SCENE := preload("res://scenes/rooms/room.tscn")
 const DOOR_SCENE := preload("res://scenes/rooms/door.tscn")
 const SHOP_ROOM_SCENE := preload("res://scenes/shop/shop_room.tscn")
-const BOSS_SCENE := preload("res://scenes/bosses/merge_conflict.tscn")
 
 ## How many rare items the boss offers, and where they stand relative to the reward point.
 ## Spec section 16: choose one of three.
@@ -65,7 +74,7 @@ var _clears := 0
 
 ## The boss, once the player has walked into its arena. Null until then — a boss that
 ## existed from the moment the floor was built would be a boss firing at an empty room.
-var _boss: MergeConflict
+var _boss: Boss
 
 @onready var _rooms_container: Node2D = %Rooms
 @onready var _doors_container: Node2D = %Doors
@@ -241,8 +250,12 @@ func _needs_clearing(id: int) -> bool:
 ## so the boss lays out its terminals and clamps its own movement without ever asking what
 ## room it is in.
 func _spawn_boss(room: Room) -> void:
-	_boss = BOSS_SCENE.instantiate()
-	EventBus.boss_defeated.connect(_on_boss_defeated.bind(room))
+	_boss = config.boss_scene.instantiate()
+	boss_encountered.emit(config.boss_display_name, config.boss_defeat_banner)
+	# One-shot: a boss is defeated exactly once per floor, and this controller now outlives a
+	# single floor. Without it, the next floor's boss spawn would stack a second connection,
+	# and its death would also invoke the handler still bound to this (by-then-freed) room.
+	EventBus.boss_defeated.connect(_on_boss_defeated.bind(room), CONNECT_ONE_SHOT)
 	# Deferred, for the fourth time in this project and the same reason every time: rooms
 	# are entered through an Area2D trigger, and registering the boss's collision bodies
 	# while the physics server is flushing queries is refused outright.
@@ -277,7 +290,7 @@ func _on_boss_defeated(_boss_node: Node, room: Room) -> void:
 		# ordinary reward path is already outside the callback, which is why it never showed
 		# this.
 		push_warning("FloorController: no items left for the boss reward; winning without one.")
-		GameManager.win_run.call_deferred()
+		_finish_floor()
 		return
 
 	var reward: ShopRoom = SHOP_ROOM_SCENE.instantiate()
@@ -287,7 +300,61 @@ func _on_boss_defeated(_boss_node: Node, room: Room) -> void:
 
 
 func _on_boss_reward_taken(_item: ItemConfig) -> void:
-	GameManager.win_run()
+	_finish_floor()
+
+
+## Winning the run and advancing to the next floor are the same event from the boss's point of
+## view — "this floor is done" — so both call sites funnel through here rather than deciding
+## for themselves. `config.next_floor == null` is what makes a floor the run's last one.
+func _finish_floor() -> void:
+	if config.next_floor == null:
+		GameManager.win_run.call_deferred()
+		return
+	_advance_to_next_floor.call_deferred(config.next_floor, _derive_next_seed(RunManager.floor_seed))
+
+
+## Tears down the current floor and rebuilds this same controller from `next_config`. Deferred
+## by the caller because this runs from inside a pickup's physics callback (the boss reward
+## stand), and this project has hit "touching physics bodies while the server is flushing
+## queries is refused outright" enough times already (see `_add_boss`, `LootSpawner`) that
+## rebuilding synchronously in that same callback is not worth risking again.
+func _advance_to_next_floor(next_config: FloorConfig, seed_value: int) -> void:
+	_teardown()
+	config = next_config
+	if not build(_player, seed_value):
+		# Same stance as main.gd's own build() call: a content bug, not something to hide
+		# behind a blank screen.
+		push_error("FloorController: floor generation failed advancing to floor %d." % next_config.floor_number)
+		return
+	floor_advanced.emit(config)
+
+
+## Clears every piece of the floor that `build()` creates, so it can be called a second time.
+## Rooms and doors are freed rather than reused: a `Room` carries its own combat/spawn state,
+## and rebuilding it from scratch is simpler than resetting it in place. Freeing is safe here
+## because every signal a `Room`/`RoomCombat` connects is local to its own subtree — nothing
+## outlives it that needs disconnecting first.
+func _teardown() -> void:
+	for room: Room in _rooms.values():
+		room.queue_free()
+	for doors: Array in _doors_by_room.values():
+		for door: Door in doors:
+			if is_instance_valid(door):
+				door.queue_free()
+	_rooms.clear()
+	_doors_by_room.clear()
+	_cleared.clear()
+	visited.clear()
+	current_room_id = -1
+	_clears = 0
+	_boss = null
+
+
+## Deterministic from the floor it follows, so a run is still fully reproducible from its
+## opening seed, but decorrelated from it rather than an obvious "plus one" — a floor's seed
+## should not read as a function of the last one when compared in the debug overlay.
+func _derive_next_seed(seed_value: int) -> int:
+	return absi(hash(seed_value))
 
 
 ## Rare items by preference, because that is what spec section 16 promises. Falls back to

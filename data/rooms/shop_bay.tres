@@ -11,6 +11,6 @@ enemy_spawns = Array[Vector2i]([])
 reward_spawn = Vector2i(13, 9)
 shop_stands = Array[Vector2i]([Vector2i(5, 4), Vector2i(13, 4), Vector2i(21, 4), Vector2i(13, 8)])
 difficulty = 0
-floor_tags = Array[StringName]([&"help_desk"])
+floor_tags = Array[StringName]([])
 min_floor = 1
 max_floor = 6

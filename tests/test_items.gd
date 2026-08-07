@@ -61,6 +61,7 @@ func run() -> void:
 	await _test_chain_lightning_jumps_twice()
 	await _test_volatile_kernel_detonates_on_a_kill()
 	await _test_scrap_magnet_pulls_nearby_pickups()
+	await _test_scrap_scatter_avoids_geometry()
 	await _test_debug_drone_fires_with_the_player()
 	await _test_drone_shots_advance_the_chain_trigger()
 
@@ -768,6 +769,47 @@ func _test_scrap_magnet_pulls_nearby_pickups() -> void:
 		1.0,
 	)
 	await _teardown(arena)
+
+
+## Reported: a kill near a corner could drop scrap that scattered into the wall it died
+## against, which the player could never reach — not even with Scrap Magnet, since the pull is
+## gated by the player's own distance and a player's body cannot stand inside a wall either.
+## Placing four death points hard against a single block's corners, where an unchecked +/-9px
+## scatter (`LootSpawner.SCATTER`) would cross into it on a fair fraction of draws, is what
+## makes this a check on the rejection logic rather than a check that mostly passes by luck.
+func _test_scrap_scatter_avoids_geometry() -> void:
+	var arena := _make_arena()
+	_add_wall(arena, Vector2(100.0, 100.0), Vector2i(32, 32))
+	await advance_physics(1)
+
+	var spawner := LootSpawner.new()
+	arena.add_child(spawner)
+	spawner._rng.seed = 4242
+
+	for corner: Vector2 in [
+		Vector2(95.0, 95.0), Vector2(137.0, 95.0), Vector2(95.0, 137.0), Vector2(137.0, 137.0),
+	]:
+		spawner._spawn_scrap(corner, 20)
+	await advance_physics(2)
+
+	var pickups := arena.get_tree().get_nodes_in_group(Pickup.GROUP)
+	check(pickups.size() > 0, "scrap actually spawned")
+	var embedded := 0
+	for node: Node in pickups:
+		if _is_solid_at((node as Pickup).global_position):
+			embedded += 1
+	check(embedded == 0, "no scrap landed inside the wall (%d of %d did)" % [embedded, pickups.size()])
+
+	await _teardown(arena)
+
+
+## Same query PopUpDrone tests itself against — real physics geometry, not the room template.
+func _is_solid_at(point: Vector2) -> bool:
+	var query := PhysicsPointQueryParameters2D.new()
+	query.position = point
+	query.collision_mask = Teams.LAYER_WORLD
+	query.collide_with_areas = false
+	return not get_viewport().world_2d.direct_space_state.intersect_point(query, 1).is_empty()
 
 
 func _test_debug_drone_fires_with_the_player() -> void:

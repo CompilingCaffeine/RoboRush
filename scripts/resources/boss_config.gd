@@ -16,8 +16,9 @@ extends Resource
 ## that has beaten the boss report that it has not.
 @export var id: StringName = &"merge_conflict"
 
-## The name the player reads. CombatHUD.BOSS_NAME is the same name in the HUD's own casing, and
-## tests/test_boss.gd asserts the two agree.
+## The name the player reads. `FloorConfig.boss_display_name` is the same name in the HUD's
+## own casing (see `FloorController.boss_encountered`), and tests/test_boss.gd asserts the
+## two agree.
 @export var display_name: String = "The Scrap King"
 
 @export_group("Durability")

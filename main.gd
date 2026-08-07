@@ -33,7 +33,9 @@ func _ready() -> void:
 	_item_effects.bind_player(_player)
 	_combat_hud.bind_player(_player)
 	_debug_hud.bind_player(_player)
+	_floor.boss_encountered.connect(_combat_hud.bind_boss)
 
+	_apply_dev_floor_override()
 	if not _floor.build(_player, seed_value):
 		# Generation failing is a content bug, not something to hide from the player behind a
 		# blank screen (spec section 31.10 forbids placeholder error messages reaching them).
@@ -42,6 +44,7 @@ func _ready() -> void:
 
 	_minimap.bind_floor(_floor)
 	_debug_hud.bind_floor(_floor)
+	_floor.floor_advanced.connect(_on_floor_advanced)
 
 
 ## Seed precedence: command line, then the compiled-in override, then the clock.
@@ -62,3 +65,27 @@ func _resolve_seed() -> int:
 	if FLOOR_SEED_OVERRIDE != 0:
 		return FLOOR_SEED_OVERRIDE
 	return absi(int(Time.get_unix_time_from_system() * 1000.0)) % 0x7FFFFFFF
+
+
+## Developer-only: `godot -- --floor=2` starts the run on floor 2 instead of floor 1, so a
+## later floor can be reached and iterated on without clearing everything before it. Reads
+## `_floor.config.next_floor` rather than any separate floor registry — there is only ever
+## the one chain, and this walks the same links `FloorController._finish_floor` does.
+func _apply_dev_floor_override() -> void:
+	for argument: String in OS.get_cmdline_user_args():
+		if argument != "--floor=2":
+			continue
+		if _floor.config.next_floor == null:
+			push_warning("Main: --floor=2 requested but floor 1 has no next_floor configured.")
+			return
+		_floor.config = _floor.config.next_floor
+		return
+
+
+## The floor rebuilds itself in place rather than reloading the scene, so the HUDs that were
+## wired to it once at startup need to be pointed at it again. Minimap in particular caches the
+## floor's layout at bind time rather than reading it live, so without this it would keep
+## drawing the floor the player just left.
+func _on_floor_advanced(_config: FloorConfig) -> void:
+	_minimap.bind_floor(_floor)
+	_debug_hud.bind_floor(_floor)

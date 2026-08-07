@@ -521,12 +521,12 @@ tests/test_case.gd                         Suite base class
 tests/test_player_movement.gd              32 movement and dash checks
 tests/test_combat.gd                       101 data, component, and integration checks
 tests/test_player_input.gd                 38 arrow-key shooting checks
-tests/test_floor.gd                        135 generation, invariant, and template checks
-tests/test_items.gd                        172 item, stack, inventory, and synergy checks
+tests/test_floor.gd                        149 generation, invariant, template, and floor-advance checks
+tests/test_items.gd                        174 item, stack, inventory, and synergy checks
 tests/test_enemies.gd                      57 checks that each enemy poses its problem
 tests/test_run.gd                          64 statistics, state, and summary checks
 tests/test_shop.gd                         47 price, purchase, and refusal checks
-tests/test_boss.gd                         50 phase, terminal, and defeat checks
+tests/test_boss.gd                         85 phase, terminal, and defeat checks
 tests/test_save.gd                      + 59 settings, save format, and record checks
 tests/test_audio.gd                     + 55 library, loop, and crossfade checks
 tests/test_gamepad.gd                   + 67 checks driven by a synthesized controller

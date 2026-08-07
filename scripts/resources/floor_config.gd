@@ -12,6 +12,11 @@ extends Resource
 ## Tags used to filter which room templates may appear here.
 @export var floor_tags: Array[StringName] = [&"help_desk"]
 
+## The floor to load when this floor's boss is defeated. Null means this is the run's last
+## floor — defeating its boss wins the run. A chain of these is the run's floor order, so
+## adding a floor is a new .tres with this field pointed at it, not new code.
+@export var next_floor: FloorConfig
+
 @export_group("Rooms")
 
 ## Total rooms including the start and the treasure room. Spec section 9 suggests a start,
@@ -23,6 +28,20 @@ extends Resource
 @export var treasure_templates: Array[RoomTemplate] = []
 @export var shop_templates: Array[RoomTemplate] = []
 @export var boss_templates: Array[RoomTemplate] = []
+
+@export_group("Boss")
+
+## Which boss this floor's boss room spawns. A `Boss` scene, instantiated by
+## `FloorController` the same way any other floor-specific content is.
+@export var boss_scene: PackedScene
+
+## As the HUD shows it. Not read off the boss's own resource — nothing hands the HUD a
+## reference to one, and a name is cheaper to keep in step with data than to plumb a
+## cross-scene reference for.
+@export var boss_display_name: String = ""
+
+## Shown when the boss falls, alongside the reward choice.
+@export var boss_defeat_banner: String = ""
 
 @export_group("Population")
 

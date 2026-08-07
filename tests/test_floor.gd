@@ -34,6 +34,7 @@ func run() -> void:
 	_test_layout_rejects_overlap()
 	_test_generator_refuses_impossible_configs()
 	await _test_repair_cells_drop_on_every_third_clear()
+	await _test_boss_defeat_advances_to_the_next_floor_and_only_the_last_wins()
 
 
 func _test_config_has_content() -> void:
@@ -255,7 +256,7 @@ func _test_templates_keep_doorways_clear() -> void:
 		for obstacle: Rect2i in template.obstacles:
 			check(
 				Rect2i(Vector2i.ZERO, tiles).encloses(obstacle),
-				"%s obstacle %v stays inside the interior" % [template.id, obstacle],
+				"%s obstacle %s stays inside the interior" % [template.id, obstacle],
 			)
 			# An obstacle may sit in the middle of the room; what it must not do is straddle a
 			# doorway corridor at the wall it opens through.
@@ -264,7 +265,7 @@ func _test_templates_keep_doorways_clear() -> void:
 			var touches_bottom := obstacle.end.y >= tiles.y - 1
 			check(
 				not (in_vertical and (touches_top or touches_bottom)),
-				"%s obstacle %v does not block a top or bottom doorway" % [template.id, obstacle],
+				"%s obstacle %s does not block a top or bottom doorway" % [template.id, obstacle],
 			)
 
 			var in_horizontal := obstacle.position.y < horizontal_corridor.y and obstacle.end.y > horizontal_corridor.x
@@ -272,7 +273,7 @@ func _test_templates_keep_doorways_clear() -> void:
 			var touches_right := obstacle.end.x >= tiles.x - 1
 			check(
 				not (in_horizontal and (touches_left or touches_right)),
-				"%s obstacle %v does not block a side doorway" % [template.id, obstacle],
+				"%s obstacle %s does not block a side doorway" % [template.id, obstacle],
 			)
 
 		for spawn: Vector2i in template.enemy_spawns:
@@ -412,6 +413,74 @@ func _test_repair_cells_drop_on_every_third_clear() -> void:
 
 	arena.queue_free()
 	await advance_physics(1)
+
+
+## Step 1 of multi-level: floor 1 chains to a duplicate as floor 2 via `FloorConfig.next_floor`.
+## Defeating a boss must advance the run into the next floor rather than end it, and only the
+## *last* floor's boss may reach victory. Drives the boss-defeat handlers directly, the same way
+## `_test_repair_cells_drop_on_every_third_clear` drives `_on_room_cleared` directly above.
+func _test_boss_defeat_advances_to_the_next_floor_and_only_the_last_wins() -> void:
+	var floor_config: FloorConfig = load(FLOOR_CONFIG_PATH) as FloorConfig
+	if not require(floor_config.next_floor, "floor 1 has a next floor configured"):
+		return
+
+	var arena := Node2D.new()
+	add_child(arena)
+	var floor_node: FloorController = FLOOR_SCENE.instantiate()
+	arena.add_child(floor_node)
+	var player: Player = PLAYER_SCENE.instantiate()
+	arena.add_child(player)
+	await advance_physics(1)
+
+	GameManager.start_run()
+	RunManager.begin_run(9001)
+	check(floor_node.build(player, 9001), "floor 1 builds")
+
+	var boss_room := _find_boss_room(floor_node)
+	if require(boss_room, "floor 1 has a boss room"):
+		floor_node._on_boss_defeated(Node.new(), boss_room)
+		await advance_physics(1)
+		check(
+			GameManager.state == GameManager.State.RUN,
+			"defeating floor 1's boss does not end the run",
+		)
+
+		floor_node._on_boss_reward_taken(floor_config.item_pool[0])
+		await advance_physics(1)
+		check(
+			GameManager.state == GameManager.State.RUN,
+			"taking floor 1's reward advances, not wins",
+		)
+		check(RunManager.floor_number == 2, "RunManager reports floor 2")
+		check(
+			floor_node.config == floor_config.next_floor,
+			"the controller rebuilt from floor 2's config",
+		)
+		check(floor_node._clears == 0, "floor 2 starts with a clean clear count")
+		check(floor_node.visited.size() == 1, "floor 2 starts with only its own start room visited")
+
+		var boss_room_2 := _find_boss_room(floor_node)
+		if require(boss_room_2, "floor 2 has a boss room"):
+			floor_node._on_boss_defeated(Node.new(), boss_room_2)
+			floor_node._on_boss_reward_taken(floor_config.next_floor.item_pool[0])
+			await advance_physics(1)
+			check(
+				GameManager.state == GameManager.State.VICTORY,
+				"defeating the last floor's boss wins the run",
+			)
+
+	# Winning pauses the tree (GameManager._set_state); leaving it paused would break every
+	# suite that runs after this one and needs physics frames to actually advance.
+	GameManager.start_run()
+	arena.queue_free()
+	await advance_physics(1)
+
+
+func _find_boss_room(floor_node: FloorController) -> Room:
+	for plan: RoomPlan in floor_node.layout.rooms:
+		if plan.type == RoomTemplate.Type.BOSS:
+			return floor_node.get_room(plan.id)
+	return null
 
 
 func _count_repair_cells() -> int:

@@ -17,6 +17,11 @@ const REPAIR_CELL_CONFIG := preload("res://data/pickups/repair_cell.tres")
 ## How far scrap scatters from where it dropped, so a pile of it is countable.
 const SCATTER := 9.0
 
+## How many scattered offsets to try before giving up and dropping the pickup exactly where
+## it died instead of taking a chance on the last one. Mirrors PopUpDrone._pick_destination:
+## retry against real geometry, then fall back to a position already known to be clear.
+const SCATTER_ATTEMPTS := 6
+
 var _config: FloorConfig
 var _rng := RandomNumberGenerator.new()
 
@@ -24,7 +29,11 @@ var _rng := RandomNumberGenerator.new()
 func setup(config: FloorConfig, seed_value: int) -> void:
 	_config = config
 	_rng.seed = seed_value
-	EventBus.enemy_killed.connect(_on_enemy_killed)
+	# Guarded because a floor advance calls setup() again on this same node: an unguarded
+	# connect would stack a second EventBus.enemy_killed listener and quietly double every
+	# scrap drop from the second floor onward.
+	if not EventBus.enemy_killed.is_connected(_on_enemy_killed):
+		EventBus.enemy_killed.connect(_on_enemy_killed)
 
 
 ## Called by the floor when a combat room is cleared. The reward is the payoff for the fight,
@@ -82,9 +91,38 @@ func _spawn_scrap(position: Vector2, count: int) -> void:
 func _spawn(config: PickupConfig, position: Vector2, scatter := true) -> void:
 	var pickup: Pickup = PICKUP_SCENE.instantiate()
 	pickup.config = config
-	pickup.position = position
-	if scatter:
-		pickup.position += Vector2(
+	pickup.position = _resolve_position(position, scatter)
+	add_child.call_deferred(pickup)
+
+
+## Scatter lands most drops in the open, but an unchecked offset can just as easily land one
+## inside the wall or obstacle the origin point was sitting next to — an enemy dying pinned in
+## a corner is common, and the scatter radius is well within reach of both of that corner's
+## faces. A pickup is an Area2D, so nothing physically stops it from spawning embedded in solid
+## geometry the way a living body would; once it has, the player's own body can never approach
+## close enough to collect it, and the Scrap Magnet's pull never engages either — it is gated by
+## the player's distance, not blocked by walls, so it silently never starts.
+##
+## Retried against real physics geometry rather than the room template, so obstacles the
+## template does not know about are covered too (see PopUpDrone._is_blocked, the same check).
+## Falling back to the unscattered `position` after exhausting the attempts is safe because
+## that point is always somewhere already clear of geometry — an enemy's collision-safe death
+## position, or an authored room reward point.
+func _resolve_position(position: Vector2, scatter: bool) -> Vector2:
+	if not scatter:
+		return position
+	for _attempt: int in SCATTER_ATTEMPTS:
+		var candidate := position + Vector2(
 			_rng.randf_range(-SCATTER, SCATTER), _rng.randf_range(-SCATTER, SCATTER)
 		)
-	add_child.call_deferred(pickup)
+		if not _is_blocked(candidate):
+			return candidate
+	return position
+
+
+func _is_blocked(point: Vector2) -> bool:
+	var query := PhysicsPointQueryParameters2D.new()
+	query.position = point
+	query.collision_mask = Teams.LAYER_WORLD
+	query.collide_with_areas = false
+	return not get_world_2d().direct_space_state.intersect_point(query, 1).is_empty()

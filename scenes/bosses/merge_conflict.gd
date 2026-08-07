@@ -1,5 +1,5 @@
 class_name MergeConflict
-extends Node2D
+extends Boss
 ## Spec section 16's Floor 1 boss, **The Scrap King**: a machine built out of everything the
 ## megacorp threw away, which splits into two rival copies of itself and then drags them back
 ## together into something worse.
@@ -7,7 +7,8 @@ extends Node2D
 ## The class, the scene, and the config id are all still spelled `merge_conflict`, which was the
 ## boss's name until it was renamed. Left alone deliberately: `BossConfig.id` is what a save file
 ## records as "beaten", and file paths are what half the project's `preload`s point at. The name the
-## player reads lives in `BossConfig.display_name` and in CombatHUD.BOSS_NAME.
+## player reads lives in `BossConfig.display_name` and in `FloorConfig.boss_display_name`,
+## which is what the HUD is actually bound to (see `FloorController.boss_encountered`).
 ##
 ## The controller owns the fight; the bodies the player shoots at are `BossPart`s that
 ## forward their hits here. That split is what lets phase two put two bodies in the arena

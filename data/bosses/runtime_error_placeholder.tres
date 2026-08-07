@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="SimpleBossConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/simple_boss_config.gd" id="1_boss"]
+[ext_resource type="Resource" path="res://data/projectiles/boss_red.tres" id="2_shot"]
+
+[resource]
+script = ExtResource("1_boss")
+display_name = "Runtime Error"
+max_health = 30.0
+move_speed = 26.0
+attack_interval = 1.8
+telegraph_seconds = 0.5
+shot = ExtResource("2_shot")
+spread_count = 5
+spread_degrees = 50.0

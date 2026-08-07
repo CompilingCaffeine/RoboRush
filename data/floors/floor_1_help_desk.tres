@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="FloorConfig" load_steps=27 format=3]
+[gd_resource type="Resource" script_class="FloorConfig" load_steps=29 format=3]
 
 [ext_resource type="Script" path="res://scripts/resources/floor_config.gd" id="1_floor"]
 [ext_resource type="Resource" path="res://data/rooms/start_bay.tres" id="2_start"]
@@ -26,6 +26,8 @@
 [ext_resource type="Resource" path="res://data/items/unsafe_overclock.tres" id="18_unsafe_overclock"]
 [ext_resource type="Resource" path="res://data/items/scrap_magnet.tres" id="19_scrap_magnet"]
 [ext_resource type="Resource" path="res://data/items/debug_drone.tres" id="20_debug_drone"]
+[ext_resource type="Resource" path="res://data/floors/floor_2_development.tres" id="24_next"]
+[ext_resource type="PackedScene" path="res://scenes/bosses/merge_conflict.tscn" id="25_boss_scene"]
 
 [resource]
 script = ExtResource("1_floor")
@@ -45,3 +47,7 @@ item_pool = Array[ItemConfig]([ExtResource("9_ricochet_driver"), ExtResource("10
 item_clear_indices = Array[int]([1, 3, 5])
 shop = ExtResource("23_shop_cfg")
 treasure_grants_item = true
+next_floor = ExtResource("24_next")
+boss_scene = ExtResource("25_boss_scene")
+boss_display_name = "THE SCRAP KING"
+boss_defeat_banner = "THE KING IS DEAD"
