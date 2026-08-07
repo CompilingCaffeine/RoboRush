@@ -104,3 +104,9 @@ signal room_entered(type: int, room_id: int)
 
 ## The current room's doors sealed or opened.
 signal doors_changed(are_locked: bool)
+
+## A compile lane (Floor 2's telegraph-then-strike hazard) finished its telegraph and struck.
+## Damage is already resolved by the time this fires — same shape as `explosion_triggered` —
+## it exists so the strike is drawn/heard in one place rather than by whatever queued the
+## lane. `rect` is in global coordinates.
+signal compile_lane_executed(rect: Rect2)

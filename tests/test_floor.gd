@@ -11,6 +11,7 @@ extends TestCase
 ## I happened to try" is exactly the failure mode here.
 
 const FLOOR_CONFIG_PATH := "res://data/floors/floor_1_help_desk.tres"
+const FLOOR_2_CONFIG_PATH := "res://data/floors/floor_2_development.tres"
 
 ## Seeds to sweep. Enough that a rare structural bug has to be very rare to survive.
 const SEED_COUNT := 120
@@ -33,6 +34,8 @@ func run() -> void:
 	_test_templates_keep_doorways_clear()
 	_test_layout_rejects_overlap()
 	_test_generator_refuses_impossible_configs()
+	_test_forced_enemies_never_exceed_their_spawn_points()
+	_test_combat_templates_skew_easier_near_the_start()
 	await _test_repair_cells_drop_on_every_third_clear()
 	await _test_boss_defeat_advances_to_the_next_floor_and_only_the_last_wins()
 
@@ -336,6 +339,79 @@ func _test_generator_refuses_impossible_configs() -> void:
 		FloorGenerator.generate(no_templates, 1) == null,
 		"a floor with no templates is refused",
 	)
+
+
+## `RoomTemplate.forced_enemies` pairs with `enemy_spawns` by index; a template author
+## resizing one and forgetting the other is exactly the authoring-time mistake this is cheap
+## to catch here and expensive to notice by playing (see the field's own doc comment).
+func _test_forced_enemies_never_exceed_their_spawn_points() -> void:
+	var templates: Array[RoomTemplate] = []
+	templates.append_array(_config.start_templates)
+	templates.append_array(_config.combat_templates)
+	templates.append_array(_config.treasure_templates)
+	templates.append_array(_config.shop_templates)
+	templates.append_array(_config.boss_templates)
+	for template: RoomTemplate in templates:
+		check(
+			template.forced_enemies.size() <= template.enemy_spawns.size(),
+			"%s does not force more enemies than it has spawn points" % template.id,
+		)
+
+
+## Distance-biased template selection (`FloorGenerator._capped_by_distance`) is what makes
+## README's Floor 2 encounter curve possible at all: an easy template near the start, the
+## hardest reserved for the approach to the boss. Swept across many seeds, because "worked
+## on the seed I happened to try" is exactly the failure mode a single generation would hide.
+func _test_combat_templates_skew_easier_near_the_start() -> void:
+	var dev_config := load(FLOOR_2_CONFIG_PATH) as FloorConfig
+	if not require(dev_config, "floor_2_development.tres loads as a FloorConfig"):
+		return
+
+	var near_start: Array[int] = []
+	var near_boss: Array[int] = []
+
+	for offset: int in 60:
+		var seed_value := 5000 + offset * 41
+		var layout := FloorGenerator.generate(dev_config, seed_value)
+		if layout == null:
+			fail("seed %d failed to generate" % seed_value)
+			continue
+
+		var distances := layout.distances_from(layout.get_start_room())
+		var max_distance := 0
+		for room: RoomPlan in layout.rooms:
+			max_distance = maxi(max_distance, distances.get(room.id, 0))
+		if max_distance <= 0:
+			continue
+
+		for room: RoomPlan in layout.rooms:
+			if room.type != RoomTemplate.Type.COMBAT or room.template == null:
+				continue
+			var progress := float(distances.get(room.id, 0)) / float(max_distance)
+			if progress <= 0.34:
+				near_start.append(room.template.difficulty)
+			elif progress >= 0.66:
+				near_boss.append(room.template.difficulty)
+
+	if not require(not near_start.is_empty(), "some combat rooms landed near the start across the sweep"):
+		return
+	if not require(not near_boss.is_empty(), "some combat rooms landed near the boss across the sweep"):
+		return
+
+	var start_average := _average(near_start)
+	var boss_average := _average(near_boss)
+	check(
+		start_average < boss_average,
+		"combat rooms near the start average an easier difficulty than rooms near the boss (%.2f vs %.2f)"
+			% [start_average, boss_average],
+	)
+
+
+func _average(values: Array[int]) -> float:
+	var total := 0
+	for value: int in values:
+		total += value
+	return float(total) / float(values.size())
 
 
 ## A stable text form of a layout, for comparing two generations.

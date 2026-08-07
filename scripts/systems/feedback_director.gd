@@ -33,6 +33,11 @@ const SHAKE_EXPLOSION := 0.16
 ## significant thing that happens in the fight that is not somebody's death.
 const SHAKE_BOSS_PHASE := 0.5
 
+## A compile lane striking. Small on purpose — the lane already draws a room-spanning red
+## flash of its own, which is the real feedback; this only has to confirm the hit landed,
+## not compete with it.
+const SHAKE_COMPILE_LANE := 0.2
+
 ## The explosion particle scene is built around a 36px blast (Volatile Kernel's radius), so
 ## this converts a requested radius into a scale for anything else.
 const EXPLOSION_REFERENCE_RADIUS := 36.0
@@ -69,6 +74,7 @@ func _ready() -> void:
 	EventBus.boss_phase_changed.connect(_on_boss_phase_changed)
 	EventBus.boss_feigned_defeat.connect(_on_boss_feigned_defeat)
 	EventBus.boss_defeated.connect(_on_boss_defeated)
+	EventBus.compile_lane_executed.connect(_on_compile_lane_executed)
 
 
 ## Wired by main.gd, which owns scene composition.
@@ -232,6 +238,13 @@ func _on_explosion_triggered(position: Vector2, radius: float) -> void:
 
 	AudioManager.play_sfx(&"explosion", HIT_PITCH_VARIATION)
 	_add_trauma(SHAKE_EXPLOSION)
+
+
+## Small and cheap on purpose — see SHAKE_COMPILE_LANE. `_rect` is unused: there is nowhere
+## more specific than "the lane" to put a sound or a shake.
+func _on_compile_lane_executed(_rect: Rect2) -> void:
+	AudioManager.play_sfx(&"zap", HIT_PITCH_VARIATION)
+	_add_trauma(SHAKE_COMPILE_LANE)
 
 
 func _on_chain_jumped(from: Vector2, to: Vector2) -> void:

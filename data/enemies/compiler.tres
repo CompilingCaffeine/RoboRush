@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CompilerConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/compiler_config.gd" id="1_config"]
+
+[resource]
+script = ExtResource("1_config")
+display_name = "Compiler"
+max_health = 5.0
+knockback_resistance = 1.0
+move_speed = 0.0
+acceleration = 0.0
+deceleration = 0.0
+preferred_range = 0.0
+range_tolerance = 0.0
+contact_damage = 0.0
+telegraph_seconds = 0.0
+lane_interval = 3.2
+lane_telegraph_seconds = 1.1
+lane_strike_seconds = 0.25
+lane_damage = 1.0

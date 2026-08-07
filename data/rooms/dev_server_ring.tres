@@ -1,6 +1,8 @@
-[gd_resource type="Resource" script_class="RoomTemplate" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="1_template"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/code_runner.tscn" id="2_code_runner"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/compiler.tscn" id="3_compiler"]
 
 [resource]
 script = ExtResource("1_template")
@@ -8,6 +10,7 @@ id = &"dev_server_ring"
 type = 1
 obstacles = Array[Rect2i]([Rect2i(9, 3, 8, 1), Rect2i(9, 8, 8, 1), Rect2i(9, 4, 1, 4), Rect2i(16, 4, 1, 4)])
 enemy_spawns = Array[Vector2i]([Vector2i(3, 2), Vector2i(23, 2), Vector2i(3, 9), Vector2i(23, 9)])
+forced_enemies = Array[PackedScene]([ExtResource("2_code_runner"), ExtResource("3_compiler")])
 reward_spawn = Vector2i(13, 6)
 difficulty = 3
 floor_tags = Array[StringName]([&"development"])

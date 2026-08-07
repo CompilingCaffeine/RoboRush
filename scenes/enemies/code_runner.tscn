@@ -1,0 +1,46 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scenes/enemies/code_runner.gd" id="1_runner"]
+[ext_resource type="Resource" path="res://data/enemies/code_runner.tres" id="2_config"]
+[ext_resource type="Texture2D" path="res://art/enemies/memory_leech.png" id="3_tex"]
+[ext_resource type="Script" path="res://scripts/components/health_component.gd" id="4_health"]
+[ext_resource type="Script" path="res://scripts/components/weapon_controller.gd" id="5_weapon"]
+[ext_resource type="Resource" path="res://data/weapons/ticket_spitter.tres" id="6_spitter"]
+[ext_resource type="Script" path="res://scripts/components/hurt_flash.gd" id="7_flash"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_runner"]
+radius = 6.0
+
+[node name="CodeRunner" type="CharacterBody2D" groups=["enemy"]]
+collision_layer = 4
+collision_mask = 1
+motion_mode = 1
+script = ExtResource("1_runner")
+config = ExtResource("2_config")
+
+[node name="Shape" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_runner")
+
+[node name="Sprite" type="Sprite2D" parent="."]
+unique_name_in_owner = true
+texture = ExtResource("3_tex")
+; Borrowed silhouette, distinct tint: Memory Leech isn't in Development's roster, so there
+; is no collision. Violet rather than Compiler's cyan, so Development's two new enemies
+; read apart from each other too, not just from the returning cast. A dedicated "fast
+; mover" sprite is a later art pass, not this one.
+modulate = Color(0.68, 0.45, 0.95, 1)
+
+[node name="Health" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("4_health")
+invulnerability_seconds = 0.0
+
+[node name="Weapon" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("5_weapon")
+config = ExtResource("6_spitter")
+
+[node name="HurtFlash" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("7_flash")
+target = NodePath("../Sprite")

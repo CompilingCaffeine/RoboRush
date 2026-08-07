@@ -519,11 +519,11 @@ audio/music/*.wav                       + Menu, explore, and boss loops
 tests/test_runner.tscn / .gd               Aggregating runner; fails on a vanished suite
 tests/test_case.gd                         Suite base class
 tests/test_player_movement.gd              32 movement and dash checks
-tests/test_combat.gd                       101 data, component, and integration checks
+tests/test_combat.gd                       126 data, component, and integration checks
 tests/test_player_input.gd                 38 arrow-key shooting checks
-tests/test_floor.gd                        149 generation, invariant, template, and floor-advance checks
+tests/test_floor.gd                        161 generation, invariant, template, and floor-advance checks
 tests/test_items.gd                        174 item, stack, inventory, and synergy checks
-tests/test_enemies.gd                      57 checks that each enemy poses its problem
+tests/test_enemies.gd                      84 checks that each enemy poses its problem
 tests/test_run.gd                          64 statistics, state, and summary checks
 tests/test_shop.gd                         47 price, purchase, and refusal checks
 tests/test_boss.gd                         85 phase, terminal, and defeat checks

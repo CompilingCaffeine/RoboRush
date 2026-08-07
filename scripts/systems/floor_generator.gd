@@ -161,11 +161,17 @@ static func _free_neighbour_cells(layout: FloorLayout, room: RoomPlan) -> Array[
 	return free
 
 
-## Picks a template per room. Combat templates are drawn without immediate repetition where
+## Picks a template per room. Combat templates are capped by distance from the start before
+## the existing no-immediate-repeat filter, and drawn without immediate repetition where
 ## possible, so a floor does not present the same layout twice in a row.
 static func _assign_templates(
 	layout: FloorLayout, config: FloorConfig, rng: RandomNumberGenerator
 ) -> bool:
+	var distances := layout.distances_from(layout.get_start_room())
+	var max_distance := 0
+	for room: RoomPlan in layout.rooms:
+		max_distance = maxi(max_distance, distances.get(room.id, 0))
+
 	var last_combat_id := &""
 	for room: RoomPlan in layout.rooms:
 		var pool := config.templates_for(room.type)
@@ -175,15 +181,44 @@ static func _assign_templates(
 			])
 			return false
 
-		if room.type == RoomTemplate.Type.COMBAT and pool.size() > 1:
-			var filtered: Array[RoomTemplate] = []
-			for template: RoomTemplate in pool:
-				if template.id != last_combat_id:
-					filtered.append(template)
-			pool = filtered
+		if room.type == RoomTemplate.Type.COMBAT:
+			pool = _capped_by_distance(pool, distances.get(room.id, 0), max_distance)
+			if pool.size() > 1:
+				var filtered: Array[RoomTemplate] = []
+				for template: RoomTemplate in pool:
+					if template.id != last_combat_id:
+						filtered.append(template)
+				pool = filtered
 
 		room.template = pool[rng.randi_range(0, pool.size() - 1)]
 		if room.type == RoomTemplate.Type.COMBAT:
 			last_combat_id = room.template.id
 
 	return true
+
+
+## Combat rooms near the start draw only from the floor's easier templates; rooms near the
+## boss may draw anything, capped linearly in between. This is what makes "introduce the new
+## enemy near the entrance, save the hardest combinations for the approach to the boss"
+## (README's Floor 2 plan) actually happen, rather than being left to an independent weighted
+## roll that has no idea where in the floor it is running.
+##
+## Falls back to the unfiltered pool if the cap would leave nothing eligible — a floor whose
+## easiest template is still harder than the cap allows must still generate a room.
+static func _capped_by_distance(
+	pool: Array[RoomTemplate], distance: int, max_distance: int
+) -> Array[RoomTemplate]:
+	var hardest := 0
+	for template: RoomTemplate in pool:
+		hardest = maxi(hardest, template.difficulty)
+	if hardest <= 1:
+		return pool
+
+	var progress := float(distance) / float(maxi(max_distance, 1))
+	var cap := 1 + roundi(progress * float(hardest - 1))
+
+	var capped: Array[RoomTemplate] = []
+	for template: RoomTemplate in pool:
+		if template.difficulty <= cap:
+			capped.append(template)
+	return capped if not capped.is_empty() else pool

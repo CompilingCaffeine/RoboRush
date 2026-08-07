@@ -49,6 +49,8 @@ func run() -> void:
 	await _test_return_protocol_turns_around_inside_a_room()
 	await _test_return_protocol_leaves_ordinary_range_alone()
 	await _test_ricochet_and_return_stack()
+	await _test_compile_lane_telegraphs_then_strikes()
+	await _test_compile_lane_misses_a_player_outside_the_rect()
 
 
 # --- Data ---------------------------------------------------------------------
@@ -551,6 +553,66 @@ func _test_room_combat_reports_cleared_once() -> void:
 	check(global[0] == 1, "room_cleared reached the EventBus once")
 
 	EventBus.room_cleared.disconnect(handler)
+	await _teardown(arena)
+
+
+## Floor 2's shared telegraph-then-strike hazard (scripts/combat/compile_lane.gd): no damage
+## while it is still telegraphing, one hit once the strike opens if the player is inside the
+## rectangle, and the node frees itself afterward.
+func _test_compile_lane_telegraphs_then_strikes() -> void:
+	var arena := _make_arena()
+	var spawner := Node2D.new()
+	arena.add_child(spawner)
+
+	var player: Player = PLAYER_SCENE.instantiate()
+	player.global_position = Vector2(50.0, 16.0)
+	arena.add_child(player)
+	await advance_physics(1)
+
+	var rect := Rect2(Vector2(0.0, 0.0), Vector2(200.0, 32.0))
+	var lane := CompileLane.spawn(spawner, rect, 1.0, 0.1, 0.1)
+	if not require(lane, "the lane spawns"):
+		await _teardown(arena)
+		return
+
+	var health := player.get_health_component()
+	var before := health.current
+	await advance_physics(3)
+	check(
+		is_equal_approx(health.current, before),
+		"no damage lands while the lane is still telegraphing",
+	)
+
+	await advance_physics(15)
+	check(health.current < before, "damage lands once the strike opens, for a player inside the lane")
+	check(not is_instance_valid(lane), "the lane frees itself once its strike window ends")
+
+	await _teardown(arena)
+
+
+## The counterpart to the check above: a player standing outside the lane's rectangle when
+## it strikes is not hit, even though a lane exists and executes.
+func _test_compile_lane_misses_a_player_outside_the_rect() -> void:
+	var arena := _make_arena()
+	var spawner := Node2D.new()
+	arena.add_child(spawner)
+
+	var player: Player = PLAYER_SCENE.instantiate()
+	player.global_position = Vector2(1000.0, 1000.0)
+	arena.add_child(player)
+	await advance_physics(1)
+
+	var rect := Rect2(Vector2(0.0, 0.0), Vector2(200.0, 32.0))
+	var lane := CompileLane.spawn(spawner, rect, 1.0, 0.05, 0.05)
+	if not require(lane, "the lane spawns"):
+		await _teardown(arena)
+		return
+
+	var health := player.get_health_component()
+	var before := health.current
+	await advance_physics(10)
+	check(is_equal_approx(health.current, before), "a player outside the lane's rect takes no damage")
+
 	await _teardown(arena)
 
 

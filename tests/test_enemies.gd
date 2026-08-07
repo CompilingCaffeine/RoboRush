@@ -17,17 +17,21 @@ const TICKET_BOT_SCENE := preload("res://scenes/enemies/ticket_bot.tscn")
 const POP_UP_DRONE_SCENE := preload("res://scenes/enemies/pop_up_drone.tscn")
 const MEMORY_LEECH_SCENE := preload("res://scenes/enemies/memory_leech.tscn")
 const FIREWALL_NODE_SCENE := preload("res://scenes/enemies/firewall_node.tscn")
+const CODE_RUNNER_SCENE := preload("res://scenes/enemies/code_runner.tscn")
+const COMPILER_SCENE := preload("res://scenes/enemies/compiler.tscn")
 const WALL_BLOCK_SCENE := preload("res://scenes/rooms/wall_block.tscn")
 const ROOM_SCENE := preload("res://scenes/rooms/room.tscn")
 
 const DRONE_CONFIG := "res://data/enemies/pop_up_drone.tres"
 const LEECH_CONFIG := "res://data/enemies/memory_leech.tres"
 const FIREWALL_CONFIG := "res://data/enemies/firewall_node.tres"
+const CODE_RUNNER_CONFIG := "res://data/enemies/code_runner.tres"
+const COMPILER_CONFIG := "res://data/enemies/compiler.tres"
 
 
 func run() -> void:
 	_test_configs_load_as_their_own_types()
-	_test_the_roster_is_four_distinct_problems()
+	_test_the_roster_is_six_distinct_problems()
 
 	await _test_every_enemy_shares_the_lifecycle()
 	await _test_ticket_bot_keeps_its_range()
@@ -39,6 +43,8 @@ func run() -> void:
 	await _test_leech_deals_contact_damage()
 	await _test_firewall_node_holds_still_and_sweeps()
 	await _test_firewall_beams_stop_at_walls()
+	await _test_code_runner_strafes_while_firing()
+	await _test_compiler_paints_lanes()
 	await _test_knockback_decays_instead_of_growing()
 	await _test_knockback_stays_out_of_the_steering_velocity()
 	await _test_full_resistance_means_immovable()
@@ -69,15 +75,27 @@ func _test_configs_load_as_their_own_types() -> void:
 		check(is_zero_approx(firewall.move_speed), "the node never moves")
 		check(firewall.max_health > 4.0, "it is durable, being the one that cannot flee")
 
+	var runner := load(CODE_RUNNER_CONFIG) as CodeRunnerConfig
+	if require(runner, "code_runner.tres loads as a CodeRunnerConfig"):
+		check(runner.weapon != null, "the runner has a weapon — firing while moving is its whole point")
+		check(runner.direction_hold_seconds > 0.0, "it commits to a strafe direction for a real duration")
 
-## Spec section 15 asks for four enemies that each create a *different* movement problem.
-## Four enemies with the same statistics would technically satisfy the count.
-func _test_the_roster_is_four_distinct_problems() -> void:
+	var compiler := load(COMPILER_CONFIG) as CompilerConfig
+	if require(compiler, "compiler.tres loads as a CompilerConfig"):
+		check(is_zero_approx(compiler.move_speed), "the compiler never moves — the lane is its attack")
+		check(compiler.lane_telegraph_seconds > 0.0, "its lane telegraphs for a real duration")
+
+
+## Spec section 15 asks for enemies that each create a *different* movement problem. Six
+## enemies with the same statistics would technically satisfy the count.
+func _test_the_roster_is_six_distinct_problems() -> void:
 	var configs: Array[EnemyConfig] = [
 		load("res://data/enemies/ticket_bot.tres") as EnemyConfig,
 		load(DRONE_CONFIG) as EnemyConfig,
 		load(LEECH_CONFIG) as EnemyConfig,
 		load(FIREWALL_CONFIG) as EnemyConfig,
+		load(CODE_RUNNER_CONFIG) as EnemyConfig,
+		load(COMPILER_CONFIG) as EnemyConfig,
 	]
 
 	var names: Dictionary[String, bool] = {}
@@ -89,8 +107,8 @@ func _test_the_roster_is_four_distinct_problems() -> void:
 		names[config.display_name] = true
 		healths[config.max_health] = true
 
-	check(names.size() == 4, "all four enemies are named distinctly")
-	check(healths.size() == 4, "all four have different durability")
+	check(names.size() == 6, "all six enemies are named distinctly")
+	check(healths.size() == 6, "all six have different durability")
 	check(
 		configs[2].contact_damage > 0.0 and configs[0].contact_damage <= 0.0,
 		"only the melee enemy deals contact damage",
@@ -105,7 +123,8 @@ func _test_the_roster_is_four_distinct_problems() -> void:
 ## would be a door that never opens.
 func _test_every_enemy_shares_the_lifecycle() -> void:
 	for scene: PackedScene in [
-		TICKET_BOT_SCENE, POP_UP_DRONE_SCENE, MEMORY_LEECH_SCENE, FIREWALL_NODE_SCENE
+		TICKET_BOT_SCENE, POP_UP_DRONE_SCENE, MEMORY_LEECH_SCENE, FIREWALL_NODE_SCENE,
+		CODE_RUNNER_SCENE, COMPILER_SCENE,
 	]:
 		var arena := _make_arena()
 		var enemy := _add_enemy(arena, scene, Vector2(60.0, 0.0))
@@ -365,6 +384,78 @@ func _test_firewall_beams_stop_at_walls() -> void:
 	await _teardown(arena)
 
 
+# --- Code Runner ----------------------------------------------------------------
+
+
+## README's Floor 2 plan: "Strafes across sight lines and fires while moving." Both halves
+## are checked together — a runner that fired without moving, or moved without firing,
+## would not be posing the problem it exists for.
+func _test_code_runner_strafes_while_firing() -> void:
+	var arena := _make_arena()
+	_add_target(arena, Vector2.ZERO)
+	var runner := _add_enemy(arena, CODE_RUNNER_SCENE, Vector2(110.0, 0.0)) as CodeRunner
+	await advance_physics(2)
+
+	var container := arena.get_node("Projectiles")
+	var spawned := [0]
+	container.child_entered_tree.connect(func(_c: Node) -> void: spawned[0] += 1)
+
+	# The target sits due west of the runner's start, so the tangential (strafe) component
+	# of its movement is purely along Y — sampling Y over time is what proves it strafes
+	# rather than just closing straight in and holding.
+	var lateral: Array[float] = [runner.global_position.y]
+	for _cycle: int in 20:
+		await advance_physics(6)
+		lateral.append(runner.global_position.y)
+
+	var min_y := lateral[0]
+	var max_y := lateral[0]
+	for y: float in lateral:
+		min_y = minf(min_y, y)
+		max_y = maxf(max_y, y)
+
+	check(spawned[0] > 0, "the runner fires")
+	check(
+		max_y - min_y > 20.0,
+		"and its lateral position actually changes over time (spread %.1f px) — it strafes rather than holding still"
+			% (max_y - min_y),
+	)
+	await _teardown(arena)
+
+
+# --- Compiler ---------------------------------------------------------------------
+
+
+## README's Floor 2 plan: "Paints one row or column, telegraphs it, then sends a fast pulse
+## through the lane." CompileLane's own telegraph/strike/hit-detection correctness is
+## covered in tests/test_combat.gd; this only checks that the Compiler actually produces one.
+func _test_compiler_paints_lanes() -> void:
+	var arena := _make_arena()
+	var room := _add_room(arena)
+	if room == null:
+		await _teardown(arena)
+		return
+
+	var compiler: Compiler = COMPILER_SCENE.instantiate()
+	compiler.config = _quick_compiler()
+	compiler.position = Vector2(40.0, 40.0)
+	room.get_node("%Enemies").add_child(compiler)
+	await advance_physics(2)
+
+	var container := arena.get_node("Projectiles")
+	var lanes := [0]
+	container.child_entered_tree.connect(
+		func(node: Node) -> void:
+			if node is CompileLane:
+				lanes[0] += 1
+	)
+
+	await advance_physics(30)
+
+	check(lanes[0] > 0, "the Compiler actually paints a lane")
+	await _teardown(arena)
+
+
 # --- Fixtures -----------------------------------------------------------------
 
 
@@ -451,6 +542,14 @@ func _fast_firewall() -> FirewallNodeConfig:
 	var tuning := (load(FIREWALL_CONFIG) as FirewallNodeConfig).duplicate() as FirewallNodeConfig
 	tuning.beam_rotation_speed = 9.0
 	tuning.beam_interval = 0.1
+	return tuning
+
+
+## The shipped Compiler waits 3.2 seconds between lanes, which is right in the game and far
+## too slow to watch in a test.
+func _quick_compiler() -> CompilerConfig:
+	var tuning := (load(COMPILER_CONFIG) as CompilerConfig).duplicate() as CompilerConfig
+	tuning.lane_interval = 0.05
 	return tuning
 
 

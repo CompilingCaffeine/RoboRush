@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="CodeRunnerConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/code_runner_config.gd" id="1_config"]
+[ext_resource type="Resource" path="res://data/weapons/ticket_spitter.tres" id="2_weapon"]
+
+[resource]
+script = ExtResource("1_config")
+display_name = "Code Runner"
+max_health = 3.5
+knockback_resistance = 0.1
+move_speed = 70.0
+acceleration = 480.0
+deceleration = 600.0
+preferred_range = 110.0
+range_tolerance = 30.0
+weapon = ExtResource("2_weapon")
+contact_damage = 0.0
+telegraph_seconds = 0.0
+direction_hold_seconds = 1.4

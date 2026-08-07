@@ -1,6 +1,7 @@
-[gd_resource type="Resource" script_class="RoomTemplate" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="1_template"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/compiler.tscn" id="2_compiler"]
 
 [resource]
 script = ExtResource("1_template")
@@ -8,6 +9,7 @@ id = &"dev_cubicles"
 type = 1
 obstacles = Array[Rect2i]([Rect2i(6, 3, 1, 1), Rect2i(13, 3, 1, 1), Rect2i(20, 3, 1, 1), Rect2i(6, 8, 1, 1), Rect2i(13, 8, 1, 1), Rect2i(20, 8, 1, 1)])
 enemy_spawns = Array[Vector2i]([Vector2i(3, 6), Vector2i(23, 6), Vector2i(13, 2), Vector2i(13, 9)])
+forced_enemies = Array[PackedScene]([ExtResource("2_compiler")])
 reward_spawn = Vector2i(13, 6)
 difficulty = 2
 floor_tags = Array[StringName]([&"development"])

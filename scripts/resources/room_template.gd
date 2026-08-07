@@ -42,6 +42,18 @@ enum Type {
 ## "enemy count" knob for the generator to get wrong.
 @export var enemy_spawns: Array[Vector2i] = []
 
+## Forces a specific enemy at the matching index in `enemy_spawns` — index *i* here pairs
+## with point *i* there. Leave an index unset (or leave this array shorter than
+## `enemy_spawns`) to have that point draw from the floor's weighted roster as normal; this
+## is additive, not a replacement for it.
+##
+## Exists because independent weighted rolls cannot promise a "teaching" room actually
+## contains the enemy it teaches — a Development room built to introduce Code Runner is not
+## teaching anything on the seeds where the roll skips it. A template author reaches for
+## this only when a specific point must be a specific enemy; every other point stays exactly
+## as unpredictable as before.
+@export var forced_enemies: Array[PackedScene] = []
+
 ## Where a room-clear reward or treasure appears, in tile coordinates.
 @export var reward_spawn := Vector2i(13, 6)
 

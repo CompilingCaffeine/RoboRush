@@ -68,17 +68,22 @@ func build(room_plan: RoomPlan) -> void:
 ## Fills the template's spawn points with enemies drawn from the floor's roster.
 ##
 ## The template's own `difficulty` decides which enemies are eligible, so a harder layout
-## gets a harder encounter without the generator having to know what either means.
+## gets a harder encounter without the generator having to know what either means. A point
+## with a matching `forced_enemies` entry skips the roll entirely — see that field's doc.
 func populate(floor_config: FloorConfig, rng: RandomNumberGenerator) -> void:
 	if plan.template == null or floor_config == null:
 		return
 
-	for tile: Vector2i in plan.template.enemy_spawns:
-		var scene := floor_config.pick_enemy(plan.template.difficulty, rng)
+	var spawns := plan.template.enemy_spawns
+	var forced := plan.template.forced_enemies
+	for index: int in spawns.size():
+		var scene: PackedScene = forced[index] if index < forced.size() else null
+		if scene == null:
+			scene = floor_config.pick_enemy(plan.template.difficulty, rng)
 		if scene == null:
 			continue
 		var enemy: Node2D = scene.instantiate()
-		enemy.position = _tile_centre(tile)
+		enemy.position = _tile_centre(spawns[index])
 		_enemies.add_child(enemy)
 
 	_room_combat.begin(_enemies)
@@ -115,6 +120,25 @@ func get_interior_centre() -> Vector2:
 ## anything that needs to place itself "somewhere in this room" should ask for.
 func get_interior_rect() -> Rect2:
 	return Rect2(global_position, Vector2(INTERIOR_SIZE))
+
+
+## The full width of one tile row, in global coordinates. `row` is clamped into the interior,
+## so a caller does not have to bounds-check before asking — a compile lane is always drawn
+## somewhere real, never off the edge of the room it was told to appear in.
+func get_row_rect(row: int) -> Rect2:
+	var clamped := clampi(row, 0, INTERIOR_TILES.y - 1)
+	return Rect2(
+		global_position + Vector2(0.0, clamped * TILE_SIZE), Vector2(INTERIOR_SIZE.x, TILE_SIZE)
+	)
+
+
+## The full height of one tile column, in global coordinates. See `get_row_rect` for why `col`
+## is clamped rather than asserted.
+func get_column_rect(col: int) -> Rect2:
+	var clamped := clampi(col, 0, INTERIOR_TILES.x - 1)
+	return Rect2(
+		global_position + Vector2(clamped * TILE_SIZE, 0.0), Vector2(TILE_SIZE, INTERIOR_SIZE.y)
+	)
 
 
 ## Where this room's shop stands go, in global coordinates. Empty for anything but a shop.
