@@ -1,5 +1,6 @@
 extends TestCase
-## Checks for spec section 15's four enemies.
+## Checks for the enemy roster: spec section 15's original four, and the five Development
+## added on top of them.
 ##
 ## Each enemy exists to pose one movement problem, so each check here asks whether that
 ## problem is actually being posed — not whether the script ran. The Pop Up Drone must
@@ -19,6 +20,9 @@ const MEMORY_LEECH_SCENE := preload("res://scenes/enemies/memory_leech.tscn")
 const FIREWALL_NODE_SCENE := preload("res://scenes/enemies/firewall_node.tscn")
 const CODE_RUNNER_SCENE := preload("res://scenes/enemies/code_runner.tscn")
 const COMPILER_SCENE := preload("res://scenes/enemies/compiler.tscn")
+const NULL_POINTER_SCENE := preload("res://scenes/enemies/null_pointer.tscn")
+const DEADLOCK_SCENE := preload("res://scenes/enemies/deadlock.tscn")
+const RECURSION_SCENE := preload("res://scenes/enemies/recursion.tscn")
 const WALL_BLOCK_SCENE := preload("res://scenes/rooms/wall_block.tscn")
 const ROOM_SCENE := preload("res://scenes/rooms/room.tscn")
 
@@ -27,11 +31,14 @@ const LEECH_CONFIG := "res://data/enemies/memory_leech.tres"
 const FIREWALL_CONFIG := "res://data/enemies/firewall_node.tres"
 const CODE_RUNNER_CONFIG := "res://data/enemies/code_runner.tres"
 const COMPILER_CONFIG := "res://data/enemies/compiler.tres"
+const NULL_POINTER_CONFIG := "res://data/enemies/null_pointer.tres"
+const DEADLOCK_CONFIG := "res://data/enemies/deadlock.tres"
+const RECURSION_CONFIG := "res://data/enemies/recursion.tres"
 
 
 func run() -> void:
 	_test_configs_load_as_their_own_types()
-	_test_the_roster_is_six_distinct_problems()
+	_test_the_roster_is_nine_distinct_problems()
 
 	await _test_every_enemy_shares_the_lifecycle()
 	await _test_ticket_bot_keeps_its_range()
@@ -45,6 +52,16 @@ func run() -> void:
 	await _test_firewall_beams_stop_at_walls()
 	await _test_code_runner_strafes_while_firing()
 	await _test_compiler_paints_lanes()
+	await _test_null_pointer_marks_where_the_player_is()
+	await _test_null_pointer_does_not_follow_the_player()
+	await _test_deadlock_warns_before_it_drains()
+	await _test_deadlock_is_broken_by_cover()
+	await _test_deadlock_is_broken_by_distance()
+	await _test_recursion_splits_into_fragments()
+	await _test_recursion_fragments_do_not_split_again()
+	await _test_a_room_is_not_clear_while_fragments_live()
+	await _test_every_hurt_flash_is_actually_wired()
+	await _test_a_tinted_enemy_keeps_its_colour()
 	await _test_knockback_decays_instead_of_growing()
 	await _test_knockback_stays_out_of_the_steering_velocity()
 	await _test_full_resistance_means_immovable()
@@ -85,10 +102,56 @@ func _test_configs_load_as_their_own_types() -> void:
 		check(is_zero_approx(compiler.move_speed), "the compiler never moves — the lane is its attack")
 		check(compiler.lane_telegraph_seconds > 0.0, "its lane telegraphs for a real duration")
 
+	var null_pointer := load(NULL_POINTER_CONFIG) as NullPointerConfig
+	if require(null_pointer, "null_pointer.tres loads as a NullPointerConfig"):
+		check(
+			null_pointer.mark_telegraph_seconds > 0.0,
+			"its patch telegraphs for a real duration — a hazard placed under the player with no warning has no answer",
+		)
+		check(null_pointer.mark_tiles >= 3, "the patch is big enough to read as a deliberate square")
+		check(
+			null_pointer.contact_damage <= 0.0,
+			"it never touches the player — the patch is its whole attack",
+		)
 
-## Spec section 15 asks for enemies that each create a *different* movement problem. Six
+	var deadlock := load(DEADLOCK_CONFIG) as DeadlockConfig
+	if require(deadlock, "deadlock.tres loads as a DeadlockConfig"):
+		check(deadlock.acquire_seconds > 0.0, "the tether is harmless for a readable window first")
+		check(
+			deadlock.tether_range > deadlock.preferred_range,
+			"it holds station inside its own reach (%.0f held against %.0f reach), so the player has to *move* to break it rather than getting the break for free"
+				% [deadlock.preferred_range, deadlock.tether_range],
+		)
+		check(
+			deadlock.reacquire_delay > 0.0,
+			"reaching cover buys real time rather than one frame",
+		)
+
+	var recursion := load(RECURSION_CONFIG) as RecursionConfig
+	if require(recursion, "recursion.tres loads as a RecursionConfig"):
+		check(recursion.fragment_count >= 2, "a split actually produces a crowd")
+		check(recursion.max_generation >= 1, "the enemy the floor spawns can split at all")
+		check(
+			recursion.fragment_health < recursion.max_health,
+			"a fragment is cheaper to remove than the body it came from",
+		)
+		check(
+			recursion.fragment_speed_scale > 1.0,
+			"fragments are faster than the parent — that is the cost of the kill",
+		)
+		# The whole family has to stay inside a sane time-to-kill, and the parent's pool is
+		# only part of that bill.
+		var family := recursion.max_health + recursion.fragment_count * recursion.fragment_health
+		check(
+			family <= 8.0,
+			"the whole family costs %.1f integrity to clear, which is one tough enemy rather than three"
+				% family,
+		)
+
+
+## Spec section 15 asks for enemies that each create a *different* movement problem. Nine
 ## enemies with the same statistics would technically satisfy the count.
-func _test_the_roster_is_six_distinct_problems() -> void:
+func _test_the_roster_is_nine_distinct_problems() -> void:
 	var configs: Array[EnemyConfig] = [
 		load("res://data/enemies/ticket_bot.tres") as EnemyConfig,
 		load(DRONE_CONFIG) as EnemyConfig,
@@ -96,6 +159,9 @@ func _test_the_roster_is_six_distinct_problems() -> void:
 		load(FIREWALL_CONFIG) as EnemyConfig,
 		load(CODE_RUNNER_CONFIG) as EnemyConfig,
 		load(COMPILER_CONFIG) as EnemyConfig,
+		load(NULL_POINTER_CONFIG) as EnemyConfig,
+		load(DEADLOCK_CONFIG) as EnemyConfig,
+		load(RECURSION_CONFIG) as EnemyConfig,
 	]
 
 	var names: Dictionary[String, bool] = {}
@@ -107,12 +173,26 @@ func _test_the_roster_is_six_distinct_problems() -> void:
 		names[config.display_name] = true
 		healths[config.max_health] = true
 
-	check(names.size() == 6, "all six enemies are named distinctly")
-	check(healths.size() == 6, "all six have different durability")
+	check(names.size() == configs.size(), "all nine enemies are named distinctly")
 	check(
-		configs[2].contact_damage > 0.0 and configs[0].contact_damage <= 0.0,
-		"only the melee enemy deals contact damage",
+		healths.size() == configs.size(),
+		"all nine have different durability (%d distinct values across %d enemies)"
+			% [healths.size(), configs.size()],
 	)
+
+	# Was "only the melee enemy deals contact damage", which stopped being the rule when
+	# Recursion joined the roster as a second body that hurts to touch. The rule underneath
+	# it survives and is the one worth keeping: touching the player is only ever an attack
+	# for something that can actually reach them, so a stationary or range-holding enemy
+	# must never have it — otherwise the player is punished for approaching a target that
+	# gave them no reason to expect it.
+	for config: EnemyConfig in configs:
+		if config.contact_damage <= 0.0:
+			continue
+		check(
+			config.move_speed > 0.0 and is_zero_approx(config.preferred_range),
+			"%s deals contact damage, so it must be one that closes on the player" % config.display_name,
+		)
 
 
 # --- Shared lifecycle ---------------------------------------------------------
@@ -124,7 +204,7 @@ func _test_the_roster_is_six_distinct_problems() -> void:
 func _test_every_enemy_shares_the_lifecycle() -> void:
 	for scene: PackedScene in [
 		TICKET_BOT_SCENE, POP_UP_DRONE_SCENE, MEMORY_LEECH_SCENE, FIREWALL_NODE_SCENE,
-		CODE_RUNNER_SCENE, COMPILER_SCENE,
+		CODE_RUNNER_SCENE, COMPILER_SCENE, NULL_POINTER_SCENE, DEADLOCK_SCENE, RECURSION_SCENE,
 	]:
 		var arena := _make_arena()
 		var enemy := _add_enemy(arena, scene, Vector2(60.0, 0.0))
@@ -456,6 +536,384 @@ func _test_compiler_paints_lanes() -> void:
 	await _teardown(arena)
 
 
+# --- Null Pointer -----------------------------------------------------------------
+
+
+## The enemy's whole claim is that the patch lands where the player *is*. Checked against
+## the rect the lane reports as it executes, rather than against the lane's own fields, so
+## what is measured is the geometry that actually resolved damage.
+func _test_null_pointer_marks_where_the_player_is() -> void:
+	var arena := _make_arena()
+	var room := _add_room(arena)
+	if room == null:
+		await _teardown(arena)
+		return
+
+	var here := room.get_interior_centre()
+	var target := _add_target(arena, here)
+	var pointer: NullPointer = NULL_POINTER_SCENE.instantiate()
+	pointer.config = _quick_null_pointer()
+	# Placed away from the player so the patch is visibly sent rather than dropped underfoot,
+	# and inside the room so `find_room` resolves and the patch snaps to the tile grid.
+	pointer.global_position = here + Vector2(90.0, 0.0)
+	room.get_node("%Enemies").add_child(pointer)
+	await advance_physics(2)
+
+	var executed: Array[Rect2] = []
+	var handler := func(rect: Rect2) -> void: executed.append(rect)
+	EventBus.compile_lane_executed.connect(handler)
+	await advance_physics(40)
+	EventBus.compile_lane_executed.disconnect(handler)
+
+	var struck := not executed.is_empty()
+	check(struck, "the Null Pointer actually executes a patch")
+	if not struck:
+		await _teardown(arena)
+		return
+
+	var covering := 0
+	for rect: Rect2 in executed:
+		if rect.grow(CompileLane.PLAYER_RADIUS).has_point(target.global_position):
+			covering += 1
+	check(
+		covering == executed.size(),
+		"every patch it executed covered the standing player (%d of %d)"
+			% [covering, executed.size()],
+	)
+	await _teardown(arena)
+
+
+## The other half, and the half that makes it fair: it commits at the moment of marking and
+## never re-aims. A patch that tracked the player would be a hazard with no answer at all,
+## which is the failure mode this floor's whole warning language exists to avoid.
+##
+## Deliberately the mirror of `_test_leech_does_not_steer_mid_charge` — same fairness rule,
+## different verb.
+func _test_null_pointer_does_not_follow_the_player() -> void:
+	var arena := _make_arena()
+	var room := _add_room(arena)
+	if room == null:
+		await _teardown(arena)
+		return
+
+	var origin := room.get_interior_centre()
+	var target := _add_target(arena, origin)
+	var pointer: NullPointer = NULL_POINTER_SCENE.instantiate()
+	pointer.config = _quick_null_pointer()
+	pointer.global_position = origin + Vector2(90.0, 0.0)
+	room.get_node("%Enemies").add_child(pointer)
+	await advance_physics(2)
+
+	var executed: Array[Rect2] = []
+	var handler := func(rect: Rect2) -> void: executed.append(rect)
+	EventBus.compile_lane_executed.connect(handler)
+
+	# Wait for a patch to be marked, then bolt. The quick config telegraphs for 0.25s, which
+	# is several physics frames of running away before it can possibly resolve.
+	while pointer.get_seconds_to_next_mark() > 0.02:
+		await advance_physics(1)
+	await advance_physics(2)
+	var fled := origin + Vector2(0.0, 70.0)
+	target.global_position = fled
+
+	await advance_physics(24)
+	EventBus.compile_lane_executed.disconnect(handler)
+
+	var struck := not executed.is_empty()
+	check(struck, "a patch resolved while the player was running")
+	if not struck:
+		await _teardown(arena)
+		return
+
+	var chased := 0
+	for rect: Rect2 in executed:
+		if rect.grow(CompileLane.PLAYER_RADIUS).has_point(fled):
+			chased += 1
+	check(
+		chased == 0,
+		"no patch followed the player to where they ran (%d of %d did)" % [chased, executed.size()],
+	)
+	await _teardown(arena)
+
+
+# --- Deadlock ---------------------------------------------------------------------
+
+
+## The tether has to be readable before it is expensive, or "break line of sight" is advice
+## the player receives after already paying for it.
+func _test_deadlock_warns_before_it_drains() -> void:
+	var arena := _make_arena()
+	var target := _add_target(arena, Vector2.ZERO)
+	var health := HealthComponent.find_on(target)
+	var lock := _add_enemy(arena, DEADLOCK_SCENE, Vector2(150.0, 0.0)) as Deadlock
+	var tuning := lock.config as DeadlockConfig
+	await advance_physics(2)
+
+	# Comfortably inside the acquire window, so nothing should have landed yet.
+	var warning_frames := int(tuning.acquire_seconds * Engine.physics_ticks_per_second * 0.6)
+	await advance_physics(warning_frames)
+	check(lock.get_state() == Deadlock.State.ACQUIRING, "it locks on when it can see the player")
+	check_near(health.current, 3.0, "and costs nothing at all while it is still amber")
+
+	# Then well past it, plus a drain interval.
+	await advance_physics(
+		int((tuning.acquire_seconds + tuning.drain_interval) * Engine.physics_ticks_per_second)
+	)
+	check(lock.get_state() == Deadlock.State.DRAINING, "the tether goes red once the window closes")
+	check(health.current < 3.0, "and then it actually drains (%.2f left)" % health.current)
+	await _teardown(arena)
+
+
+## The answer the enemy exists to teach. A wall between the two of them must cut the line,
+## and cutting it must be worth more than a single frame.
+func _test_deadlock_is_broken_by_cover() -> void:
+	var arena := _make_arena()
+	var target := _add_target(arena, Vector2.ZERO)
+	var health := HealthComponent.find_on(target)
+	var lock := _add_enemy(arena, DEADLOCK_SCENE, Vector2(150.0, 0.0)) as Deadlock
+	var tuning := lock.config as DeadlockConfig
+	await advance_physics(2)
+
+	# Let it get all the way to draining first, so what is measured is a tether being cut
+	# rather than one that never formed.
+	await advance_physics(
+		int((tuning.acquire_seconds + tuning.drain_interval) * Engine.physics_ticks_per_second) + 4
+	)
+	var draining := lock.get_state() == Deadlock.State.DRAINING
+	check(draining, "the tether is live before cover arrives")
+	if not draining:
+		await _teardown(arena)
+		return
+
+	_add_wall(arena, Vector2(75.0, 0.0), Vector2i(16, 64))
+	await advance_physics(4)
+	check(not lock.is_tethered(), "a wall between them cuts the tether")
+
+	var sheltered := health.current
+	# Long enough for several drain ticks, had any of them been able to land.
+	await advance_physics(int(tuning.drain_interval * Engine.physics_ticks_per_second) * 3)
+	check_near(
+		health.current, sheltered, "and a player behind cover is never drained again", 0.001
+	)
+	await _teardown(arena)
+
+
+## The second answer, and the one that has to exist because the floor generator cannot
+## promise the room it lands in has cover worth the name.
+func _test_deadlock_is_broken_by_distance() -> void:
+	var arena := _make_arena()
+	var target := _add_target(arena, Vector2.ZERO)
+	var lock := _add_enemy(arena, DEADLOCK_SCENE, Vector2(150.0, 0.0)) as Deadlock
+	var tuning := lock.config as DeadlockConfig
+	await advance_physics(int(tuning.acquire_seconds * Engine.physics_ticks_per_second) + 4)
+
+	var tethered := lock.is_tethered()
+	check(tethered, "the tether is live before the player runs")
+	if not tethered:
+		await _teardown(arena)
+		return
+
+	# Teleported rather than walked, so the check is about the range rule and not about
+	# whether a test can outpace a 40 px/s enemy.
+	target.global_position = lock.global_position + Vector2(tuning.tether_range + 40.0, 0.0)
+	await advance_physics(4)
+	check(not lock.is_tethered(), "outranging it snaps the tether too")
+	await _teardown(arena)
+
+
+# --- Recursion --------------------------------------------------------------------
+
+
+func _test_recursion_splits_into_fragments() -> void:
+	var arena := _make_arena()
+	var container := Node2D.new()
+	arena.add_child(container)
+	_add_target(arena, Vector2.ZERO)
+
+	var parent: Recursion = RECURSION_SCENE.instantiate()
+	parent.position = Vector2(120.0, 0.0)
+	container.add_child(parent)
+	await advance_physics(2)
+
+	var tuning := parent.config as RecursionConfig
+	parent.get_health_component().apply_damage(DamageInfo.new(999.0))
+	# Two frames: fragments are added deferred, because a split happens inside a damage
+	# callback with the physics server mid-flush.
+	await advance_physics(2)
+
+	var fragments := _living_recursions(container)
+	check(
+		fragments.size() == tuning.fragment_count,
+		"killing a Recursion leaves %d fragments behind (expected %d)"
+			% [fragments.size(), tuning.fragment_count],
+	)
+	for fragment: Recursion in fragments:
+		check(fragment.get_generation() == 1, "a fragment knows it is second generation")
+		check_near(
+			fragment.get_health_component().max_health,
+			tuning.fragment_health,
+			"a fragment is sized from fragment_health, not from the parent's pool",
+		)
+
+	# Reported on review: the spread angle was rolled once per fragment rather than once per
+	# split, so two fragments were independently placed and regularly overlapped into what
+	# reads as one body — which quietly undoes the whole mechanic, since the player cannot
+	# choose when to kill a thing they cannot see is two things.
+	if fragments.size() == 2:
+		var apart := fragments[0].global_position.distance_to(fragments[1].global_position)
+		check(
+			apart > tuning.fragment_spread,
+			"the two fragments are separated rather than stacked (%.1f px apart)" % apart,
+		)
+	await _teardown(arena)
+
+
+## Reported as the thing that would make this enemy unshippable: without a generation cap a
+## room's enemy count doubles on every kill and never terminates. The cap is the only thing
+## between one Recursion and a room that cannot be cleared, so it is checked directly rather
+## than inferred from the config field.
+func _test_recursion_fragments_do_not_split_again() -> void:
+	var arena := _make_arena()
+	var container := Node2D.new()
+	arena.add_child(container)
+	_add_target(arena, Vector2.ZERO)
+
+	var parent: Recursion = RECURSION_SCENE.instantiate()
+	parent.position = Vector2(120.0, 0.0)
+	container.add_child(parent)
+	await advance_physics(2)
+
+	parent.get_health_component().apply_damage(DamageInfo.new(999.0))
+	await advance_physics(2)
+
+	var fragments := _living_recursions(container)
+	var split := not fragments.is_empty()
+	check(split, "there are fragments to kill")
+	if not split:
+		await _teardown(arena)
+		return
+
+	for fragment: Recursion in fragments:
+		check(not fragment.can_split(), "a fragment reports that it is the end of the line")
+		fragment.get_health_component().apply_damage(DamageInfo.new(999.0))
+	await advance_physics(2)
+
+	check(
+		_living_recursions(container).is_empty(),
+		"killing the fragments ends it — %d third-generation bodies appeared"
+			% _living_recursions(container).size(),
+	)
+	await _teardown(arena)
+
+
+## The bug this enemy would otherwise have shipped with: `RoomCombat` decrements on death, so
+## a Recursion that split *after* announcing its own death would drop the room's alive count
+## to zero for a frame, unlock the doors, and hand the player a cleared room with two
+## fragments still chasing them.
+func _test_a_room_is_not_clear_while_fragments_live() -> void:
+	var arena := _make_arena()
+	var room := _add_room(arena)
+	if room == null:
+		await _teardown(arena)
+		return
+	_add_target(arena, room.get_interior_centre())
+
+	var enemies := room.get_node("%Enemies")
+	var parent: Recursion = RECURSION_SCENE.instantiate()
+	parent.position = Vector2(60.0, 60.0)
+	enemies.add_child(parent)
+	await advance_physics(2)
+
+	var combat := room.get_room_combat()
+	combat.begin(enemies)
+
+	var cleared := [0]
+	combat.cleared.connect(func() -> void: cleared[0] += 1)
+
+	parent.get_health_component().apply_damage(DamageInfo.new(999.0))
+	await advance_physics(4)
+
+	check(cleared[0] == 0, "the room does not report itself clear the moment the parent dies")
+	check(
+		combat.get_alive_count() == 2,
+		"the two fragments are counted as live enemies (alive = %d)" % combat.get_alive_count(),
+	)
+
+	for fragment: Recursion in _living_recursions(enemies):
+		fragment.get_health_component().apply_damage(DamageInfo.new(999.0))
+	await advance_physics(4)
+
+	check(cleared[0] == 1, "and it clears exactly once, when the last fragment is gone")
+	await _teardown(arena)
+
+
+# --- Presentation -----------------------------------------------------------------
+
+
+## Found while building Development's roster, and the more serious of the two: `HurtFlash`
+## declared `@export var target: CanvasItem` and every scene assigned it
+## `NodePath("../Sprite")`, which never resolved. `flash()` returns early on a null target,
+## so being shot has produced no flash anywhere in the game since the component was written
+## — every enemy, both bosses' parts, and the boss terminal — and nothing said so.
+##
+## The wiring is asserted separately from the behaviour precisely because that is the half
+## that was broken. A test that only checked "the colour changes and comes back" would have
+## been satisfied by a component doing nothing at all, twice.
+func _test_every_hurt_flash_is_actually_wired() -> void:
+	for scene: PackedScene in [
+		TICKET_BOT_SCENE, POP_UP_DRONE_SCENE, MEMORY_LEECH_SCENE, FIREWALL_NODE_SCENE,
+		CODE_RUNNER_SCENE, COMPILER_SCENE, NULL_POINTER_SCENE, DEADLOCK_SCENE, RECURSION_SCENE,
+	]:
+		var arena := _make_arena()
+		var enemy := _add_enemy(arena, scene, Vector2(60.0, 0.0))
+		await advance_physics(2)
+
+		var flash := enemy.get_node("%HurtFlash") as HurtFlash
+		check(
+			flash.get_target() != null,
+			"%s's hurt flash resolved its sprite" % enemy.config.display_name,
+		)
+		await _teardown(arena)
+
+
+## The other half: both `HurtFlash` and `Enemy.tint_toward` restored `modulate` to pure
+## white, which was invisible for as long as every enemy that could be shot had an untinted
+## sprite. Code Runner and Compiler are told apart from the rest of their floor by tint, so
+## the first rivet to land on either one would have bleached it for the remainder of the
+## fight — as soon as the flash above started working at all.
+##
+## Checked on the shipped Code Runner rather than on a fixture, because the property that
+## broke is "the enemies in the game keep their colours", and a fixture with a colour
+## invented by the test would have passed the whole time.
+func _test_a_tinted_enemy_keeps_its_colour() -> void:
+	var arena := _make_arena()
+	var runner := _add_enemy(arena, CODE_RUNNER_SCENE, Vector2(100.0, 0.0))
+	await advance_physics(2)
+
+	var sprite := runner.get_node("%Sprite") as Sprite2D
+	var before := sprite.modulate
+	var tinted := not before.is_equal_approx(Color.WHITE)
+	check(tinted, "the Code Runner is tinted to begin with")
+	if not tinted:
+		await _teardown(arena)
+		return
+
+	runner.get_health_component().apply_damage(DamageInfo.new(1.0))
+	check(sprite.modulate != before, "being hit visibly flashes it")
+
+	# Past the flash, which runs on the frame clock rather than the physics one.
+	for _frame: int in 20:
+		await get_tree().process_frame
+	await advance_physics(2)
+
+	check(
+		sprite.modulate.is_equal_approx(before),
+		"and it returns to its own colour rather than to white (%s, was %s)"
+			% [sprite.modulate, before],
+	)
+	await _teardown(arena)
+
+
 # --- Fixtures -----------------------------------------------------------------
 
 
@@ -551,6 +1009,32 @@ func _quick_compiler() -> CompilerConfig:
 	var tuning := (load(COMPILER_CONFIG) as CompilerConfig).duplicate() as CompilerConfig
 	tuning.lane_interval = 0.05
 	return tuning
+
+
+## Likewise the Null Pointer's 2.4 seconds between patches. The telegraph is shortened too
+## but deliberately left several physics frames long, because "the patch does not re-aim
+## after it is marked" is only a meaningful thing to check if there is a window to re-aim in.
+func _quick_null_pointer() -> NullPointerConfig:
+	var tuning := (load(NULL_POINTER_CONFIG) as NullPointerConfig).duplicate() as NullPointerConfig
+	tuning.mark_interval = 0.35
+	tuning.mark_telegraph_seconds = 0.25
+	tuning.mark_strike_seconds = 0.05
+	# Stationary for the duration: these checks are about where the patch lands, and an
+	# enemy drifting to hold its range moves the answer while they are being measured.
+	tuning.move_speed = 0.0
+	return tuning
+
+
+## Every living Recursion under a container, parent and fragments alike. Filters out the
+## bodies that are mid-`queue_free`, which are still children for the rest of the frame they
+## died in and would otherwise be counted as survivors.
+func _living_recursions(container: Node) -> Array[Recursion]:
+	var found: Array[Recursion] = []
+	for child: Node in container.get_children():
+		var recursion := child as Recursion
+		if recursion != null and not recursion.is_queued_for_deletion():
+			found.append(recursion)
+	return found
 
 
 ## Reported: enemy knockback was "repeatedly added to velocity and initially grows instead of

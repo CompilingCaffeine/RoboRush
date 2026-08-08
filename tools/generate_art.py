@@ -241,6 +241,74 @@ FIREWALL_NODE = [
     "..oooooooooooo..",
 ]
 
+# --- Null Pointer: a ring around nothing. The only enemy whose middle is transparent, so
+# --- the floor shows through the body of the thing that dereferences empty addresses.
+# --- Cyan, and deliberately the least substantial silhouette on the floor: it never
+# --- touches the player and everything it does happens somewhere else.
+NULL_POINTER = [
+    "................",
+    ".......oo.......",
+    "......occo......",
+    ".....oc..co.....",
+    "....oc....co....",
+    "...oc......co...",
+    "..oc........co..",
+    ".oc..........co.",
+    ".oe..........eo.",
+    "..oe........eo..",
+    "...oe......eo...",
+    "....oe....eo....",
+    ".....oe..eo.....",
+    "......oeeo......",
+    ".......oo.......",
+    "................",
+]
+
+# --- Deadlock: four corner jaws clamped around a red core. The prongs are the silhouette
+# --- — nothing else on the floor has an outline that reaches outward at the corners — and
+# --- they read as "this thing holds on", which is the entire fight.
+DEADLOCK = [
+    "................",
+    "..oooo....oooo..",
+    "..oddo....oddo..",
+    "..odmoooooomdo..",
+    "..odmmmmmmmmdo..",
+    ".oodmmrrrrmmdoo.",
+    ".odmmrrRRrrmmdo.",
+    ".odmrrRYYRrrmdo.",
+    ".odmrrRYYRrrmdo.",
+    ".odmmrrRRrrmmdo.",
+    ".oodmmrrrrmmdoo.",
+    "..odmmmmmmmmdo..",
+    "..odmoooooomdo..",
+    "..oddo....oddo..",
+    "..oooo....oooo..",
+    "................",
+]
+
+# --- Recursion: squares nested inside squares, with a visibly different smaller thing at
+# --- the centre. The silhouette is the mechanic — a player who has never seen one split
+# --- can still see there is something inside it — which is the cheapest possible way to
+# --- warn them that killing it is not the end of the transaction.
+RECURSION = [
+    "................",
+    ".oooooooooooooo.",
+    ".ovvvvvvvvvvvvo.",
+    ".ovoooooooooovo.",
+    ".ovoVVVVVVVVovo.",
+    ".ovoVooooooVovo.",
+    ".ovoVobbbboVovo.",
+    ".ovoVobYYboVovo.",
+    ".ovoVobYYboVovo.",
+    ".ovoVobbbboVovo.",
+    ".ovoVooooooVovo.",
+    ".ovoVVVVVVVVovo.",
+    ".ovoooooooooovo.",
+    ".ovvvvvvvvvvvvo.",
+    ".oooooooooooooo.",
+    "................",
+]
+
 # --- Pop Up Drone's spread shot. Smaller and faster-reading than a ticket.
 DRONE_SHOT = [
     "..oo..",
@@ -924,6 +992,9 @@ SPRITES = {
     "art/enemies/pop_up_drone.png": POP_UP_DRONE,
     "art/enemies/memory_leech.png": MEMORY_LEECH,
     "art/enemies/firewall_node.png": FIREWALL_NODE,
+    "art/enemies/null_pointer.png": NULL_POINTER,
+    "art/enemies/deadlock.png": DEADLOCK,
+    "art/enemies/recursion.png": RECURSION,
     "art/effects/projectile_drone.png": DRONE_SHOT,
     "art/environments/shop_stand.png": SHOP_STAND,
     "art/bosses/merge_conflict.png": MERGE_CONFLICT,

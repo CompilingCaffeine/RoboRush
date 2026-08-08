@@ -39,4 +39,4 @@ config = ExtResource("6_spitter")
 [node name="HurtFlash" type="Node" parent="."]
 unique_name_in_owner = true
 script = ExtResource("7_flash")
-target = NodePath("../Sprite")
+target_path = NodePath("../Sprite")

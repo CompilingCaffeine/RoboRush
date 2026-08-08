@@ -141,6 +141,33 @@ func get_column_rect(col: int) -> Rect2:
 	)
 
 
+## An arbitrary block of tiles, in global coordinates. `size_tiles` is clamped to at least
+## one tile per axis and at most the interior, and `top_left_tile` is then clamped so the
+## whole block lands inside the room. Same contract as `get_row_rect` and `get_column_rect`
+## for the same reason: a caller describing a hazard should never have to bounds-check
+## before asking, and a compile lane should never be drawn half outside the room it is in.
+func get_tile_block_rect(top_left_tile: Vector2i, size_tiles: Vector2i) -> Rect2:
+	var span := Vector2i(
+		clampi(size_tiles.x, 1, INTERIOR_TILES.x), clampi(size_tiles.y, 1, INTERIOR_TILES.y)
+	)
+	var tile := Vector2i(
+		clampi(top_left_tile.x, 0, INTERIOR_TILES.x - span.x),
+		clampi(top_left_tile.y, 0, INTERIOR_TILES.y - span.y)
+	)
+	return Rect2(global_position + Vector2(tile * TILE_SIZE), Vector2(span * TILE_SIZE))
+
+
+## The interior tile containing a global point, clamped into the room. A point outside the
+## room resolves to the nearest edge tile rather than to a negative index, so an enemy
+## aiming at a player standing in a doorway still names a real tile.
+func get_tile_at(point: Vector2) -> Vector2i:
+	var local := point - global_position
+	return Vector2i(
+		clampi(floori(local.x / TILE_SIZE), 0, INTERIOR_TILES.x - 1),
+		clampi(floori(local.y / TILE_SIZE), 0, INTERIOR_TILES.y - 1)
+	)
+
+
 ## Where this room's shop stands go, in global coordinates. Empty for anything but a shop.
 func get_shop_positions() -> Array[Vector2]:
 	var positions: Array[Vector2] = []

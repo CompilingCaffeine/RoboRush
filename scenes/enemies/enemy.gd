@@ -40,11 +40,16 @@ var _is_dead := false
 ## player never use it.
 var _contact_cooldown := 0.0
 
+## The sprite's authored colour, captured before anything starts writing `modulate`. What
+## `tint_toward` returns to. See that method for why it is not simply white.
+var _resting_tint := Color.WHITE
+
 
 func _ready() -> void:
 	assert(config != null, "%s.config is unset: assign an EnemyConfig resource." % name)
 	collision_layer = Teams.body_layer(Teams.Id.ENEMY)
 	collision_mask = Teams.LAYER_WORLD
+	_resting_tint = _sprite.modulate
 
 	_health.configure(config.max_health, 0.0)
 	_health.damaged.connect(_on_damaged)
@@ -150,10 +155,17 @@ func find_room() -> Room:
 ## Tints the sprite toward a colour by `amount`, unless the hurt flash currently owns it.
 ## Every enemy telegraphs by brightening, and two systems writing `modulate` in the same
 ## frame is how a telegraph ends up invisible.
+##
+## Interpolates from the sprite's *own* resting colour rather than from white, for the
+## reason spelled out in `HurtFlash`: Floor 2 tells its enemies apart by tint, and an
+## `amount` of zero used to mean "become white" rather than "stop telegraphing", so any
+## tinted enemy that telegraphed would bleach itself the first time it wound down.
 func tint_toward(color: Color, amount: float) -> void:
 	if _hurt_flash.is_flashing():
 		return
-	_sprite.modulate = Color.WHITE.lerp(color, clampf(amount, 0.0, 1.0))
+	var tinted := _resting_tint.lerp(color, clampf(amount, 0.0, 1.0))
+	# Alpha stays wherever the sprite already had it, so a telegraph never cancels a fade.
+	_sprite.modulate = Color(tinted.r, tinted.g, tinted.b, _sprite.modulate.a)
 
 
 # --- Shared behaviour ---------------------------------------------------------

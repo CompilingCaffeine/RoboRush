@@ -38,4 +38,4 @@ config = ExtResource("7_weapon_res")
 [node name="HurtFlash" type="Node" parent="."]
 unique_name_in_owner = true
 script = ExtResource("5_flash")
-target = NodePath("../Sprite")
+target_path = NodePath("../Sprite")

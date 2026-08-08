@@ -1,15 +1,15 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
-[ext_resource type="Script" path="res://scenes/enemies/firewall_node.gd" id="1_script"]
-[ext_resource type="Resource" path="res://data/enemies/firewall_node.tres" id="2_config"]
-[ext_resource type="Texture2D" path="res://art/enemies/firewall_node.png" id="3_tex"]
+[ext_resource type="Script" path="res://scenes/enemies/null_pointer.gd" id="1_script"]
+[ext_resource type="Resource" path="res://data/enemies/null_pointer.tres" id="2_config"]
+[ext_resource type="Texture2D" path="res://art/enemies/null_pointer.png" id="3_tex"]
 [ext_resource type="Script" path="res://scripts/components/health_component.gd" id="4_health"]
 [ext_resource type="Script" path="res://scripts/components/hurt_flash.gd" id="5_flash"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_body"]
-radius = 7.0
+radius = 6.0
 
-[node name="FirewallNode" type="CharacterBody2D" groups=["enemy"]]
+[node name="NullPointer" type="CharacterBody2D" groups=["enemy"]]
 collision_layer = 4
 collision_mask = 1
 motion_mode = 1
@@ -22,6 +22,11 @@ shape = SubResource("CircleShape2D_body")
 [node name="Sprite" type="Sprite2D" parent="."]
 unique_name_in_owner = true
 texture = ExtResource("3_tex")
+; Its own sprite rather than a tinted borrow. Code Runner and Compiler could each take an
+; existing silhouette because the enemy they borrowed from is not on their floor; the three
+; enemies added here cannot, because between them they would have put three tinted copies of
+; two shapes into the same roster. Left untinted so the amber it flushes to while a patch
+; counts down is the only colour change on the body.
 
 [node name="Health" type="Node" parent="."]
 unique_name_in_owner = true

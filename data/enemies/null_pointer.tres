@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="NullPointerConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/null_pointer_config.gd" id="1_config"]
+
+[resource]
+script = ExtResource("1_config")
+display_name = "Null Pointer"
+max_health = 2.5
+knockback_resistance = 0.0
+move_speed = 45.0
+acceleration = 320.0
+deceleration = 480.0
+preferred_range = 130.0
+range_tolerance = 25.0
+contact_damage = 0.0
+telegraph_seconds = 0.0
+mark_interval = 2.4
+mark_telegraph_seconds = 0.65
+mark_strike_seconds = 0.2
+mark_damage = 1.0
+mark_tiles = 3

@@ -575,7 +575,7 @@ Executed on this machine, not assumed.
 - **Spec section 12's and section 17's numbers are pinned** — Fork Bomb's 60%, Capacitor
   Leak's 5 shots / 3 jumps / 0.7, common 12 / uncommon 20 / rare 32, heal 6, reroll 4 +2 —
   so an inspector edit cannot silently rebalance the game.
-- **Each of the four enemies is checked for posing its own problem**, not for running. The
+- **Each of the nine enemies is checked for posing its own problem**, not for running. The
   Pop Up Drone must actually appear somewhere else, never within the player's guard and
   never inside a wall — verified in a real room against real geometry. The Memory Leech must
   hold still through its windup and must *not* steer once committed, checked by moving the
@@ -909,6 +909,43 @@ resulting frames, and by nothing else. The suite was green for all of them.
    own art and its own body now. Worth recording because the placeholder was *documented* as
    temporary in its own header and still looked finished enough not to prompt the question.
 
+### Bugs found while building Development's second wave of enemies
+
+1. **Nothing in the game has ever flashed when hit.** `HurtFlash` declared
+   `@export var target: CanvasItem`, and all eleven scenes that use it assign
+   `target = NodePath("../Sprite")` — which is how the editor serialises a node reference, and
+   which a hand-authored scene does not carry the extra state to resolve. `target` was
+   therefore null on every enemy, both bosses' parts, and the boss terminal. `flash()` returns
+   early on a null target, so the failure was total, silent, and years-of-code old: shooting
+   anything produced no hit feedback at all, and the 1246 checks in the suite were all
+   satisfied by a component doing nothing.
+
+   The fix is a `NodePath` the component resolves itself, which cannot half-succeed the same
+   way. The lesson is the same one the HUD taught: **every check that touched this component
+   asserted behaviour it was allowed to skip.** There is now a check that the wiring itself
+   resolved, separate from the one that the colour changes and comes back — because a test of
+   the second kind alone is satisfied by a dead component twice over.
+
+   Worth noting that this bug was *load-bearing* for the second one below: the tint bug could
+   not have been observed by playing, because the code path that would have exposed it never
+   ran.
+
+2. **A tinted enemy would have bleached itself the first time it was shot.** Both `HurtFlash`
+   and `Enemy.tint_toward` restored `modulate` to pure white rather than to the sprite's own
+   colour. That was correct for as long as every enemy that could be shot had an untinted
+   sprite, and stopped being correct when Floor 2 started telling Code Runner and Compiler
+   apart by tint. Both now interpolate from a resting colour captured at ready, and both leave
+   alpha alone so a Pop Up Drone shot mid-fade keeps fading instead of snapping to opaque.
+
+3. **Three tinted borrows of two silhouettes.** Not a bug, but the point at which the existing
+   convention broke down. Code Runner and Compiler could each borrow an existing sprite because
+   the enemy they borrowed from is not on their floor; three more could not, and Development
+   would have shipped a roster where two pairs of enemies differed only in colour. Null
+   Pointer, Deadlock, and Recursion have their own sprites in
+   [`tools/generate_art.py`](tools/generate_art.py). Recursion's is the one worth looking at:
+   it is squares nested inside squares with a visibly different smaller thing at the centre, so
+   a player who has never seen one split can still see there is something inside it.
+
 
 ## Known limitations
 
@@ -1012,7 +1049,7 @@ tile single-screen arenas.
 
 ### Encounter curve
 
-Two enemies return and two are new:
+Two enemies return and five are new:
 
 | Enemy | Job |
 | --- | --- |
@@ -1020,11 +1057,56 @@ Two enemies return and two are new:
 | Pop Up Drone | Re-aiming pressure while the player is also reading floor warnings |
 | Code Runner | Strafes across sight lines and fires while moving, forcing sustained tracking |
 | Compiler | Paints one row or column, telegraphs it, then sends a fast pulse through the lane |
+| Null Pointer | Marks a small patch of floor centred on where the player is standing, then executes it |
+| Deadlock | Tethers the player and drains until the line is cut by cover or by distance |
+| Recursion | Chases, and returns two smaller, faster copies of itself when killed |
 
 The two combat rooms nearest the start introduce the Code Runner beside Ticket Bots. The
 middle distance tier teaches the Compiler in layouts with obvious cover. The deepest combat
 rooms may combine both new enemies with Pop Up Drones. Do not add Firewall Nodes to that mix
 until playtesting proves that two kinds of area denial remain readable together.
+
+The three later additions each answer a question the original four do not ask, and each is
+placed where its answer is legible on first contact:
+
+- **Null Pointer** is the counterpart to the Compiler, not a second copy of it. A Compiler
+  lane picks a stripe of the room and asks "is that where you are?", and the answer is
+  somewhere else in a large room. This picks the *player* and asks "are you still there?",
+  and the answer is one step in any direction. Both are `CompileLane`s, so they compose
+  without teaching a second warning language, and neither ever removes the player's escape —
+  which is the property that lets two area-denial enemies share a room where the README's
+  warning about Firewall Nodes says two others could not. It commits at the moment of marking
+  and never re-aims, for the Memory Leech's reason. Its signature room is `dev_cable_trench`,
+  whose safe channel between the cable runs is the one place on the floor where standing
+  still is genuinely tempting.
+- **Deadlock** is the only enemy in the game whose answer is a *place* rather than a
+  direction: it converts the obstacles Development's rooms are already full of from scenery
+  into the thing you are running towards. It has two answers on purpose — break line of
+  sight, or outrange it — because cover alone would make it unfair in the rooms with the
+  thinnest pillars and trivial in the ones built around a server ring, and the generator
+  cannot promise which room it lands in. Distance is the answer that always exists; cover is
+  the answer that is quicker when the room offers it. Its signature room is
+  `dev_server_ring`, the only cover on the floor thick enough to break a sight line from any
+  direction.
+- **Recursion** is the one kill in the game that costs something. Popping it converts one
+  slow body at a distance into two quick ones where you were aiming, so *when* to kill it is
+  a real decision — which is a question no other enemy on the floor asks. It is one scene and
+  one config for the whole family, with `generation` raised on the fragments, so a Recursion
+  and its children cannot drift into being two unrelated things and `max_generation` is an
+  honest bound rather than a promise about a second file.
+
+Recursion is also the only enemy that touches room-clear counting. `RoomCombat` decrements on
+`HealthComponent.died`, so a body that split *after* announcing its own death would drop the
+alive count to zero for a frame, unlock the doors, and hand the player a cleared room with two
+fragments still chasing them. It splits first and registers the fragments with `RoomCombat`
+immediately — before they are added to the tree, which is deferred for `LootSpawner`'s reason —
+so the count goes one to three to two and never touches zero.
+
+Nothing here has been played by a person; see [Known limitations](#known-limitations). Two
+numbers are worth revisiting first when it is: a Recursion family costs 7.5 integrity to clear
+against a Compiler's 6.5, which is defensible as "harder enemy" and is also three kill events
+and up to three scrap drops from one spawn point; and the Compiler's telegraph is now shorter
+than the boss's, for the reason recorded in `compiler_config.gd`.
 
 The current floor chooses every spawn independently, so weights alone cannot promise that a
 teaching room contains the enemy it teaches. Development templates need one or more fixed
