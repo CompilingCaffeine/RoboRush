@@ -24,7 +24,7 @@
 [ext_resource type="Resource" path="res://data/items/unsafe_overclock.tres" id="22_unsafe_overclock"]
 [ext_resource type="Resource" path="res://data/items/scrap_magnet.tres" id="23_scrap_magnet"]
 [ext_resource type="Resource" path="res://data/items/debug_drone.tres" id="24_debug_drone"]
-[ext_resource type="PackedScene" path="res://scenes/bosses/runtime_error_placeholder.tscn" id="25_boss_scene"]
+[ext_resource type="PackedScene" path="res://scenes/bosses/runtime_error.tscn" id="25_boss_scene"]
 [ext_resource type="Resource" path="res://data/spawns/code_runner.tres" id="26_code_runner"]
 [ext_resource type="Resource" path="res://data/spawns/compiler.tres" id="27_compiler"]
 

@@ -185,10 +185,10 @@ func mark_tutorial_completed() -> void:
 ##
 ## `config` is fetched fully dynamically — no static type, and `id` read via `get()` rather
 ## than a typed member access — because `Boss` gives every boss a shared *behaviour* base but
-## deliberately no shared config type: `MergeConflict` carries a `BossConfig`,
-## `RuntimeErrorPlaceholder` a `SimpleBossConfig`, and they are siblings, not one a subclass of
-## the other. A statically-typed `var config: BossConfig` here crashed the instant a second
-## boss with its own config resource existed — this is that fix.
+## deliberately no shared config type: `MergeConflict` carries a `BossConfig`, `RuntimeError` a
+## `RuntimeErrorConfig`, and they are siblings, not one a subclass of the other. A
+## statically-typed `var config: BossConfig` here crashed the instant a second boss with its own
+## config resource existed — this is that fix.
 func _on_boss_defeated(boss: Node) -> void:
 	if boss == null or not is_instance_valid(boss):
 		return

@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="RuntimeErrorConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/runtime_error_config.gd" id="1_boss"]
+[ext_resource type="Resource" path="res://data/projectiles/boss_red.tres" id="2_shot"]
+
+[resource]
+script = ExtResource("1_boss")
+id = &"runtime_error"
+display_name = "Runtime Error"
+max_health = 150.0
+phase_two_at = 0.66
+phase_three_at = 0.33
+shot = ExtResource("2_shot")
+phase_one_interval = 2.0
+phase_two_interval = 1.8
+phase_three_interval = 1.6
+telegraph_seconds = 0.5
+spread_count = 5
+spread_degrees = 50.0
+ring_count = 14
+ring_gap = 3
+wall_count = 13
+wall_gap = 3
+lane_telegraph_seconds = 0.9
+lane_strike_seconds = 0.25
+lane_damage = 1.0
+lane_thickness_tiles = 2
+lane_stagger_seconds = 0.55
+checker_cols = 4
+checker_rows = 3
+move_speed = 30.0

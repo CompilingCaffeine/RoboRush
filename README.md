@@ -1011,7 +1011,7 @@ to draw from the weighted roster.
 to distance from the start. Development should make the first rooms draw from its gentler
 templates and reserve the hardest templates and roster combinations for rooms nearer the boss.
 
-### Floor boss: Runtime Error
+### Floor boss: Runtime Error — **built**
 
 Runtime Error is a pattern fight, not a second terminal puzzle. It remains damageable through
 all three phases:
@@ -1022,6 +1022,46 @@ all three phases:
 
 The boss must use the same amber-then-red warning language as the Compiler. Randomly combining
 attacks is allowed only after authored combinations prove they cannot erase every safe route.
+
+This now exists, in [`scenes/bosses/runtime_error.gd`](scenes/bosses/runtime_error.gd), and has
+replaced the greybox placeholder that stood in for it. Every hazard it paints is a `CompileLane`
+— the same class the Compiler enemy uses — so the warning language is shared by construction
+rather than by two implementations agreeing on a colour, and its body borrows those same two
+colours for its own windup. Its six patterns are authored and strictly alternating within each
+phase, which is the conservative half of the rule above; nothing has been played yet that could
+license the random combinations.
+
+Where The Scrap King asks the player to notice something, this one asks them to predict, so it
+is built as that boss's opposite in the two places the player can feel it:
+
+- **It is honest.** No refund, no damage scaling, no terminals, and no feigned death — a trick
+  that works exactly once per player, and a second boss doing it would be a boss they were
+  already waiting for. Its bar reports the real pool, falls once, and reaching zero means the
+  fight is over. `MergeConflict.get_phase_health_ratio` deliberately lies; `RuntimeError.get_health_ratio`
+  deliberately does not.
+- **Its phases are derived, not stepped.** A hit large enough to cross two thresholds lands in
+  the phase it earned. The Scrap King floors damage at each boundary to protect the feigned
+  death; this fight has no trick to protect.
+
+The floor's "always telegraph a reachable safe answer" criterion is what most of
+[`tests/test_runtime_error.gd`](tests/test_runtime_error.gd) is for. It is not a property of any
+one method — it falls out of the geometry of six patterns — so it is checked the way the player
+meets it: run the fight, catch every lane at the moment it executes, and assert there was
+somewhere to stand. Both halves of that were confirmed to fail when the boss was deliberately
+broken, which is the only evidence that a test measuring fairness is measuring anything.
+
+The checkerboard is the one pattern that is fair by construction rather than by tuning: in a
+checkerboard every cell that lights up shares all four of its edges with cells that do not, so
+the answer to any board is one step across the nearest boundary, wherever the player happens to
+be standing. The parity flips afterwards, so standing still is never the answer twice.
+
+**It still has not been played by a person** — see [Known limitations](#known-limitations). The
+numbers in [`data/bosses/runtime_error.tres`](data/bosses/runtime_error.tres) are reasoned rather
+than observed: a 150-point pool is 37.5 seconds of perfect fire from the starting weapon, chosen
+to match The Scrap King's ~31 seconds measured the same way, on the argument that a player who
+arrives here with a whole extra floor of items will finish it faster than that arithmetic
+suggests. `tests/test_balance.gd` holds both bosses to that comparison. Whether the fight is
+*fun* is not something any of this can tell you.
 
 ### Six new items
 
@@ -1083,7 +1123,9 @@ reason.
 4. Add a Development greybox: its floor resource, four combat templates, returning enemies,
    placeholder Runtime Error, and a developer-only direct-start path.
 5. Add the Code Runner, Compiler, compile lanes, finished boss, six items, status effects,
-   environment art, and music.
+   environment art, and music. **The Code Runner, the Compiler, compile lanes, and the finished
+   boss are done.** What is left in this step is the six items, the status system those items
+   are the reason for, the environment art, and the music.
 6. Play full two-floor runs with keyboard and controller, tune against the carried Help Desk
    build rather than a fresh debug character, then verify the exported builds.
 

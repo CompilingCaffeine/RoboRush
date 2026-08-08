@@ -260,11 +260,11 @@ func _test_unlocks_are_recorded_once() -> void:
 	SaveManager.unlocked_items.erase(&"__test_only_item")
 
 
-## Reported: defeating the (Floor 2) placeholder boss crashed instead of recording it.
+## Reported: defeating the Floor 2 boss crashed instead of recording it.
 ## `SaveManager._on_boss_defeated` statically typed the boss's config as `BossConfig`, which
-## `MergeConflict` carries but `RuntimeErrorPlaceholder` does not — it carries a
-## `SimpleBossConfig`, a sibling type, not a subclass. Every boss the game ships must be
-## checked here, not just the one that happened to exist when this suite was written.
+## `MergeConflict` carries but `RuntimeError` does not — it carries a `RuntimeErrorConfig`, a
+## sibling type, not a subclass. Every boss the game ships must be checked here, not just the
+## one that happened to exist when this suite was written.
 func _test_boss_defeats_are_recorded_regardless_of_config_type() -> void:
 	# Not asserted against a captured "before" count: test_boss.gd runs earlier in the suite
 	# order and its own checks can trigger a real Merge Conflict defeat, which this same
@@ -275,15 +275,15 @@ func _test_boss_defeats_are_recorded_regardless_of_config_type() -> void:
 	EventBus.boss_defeated.emit(merge_conflict)
 	merge_conflict.free()
 
-	var placeholder := RuntimeErrorPlaceholder.new()
-	placeholder.config = load("res://data/bosses/runtime_error_placeholder.tres") as SimpleBossConfig
-	EventBus.boss_defeated.emit(placeholder)
-	placeholder.free()
+	var runtime_error := RuntimeError.new()
+	runtime_error.config = load("res://data/bosses/runtime_error.tres") as RuntimeErrorConfig
+	EventBus.boss_defeated.emit(runtime_error)
+	runtime_error.free()
 
 	check(SaveManager.has_defeated_boss(&"merge_conflict"), "a BossConfig-typed boss is recorded")
 	check(
 		SaveManager.has_defeated_boss(&"runtime_error"),
-		"a SimpleBossConfig-typed boss is recorded too — this crashed before the fix",
+		"a RuntimeErrorConfig-typed boss is recorded too — this crashed before the fix",
 	)
 	check(
 		SaveManager.bosses_defeated.count(&"merge_conflict") == 1,

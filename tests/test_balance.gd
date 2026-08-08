@@ -21,6 +21,7 @@ extends TestCase
 const PLAYER_CONFIG := "res://data/player/player_config.tres"
 const WEAPON := "res://data/weapons/rivet_blaster.tres"
 const BOSS := "res://data/bosses/merge_conflict.tres"
+const SECOND_BOSS := "res://data/bosses/runtime_error.tres"
 const FLOOR := "res://data/floors/floor_1_help_desk.tres"
 const SHOP := "res://data/settings/shop_config.tres"
 
@@ -32,6 +33,7 @@ const ENEMIES_PER_COMBAT_ROOM := 3.5
 var _player: PlayerConfig
 var _weapon: WeaponConfig
 var _boss: BossConfig
+var _second_boss: RuntimeErrorConfig
 var _floor: FloorConfig
 var _shop: ShopConfig
 
@@ -40,6 +42,7 @@ func run() -> void:
 	_player = load(PLAYER_CONFIG)
 	_weapon = load(WEAPON)
 	_boss = load(BOSS)
+	_second_boss = load(SECOND_BOSS)
 	_floor = load(FLOOR)
 	_shop = load(SHOP)
 
@@ -51,6 +54,7 @@ func run() -> void:
 	_test_starting_weapon_deals_damage()
 	_test_every_enemy_dies_in_a_reasonable_window()
 	_test_the_boss_is_a_fight_rather_than_a_bullet_sponge()
+	_test_the_second_boss_is_a_fight_rather_than_a_bullet_sponge()
 	_test_the_player_can_take_a_few_hits()
 	_test_the_dash_is_worth_pressing()
 	_test_shop_prices_match_the_spec()
@@ -181,6 +185,69 @@ func _test_the_boss_is_a_fight_rather_than_a_bullet_sponge() -> void:
 		"the boss takes substantially longer than any regular enemy (%.1fs vs %.1fs)" % [
 			fastest, toughest_enemy,
 		],
+	)
+
+
+## The Floor 2 boss, whose length is far simpler arithmetic than the first one's: Runtime Error
+## refunds nothing, scales nothing, and spends no time playing dead, so its pool divided by the
+## player's damage is the whole answer.
+##
+## Measured against the *starting* weapon, like every other check in this suite, which makes it
+## a deliberate overestimate — nobody reaches Development with the rivet blaster and no items.
+## That is what the comparison against the first boss is for. Both numbers are wrong by roughly
+## the same factor, so a second boss that lands near the first one on this scale is a second boss
+## that lands near it in a real run too, and one that drifts to half or double the first is
+## drifting for a reason worth knowing about.
+func _test_the_second_boss_is_a_fight_rather_than_a_bullet_sponge() -> void:
+	if not require(_second_boss, "the second boss's config loads"):
+		return
+
+	var length := _seconds_to_kill(_second_boss.max_health)
+	check(
+		length >= 10.0,
+		"the second boss needs at least ten seconds of fire (%.1fs)" % length,
+	)
+	check(
+		length <= 60.0,
+		"and is not a bullet sponge (%.1fs)" % length,
+	)
+
+	# The floor the player arrives on with a whole extra floor's items. A second boss that was
+	# *shorter* than the first on identical damage would be a difficulty curve running backwards.
+	if _boss != null:
+		var first := _seconds_to_kill(_boss.max_health)
+		check(
+			length >= first,
+			"and the second floor's boss is at least the first one's pool (%.1fs against %.1fs)" % [
+				length, first,
+			],
+		)
+
+	# Each phase is a third of the pool, so each has to be long enough to show both of its
+	# patterns more than once — a phase over before its second attack has come round twice is a
+	# phase the player never learns to read.
+	var phase_length := length / 3.0
+	var slowest_interval := maxf(
+		maxf(_second_boss.phase_one_interval, _second_boss.phase_two_interval),
+		_second_boss.phase_three_interval,
+	)
+	check(
+		phase_length >= slowest_interval * 4.0,
+		"every phase lasts several attacks (%.1fs against a %.1fs interval)" % [
+			phase_length, slowest_interval,
+		],
+	)
+
+	# The lane telegraph, as the distance the player covers while it is amber, against the
+	# deepest thing they ever have to walk out of. This is the number that makes the whole
+	# mechanic fair, and it is worth having written down as arithmetic in the balance pass and
+	# not only as a rule in the boss's own suite.
+	var reach := _player.move_speed * _second_boss.lane_telegraph_seconds
+	var deepest_pattern := 192.0 / float(maxi(_second_boss.checker_rows, 1))
+	check(
+		reach >= deepest_pattern * 1.5,
+		"a lane warning buys comfortably more travel than its answer costs (%.0f against %.0f "
+			% [reach, deepest_pattern] + "pixels)",
 	)
 
 
