@@ -33,7 +33,7 @@ extends Boss
 ## reachable safe answer on its own, and no two of them ever overlap in time — the interval is
 ## longer than any pattern takes to resolve.
 
-const PART_SCENE := preload("res://scenes/bosses/boss_part.tscn")
+const PART_SCENE := preload("res://scenes/bosses/runtime_error_part.tscn")
 
 ## README's Development palette: "cyan and violet machinery, amber warnings, red execution
 ## errors." The body is the machinery. The warnings and the errors are `CompileLane`'s own two
@@ -58,9 +58,9 @@ const STRIKE_FLASH_SECONDS := 0.12
 ## leaving the first never means stepping into the second.
 const MIN_LANE_SLOT_SEPARATION := 2
 
-## How far above the player the body drifts toward. Same offset The Scrap King keeps, and for
-## the same reason: it repositions without ever closing.
-const DRIFT_OFFSET := Vector2(0.0, -70.0)
+## Where the sway starts: the middle of its sweep, so the fight opens with the body directly
+## above the player and moving, rather than parked at one end of its travel.
+const START_SWAY_PHASE := 0.0
 
 enum Phase {
 	## One lane at a time, alternating with aimed spreads.
@@ -112,6 +112,9 @@ var _staggered_lane_left := 0.0
 ## Which parity of the checkerboard lights up next, flipped after every board so that standing
 ## still is never the answer twice running.
 var _checker_parity := 0
+
+## Where the body currently sits in its side-to-side sweep, in radians. See `_step_drift`.
+var _sway_phase := START_SWAY_PHASE
 
 
 func _ready() -> void:
@@ -556,10 +559,26 @@ func _spawn(origin: Vector2, direction: Vector2) -> void:
 # --- Movement -----------------------------------------------------------------
 
 
+## The body holds station above the player and slides continuously from side to side, which is
+## the other half of making it hard to hit — a small target that held still would only be hard
+## to hit *once*, until the player settled their aim on it.
+##
+## A sway rather than a chase or a random walk. A chase closes, and this fight is not won or lost
+## at contact range; a random walk is unreadable, and an unreadable boss is an unfair one in a
+## fight built entirely on things being readable. A sine is the motion a player can learn to lead
+## and still has to keep leading, because it never stops and never repeats where it turns.
+##
+## Clamped to `_body_bounds` at the end, as everything here is. The clamp only bites when the
+## player pins themselves against a wall, and it flattens the sway rather than distorting it —
+## which is why this is a sway and not the orbit it started as: an orbit wide enough to matter
+## does not fit in a 192-pixel-tall arena, and clamping one collapses it onto the player.
 func _step_drift(delta: float) -> void:
 	if _player == null or not is_instance_valid(_part):
 		return
-	var target := _player.global_position + DRIFT_OFFSET
+	_sway_phase = fposmod(_sway_phase + config.sway_speed * delta, TAU)
+	var target := _player.global_position + Vector2(
+		sin(_sway_phase) * config.sway_amplitude, -config.drift_height
+	)
 	_part.global_position = _part.global_position.move_toward(target, config.move_speed * delta)
 	_part.global_position = _part.global_position.clamp(_body_bounds.position, _body_bounds.end)
 

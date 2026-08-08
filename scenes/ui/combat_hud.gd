@@ -26,6 +26,11 @@ extends Control
 var _boss_name := "THE BOSS"
 var _boss_defeat_banner := "THE BOSS IS DEFEATED"
 
+## What this floor's boss announces as each phase begins, indexed from phase one. Empty until
+## `bind_boss` runs, and legitimately empty for a boss with nothing to say — see
+## `FloorConfig.boss_phase_banners` for why this is data and not the constants it used to be.
+var _boss_phase_banners: Array[String] = []
+
 ## Merge Conflict's own feigned-death epitaph — distinct from the bound `_boss_defeat_banner`
 ## above, which is the *real* defeat banner and varies per floor. This one is specific to
 ## Merge Conflict's phase-one feint (see `_on_boss_feigned_defeat`) and never fires for a
@@ -136,9 +141,21 @@ func _ready() -> void:
 
 ## Called once per floor, before its boss room is reachable — see
 ## `FloorController.boss_encountered`.
-func bind_boss(display_name: String, defeat_banner: String) -> void:
+func bind_boss(display_name: String, defeat_banner: String, phase_banners: Array[String]) -> void:
 	_boss_name = display_name
 	_boss_defeat_banner = defeat_banner
+	_boss_phase_banners = phase_banners
+
+
+## Called as each floor begins, from main.gd. The floor's *name* already lives in the persistent
+## strip along the bottom; this is the one moment it is worth interrupting for, because "which
+## level am I on" is a question a player asks exactly once per floor and then never again.
+##
+## Deliberately the number and not the name. The name is on screen continuously two lines below,
+## and a banner that repeated it would be the only banner in the game that told the player
+## something they were already looking at.
+func announce_floor(number: int) -> void:
+	_show_banner("LEVEL %d" % number, BANNER_CLEAR)
 
 
 func bind_player(player: Player) -> void:
@@ -249,21 +266,25 @@ func _on_boss_health_changed(ratio: float) -> void:
 
 
 ## No phase number anywhere on screen, deliberately. "PHASE 1" tells the player there are more
-## coming, and the bar above it is built to convince them there are none left — see
-## MergeConflict._begin_feint. What each phase gets instead is a name, which says what changed
+## coming, and The Scrap King's bar is built to convince them there are none left — see
+## MergeConflict._begin_feint. What a phase gets instead is a name, which says what changed
 ## without saying how much is left.
 ##
-## The two of them are also the answer to the lie below. "THE KING IS DEAD" is a complete sentence
-## and the player is meant to believe it; the only thing that can follow that is the rest of the
-## saying.
+## Which name comes from the floor, not from here. Every boss emits this signal, so a line
+## written for one of them fires for all of them: Runtime Error reached phase two and the HUD
+## announced "LONG LIVE THE KING" over a boss with no claim to the title and no phase two of the
+## King's to be in. A boss with nothing to say now says nothing, which is the correct amount for
+## a fight whose phases announce themselves by changing what is on the floor.
 func _on_boss_phase_changed(phase: int) -> void:
 	_boss_phase = phase
 	_boss_label.text = _boss_name
-	match phase:
-		2:
-			_show_banner("LONG LIVE THE KING  //  TWO CLAIMANTS", BANNER_BOSS)
-		3:
-			_show_banner("THE KING REASSEMBLES  //  ONE UNSTABLE HEAP", BANNER_BOSS)
+
+	var index := phase - 1
+	if index < 0 or index >= _boss_phase_banners.size():
+		return
+	var banner := _boss_phase_banners[index]
+	if not banner.is_empty():
+		_show_banner(banner, BANNER_BOSS)
 
 
 ## The one place the HUD lies to the player: the same words and the same colour as a real victory,

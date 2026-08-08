@@ -21,6 +21,15 @@ extends TestCase
 
 const BOSS_SCENE := preload("res://scenes/bosses/runtime_error.tscn")
 const FLOOR_SCENE := preload("res://scenes/floors/floor.tscn")
+
+## The Scrap King's body, loaded only to be measured against. This suite never fights it.
+const KING_PART_SCENE := preload("res://scenes/bosses/boss_part.tscn")
+
+## How far the sprite is allowed to reach past the hitbox, in pixels. Runtime Error sheds four
+## small shards off the faces of its core diamond, and those are deliberately outside what can be
+## hit — the one honest way for a silhouette to be bigger than its body is for the extra part to
+## be visibly detached from it.
+const SHARD_ALLOWANCE := 4.0
 const BOSS_CONFIG_PATH := "res://data/bosses/runtime_error.tres"
 const FLOOR_2_CONFIG_PATH := "res://data/floors/floor_2_development.tres"
 const COMPILER_CONFIG_PATH := "res://data/enemies/compiler.tres"
@@ -69,6 +78,8 @@ func run() -> void:
 	_test_the_hud_calls_it_by_its_name()
 
 	await _test_it_starts_in_its_first_phase()
+	await _test_it_is_a_smaller_target_than_the_first_boss()
+	await _test_it_never_stops_moving_and_never_closes()
 	await _test_it_is_damageable_in_every_phase()
 	await _test_the_phases_change_at_their_thresholds()
 	await _test_one_huge_hit_lands_in_the_phase_it_earned()
@@ -183,6 +194,107 @@ func _test_it_starts_in_its_first_phase() -> void:
 	check(_boss.get_phase() == RuntimeError.Phase.SINGLE_LANE, "it starts in phase one")
 	check(_boss.get_part() != null, "with a body to shoot at")
 	check_near(_boss.get_health_ratio(), 1.0, "at full health")
+	await _teardown()
+
+
+## Small is a mechanic here, not a look, so it is checked as a number. The body is its own scene
+## with its own hitbox precisely so this can differ from The Scrap King's, and a change that
+## quietly pointed it back at the shared `boss_part.tscn` would restore the King's 14-pixel
+## radius and the King's sprite without breaking anything else.
+func _test_it_is_a_smaller_target_than_the_first_boss() -> void:
+	await _begin()
+	var part := _boss.get_part()
+	if not require(part, "the boss has a body"):
+		await _teardown()
+		return
+
+	# Read off the node paths rather than through `get_sprite()`/`%Sprite`: the King's body is
+	# instantiated to be measured, never added to a tree, so its `@onready` members are still
+	# null. Everything needed is pulled out and the instance freed before a single check runs,
+	# so a failing assertion cannot leak it.
+	var king: BossPart = KING_PART_SCENE.instantiate()
+	var mine := (part.get_node("Shape") as CollisionShape2D).shape as CircleShape2D
+	var theirs := (king.get_node("Shape") as CollisionShape2D).shape as CircleShape2D
+	var texture := (part.get_node("Sprite") as Sprite2D).texture
+	var king_texture := (king.get_node("Sprite") as Sprite2D).texture
+	king.free()
+
+	if require(mine and theirs, "both bosses' bodies are circles"):
+		check(
+			mine.radius < theirs.radius,
+			"Runtime Error is a smaller target than The Scrap King (%.0f against %.0f)" % [
+				mine.radius, theirs.radius,
+			],
+		)
+		# The claim the change was made for, as area rather than radius, since area is what a
+		# player's aim actually contends with.
+		check(
+			mine.radius * mine.radius <= theirs.radius * theirs.radius * 0.5,
+			"and at most half the area to hit (%.0f%% of it)" % [
+				100.0 * (mine.radius * mine.radius) / (theirs.radius * theirs.radius),
+			],
+		)
+
+	# Its own sprite as well as its own hitbox: the two are the same change, and a body wearing
+	# the King's art would be a second Scrap King whatever its collision shape said.
+	if require(texture and king_texture, "both bodies have a sprite"):
+		check(
+			texture.resource_path != king_texture.resource_path,
+			"and it does not wear the first boss's art (%s)" % texture.resource_path.get_file(),
+		)
+		# A sprite larger than the body it stands for is the complaint boss_part.tscn's own
+		# comment records: shots the player swears they hit. Half the sprite's width is the
+		# furthest any of it reaches from the centre.
+		check(
+			texture.get_width() * 0.5 <= mine.radius + SHARD_ALLOWANCE,
+			"whose art does not overhang its hitbox by more than the shards it sheds "
+				+ "(%d-pixel sprite, %.0f-pixel radius)" % [texture.get_width(), mine.radius],
+		)
+
+	await _teardown()
+
+
+## The other half of "hard to hit": a small target that held still would be hard to hit exactly
+## once. Two claims, and they pull against each other — it has to keep moving, and it must not
+## use that movement to close on the player, because this fight is not fought at contact range.
+func _test_it_never_stops_moving_and_never_closes() -> void:
+	await _begin()
+	var part := _boss.get_part()
+	var player := get_tree().get_first_node_in_group(Teams.GROUP_PLAYER) as Node2D
+	if not require(part and player, "there is a body and a player"):
+		await _teardown()
+		return
+
+	# Let it reach its station first, so what is measured is the sway and not the opening
+	# approach from the middle of the arena.
+	await advance_physics(60)
+
+	var travelled := 0.0
+	var closest := INF
+	var last := part.global_position
+	var swept_left := false
+	var swept_right := false
+
+	# A full sweep at the shipped rate, and then some.
+	for _frame: int in int(TAU / _config.sway_speed * 60.0) + 30:
+		await advance_physics(1)
+		if not is_instance_valid(part):
+			break
+		travelled += part.global_position.distance_to(last)
+		last = part.global_position
+		closest = minf(closest, part.global_position.distance_to(player.global_position))
+		var offset := part.global_position.x - player.global_position.x
+		swept_left = swept_left or offset < -_config.sway_amplitude * 0.5
+		swept_right = swept_right or offset > _config.sway_amplitude * 0.5
+
+	check(travelled > _config.sway_amplitude * 2.0, "it never stops moving (%.0f pixels)" % travelled)
+	check(swept_left and swept_right, "and sweeps to both sides of the player rather than one")
+	# Never closes: the drift height is the distance it holds, and it may not spend the fight
+	# converging on the player the way a chaser would.
+	check(
+		closest > _config.drift_height * 0.5,
+		"and never closes on the player (nearest approach %.0f pixels)" % closest,
+	)
 	await _teardown()
 
 

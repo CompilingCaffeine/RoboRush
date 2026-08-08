@@ -45,6 +45,7 @@ func _ready() -> void:
 	_minimap.bind_floor(_floor)
 	_debug_hud.bind_floor(_floor)
 	_floor.floor_advanced.connect(_on_floor_advanced)
+	_combat_hud.announce_floor(_floor.config.floor_number)
 
 
 ## Seed precedence: command line, then the compiled-in override, then the clock.
@@ -86,6 +87,10 @@ func _apply_dev_floor_override() -> void:
 ## wired to it once at startup need to be pointed at it again. Minimap in particular caches the
 ## floor's layout at bind time rather than reading it live, so without this it would keep
 ## drawing the floor the player just left.
-func _on_floor_advanced(_config: FloorConfig) -> void:
+##
+## The level is announced here as well as at startup, and those are the only two ways a floor
+## ever begins — a run either opens on one or descends into the next.
+func _on_floor_advanced(config: FloorConfig) -> void:
 	_minimap.bind_floor(_floor)
 	_debug_hud.bind_floor(_floor)
+	_combat_hud.announce_floor(config.floor_number)

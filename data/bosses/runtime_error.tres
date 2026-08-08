@@ -7,7 +7,7 @@
 script = ExtResource("1_boss")
 id = &"runtime_error"
 display_name = "Runtime Error"
-max_health = 150.0
+max_health = 110.0
 phase_two_at = 0.66
 phase_three_at = 0.33
 shot = ExtResource("2_shot")
@@ -28,4 +28,7 @@ lane_thickness_tiles = 2
 lane_stagger_seconds = 0.55
 checker_cols = 4
 checker_rows = 3
-move_speed = 30.0
+move_speed = 95.0
+drift_height = 70.0
+sway_amplitude = 60.0
+sway_speed = 1.3

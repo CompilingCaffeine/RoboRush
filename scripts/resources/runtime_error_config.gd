@@ -33,12 +33,16 @@ extends Resource
 ## damageable through all three phases." What the player is asked for here is reading the
 ## arena, not working out why their shots are not counting.
 ##
-## 150 against the starting weapon's 4 damage per second is 37.5 seconds of perfect fire,
-## which is the same order as The Scrap King's ~31s measured the same way (tests/test_balance.gd
-## does that arithmetic for both). The player reaching this boss has had a whole extra floor of
-## items, so the fight they actually get is shorter than that — matching the first boss on
-## *starting* damage is what keeps the second one from being over in ten seconds.
-@export var max_health: float = 150.0
+## 110 against the starting weapon's 4 damage per second is 27.5 seconds of *perfect* fire,
+## which is the number that matters least here and the reason this is not the 150 it started at.
+## Perfect fire assumes a target that can be hit at will, and this boss is a 7-pixel radius on a
+## body that never stops circling — a quarter of The Scrap King's area to hit, moving. The pool
+## came down because the missing came up: the fight the player actually gets is longer than this
+## arithmetic says, where the King's is close to what its own arithmetic says.
+##
+## tests/test_balance.gd still holds this against the first boss's pool, because a second floor's
+## boss being *shorter* than the first on identical damage would be a curve running backwards.
+@export var max_health: float = 110.0
 
 ## Health fractions the phases change at. Thirds rather than the Scrap King's 70/35, because
 ## its thresholds are weighted for phases that cost wildly different amounts (four terminals in
@@ -113,7 +117,27 @@ extends Resource
 
 @export_group("Movement")
 
-## Drift speed. Slow, for the same reason The Scrap King's is: it is the arena that threatens
-## the player in this fight, and a boss that chased them would be competing with its own lanes
-## for their attention.
-@export var move_speed: float = 30.0
+## How fast the body travels toward the point it is holding. Must stay above the sway's own peak
+## lateral speed — `sway_amplitude * sway_speed`, 78 pixels per second at the values below — or
+## the body never keeps up with the point it is tracking and the sway quietly shrinks to a
+## fraction of its amplitude. tests/test_balance.gd asserts that margin.
+@export var move_speed: float = 95.0
+
+## How far above the player the body holds station. It repositions without ever closing: this
+## fight is not won or lost at contact range, and a boss in the player's face would be competing
+## with its own lanes for their attention.
+@export var drift_height: float = 70.0
+
+## How far to either side of that station the body slides, and how fast, in radians per second.
+##
+## This is the half of "hard to hit" that the small hitbox cannot do on its own — a small target
+## that held still would be hard to hit exactly once, until the player settled their aim on it.
+## A sway rather than an orbit because the arena is 416x192 and an orbit wide enough to matter
+## does not fit in 192 pixels of height: it would clamp against the walls and collapse onto the
+## player, which is both ugly and the opposite of keeping its distance.
+##
+## 60 pixels at 1.3 rad/s is a 120-pixel sweep every 4.8 seconds. Against a rivet's 420-pixel
+## speed that is roughly 19 pixels of lead at typical range, on a body 14 pixels wide — so the
+## player has to lead it, and can.
+@export var sway_amplitude: float = 60.0
+@export var sway_speed: float = 1.3

@@ -23,7 +23,7 @@ signal floor_advanced(config: FloorConfig)
 ## Emitted once the boss is in its arena, carrying this floor's boss identity — plain signal
 ## for the same reason `floor_advanced` is: only main.gd needs it, to hand the HUD a name it
 ## has no other way to learn (see `FloorConfig.boss_display_name`).
-signal boss_encountered(display_name: String, defeat_banner: String)
+signal boss_encountered(display_name: String, defeat_banner: String, phase_banners: Array[String])
 
 const ROOM_SCENE := preload("res://scenes/rooms/room.tscn")
 const DOOR_SCENE := preload("res://scenes/rooms/door.tscn")
@@ -251,7 +251,9 @@ func _needs_clearing(id: int) -> bool:
 ## room it is in.
 func _spawn_boss(room: Room) -> void:
 	_boss = config.boss_scene.instantiate()
-	boss_encountered.emit(config.boss_display_name, config.boss_defeat_banner)
+	boss_encountered.emit(
+		config.boss_display_name, config.boss_defeat_banner, config.boss_phase_banners
+	)
 	# One-shot: a boss is defeated exactly once per floor, and this controller now outlives a
 	# single floor. Without it, the next floor's boss spawn would stack a second connection,
 	# and its death would also invoke the handler still bound to this (by-then-freed) room.

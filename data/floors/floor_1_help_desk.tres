@@ -51,3 +51,4 @@ next_floor = ExtResource("24_next")
 boss_scene = ExtResource("25_boss_scene")
 boss_display_name = "THE SCRAP KING"
 boss_defeat_banner = "THE KING IS DEAD"
+boss_phase_banners = Array[String](["", "LONG LIVE THE KING  //  TWO CLAIMANTS", "THE KING REASSEMBLES  //  ONE UNSTABLE HEAP"])

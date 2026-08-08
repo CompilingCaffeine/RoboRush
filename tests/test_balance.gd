@@ -238,6 +238,17 @@ func _test_the_second_boss_is_a_fight_rather_than_a_bullet_sponge() -> void:
 		],
 	)
 
+	# The body has to keep up with the point it is tracking, or the sway that makes it hard to
+	# hit quietly shrinks to a fraction of the amplitude the config claims — a boss that got
+	# easier to hit with no number anywhere admitting it.
+	var peak_lateral := _second_boss.sway_amplitude * _second_boss.sway_speed
+	check(
+		_second_boss.move_speed > peak_lateral,
+		"the boss can keep up with its own sway (%.0f against %.0f pixels per second)" % [
+			_second_boss.move_speed, peak_lateral,
+		],
+	)
+
 	# The lane telegraph, as the distance the player covers while it is amber, against the
 	# deepest thing they ever have to walk out of. This is the number that makes the whole
 	# mechanic fair, and it is worth having written down as arithmetic in the balance pass and

@@ -43,6 +43,17 @@ extends Resource
 ## Shown when the boss falls, alongside the reward choice.
 @export var boss_defeat_banner: String = ""
 
+## What the HUD announces as each of the boss's phases begins, indexed from phase one: element
+## 0 is phase one's banner, element 1 is phase two's, and so on. An empty string means that
+## phase is entered in silence, and an empty array means the boss never announces a phase at all.
+##
+## Data rather than the constants the HUD used to hold, because those constants were The Scrap
+## King's lines — "LONG LIVE THE KING", "THE KING REASSEMBLES" — fired on a signal every boss
+## emits. The second floor's boss reached phase two and the HUD crowned it. A boss's own words
+## belong to that boss, and the only place the HUD already learns which boss it is looking at is
+## here, beside its name and its epitaph.
+@export var boss_phase_banners: Array[String] = []
+
 @export_group("Population")
 
 ## Enemies that may appear on this floor, with their weights and how early they unlock.

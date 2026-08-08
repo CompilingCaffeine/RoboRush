@@ -49,3 +49,7 @@ treasure_grants_item = true
 boss_scene = ExtResource("25_boss_scene")
 boss_display_name = "RUNTIME ERROR"
 boss_defeat_banner = "THE PROCESS HAS TERMINATED"
+; Deliberately empty. Runtime Error's phases announce themselves by changing what is on the
+; floor — one lane becomes two, two become a checkerboard — and a banner saying so would be
+; explaining a change the player is already looking at.
+boss_phase_banners = Array[String]([])

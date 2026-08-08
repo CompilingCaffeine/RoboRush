@@ -885,6 +885,30 @@ resulting frames, and by nothing else. The suite was green for all of them.
    the numbers mean rather than asserting they are unchanged; the refund is now 0.75 and
    ignoring the terminals costs roughly twice as long.
 
+### Bugs found while building the Floor 2 boss
+
+1. **The HUD crowned the wrong boss.** Reported. `boss_phase_changed` is emitted by every
+   boss, and `CombatHUD` answered it with two lines written for The Scrap King — so Runtime
+   Error reached its second phase and the player was told "LONG LIVE THE KING // TWO
+   CLAIMANTS" over a boss with no claim to the title, followed by "THE KING REASSEMBLES" over
+   one that does not reassemble. Nothing failed and nothing errored; the HUD simply said the
+   wrong thing, which is the whole difficulty of the class. A boss's own words are now
+   `FloorConfig.boss_phase_banners`, bound the same way its name and epitaph already were, and
+   a boss with nothing to say gets silence — which is the right amount for a fight whose phases
+   announce themselves by changing what is on the floor.
+
+   The real fault underneath it was that **`CombatHUD` had no test suite at all.** One line in
+   `tests/test_boss.gd` compared two of its constants and that was the entire coverage of the
+   thing the player spends the whole run reading. `tests/test_hud.gd` now drives both floors'
+   shipped data through a live HUD and reads the label; putting the old hardcoded lines back
+   fails it in exactly the two places the bug appeared.
+
+2. **The greybox boss was invisible as a placeholder.** Not a crash, and not caught by
+   anything — the stand-in wore The Scrap King's own 32x32 sprite under a blue tint and used
+   his 14-pixel hitbox, so the second floor's boss read as the first one recoloured. It has its
+   own art and its own body now. Worth recording because the placeholder was *documented* as
+   temporary in its own header and still looked finished enough not to prompt the question.
+
 
 ## Known limitations
 
@@ -1055,13 +1079,38 @@ checkerboard every cell that lights up shares all four of its edges with cells t
 the answer to any board is one step across the nearest boundary, wherever the player happens to
 be standing. The parity flips afterwards, so standing still is never the answer twice.
 
+#### A small, moving target
+
+The body is the other half of the fight, and it is built to be hard to hit rather than hard to
+survive. Its hitbox is a 7-pixel radius against The Scrap King's 14 — a quarter of the area —
+and it never stops sliding from side to side above the player, so a small target is hard to hit
+more than once. Those two work together: either alone is answered by settling your aim.
+
+It moves by **sway**, not orbit. An orbit was tried first and does not fit: the arena is 416x192,
+a circle wide enough to matter needs more than 192 pixels of height, and clamping one to the room
+collapses it onto the player — the opposite of a boss that keeps its distance. A sine along the
+horizontal, held at a fixed height above the player, gives constant lateral motion that the
+player can learn to lead and has to keep leading, inside a room that shape.
+
+The sprite in [`art/bosses/runtime_error.png`](art/bosses/runtime_error.png) is 20x20 against the
+King's 32x32 and is a different *kind* of shape, not a smaller version of the same one: a banded
+diamond with two rows slipped sideways and four shards thrown off its faces, hovering, with no
+feet and no top. The King is a machine built out of salvage; this is a process that got loose. It
+is drawn in neutral greys for the King's reason — the fight tints the body violet and flashes it
+amber and red through `modulate`, which multiplies, so any colour baked into the sprite would
+fight the warning language the whole fight runs on. The shards are the one honest way for a
+silhouette to be bigger than its hitbox: they are visibly detached, so nothing the player reads
+as the body is outside what they can hit.
+
 **It still has not been played by a person** — see [Known limitations](#known-limitations). The
 numbers in [`data/bosses/runtime_error.tres`](data/bosses/runtime_error.tres) are reasoned rather
-than observed: a 150-point pool is 37.5 seconds of perfect fire from the starting weapon, chosen
-to match The Scrap King's ~31 seconds measured the same way, on the argument that a player who
-arrives here with a whole extra floor of items will finish it faster than that arithmetic
-suggests. `tests/test_balance.gd` holds both bosses to that comparison. Whether the fight is
-*fun* is not something any of this can tell you.
+than observed. The pool is 110, which is 27.5 seconds of *perfect* starting-weapon fire — the
+least meaningful number about this boss, and the reason it is not the 150 it started at. Perfect
+fire assumes a target that can be hit at will, and this one is a quarter of the King's area,
+moving; the pool came down because the missing went up. `tests/test_balance.gd` still holds it
+against the first boss's pool, since a second floor's boss being *shorter* than the first on
+identical damage would be a difficulty curve running backwards. Whether the fight is *fun* is not
+something any of this can tell you.
 
 ### Six new items
 
@@ -1106,6 +1155,14 @@ and its projectiles must be gone before the next floor becomes active, so there 
 than one projectile container or one room graph in the tree. The minimap and
 `FloorController._clears` reset; cumulative `RunManager.rooms_cleared` and run statistics do
 not, so the HUD and final summary still describe the whole run.
+
+**Each floor announces itself.** `CombatHUD.announce_floor` puts `LEVEL 1` or `LEVEL 2` up as a
+banner, called from `main.gd` at startup and again on every descent — which are the only two ways
+a floor ever begins. The number and not the name, deliberately: the floor's *name* is already in
+the persistent strip along the bottom of the screen, and a banner repeating it would be the only
+one in the game telling the player something they were already looking at. It is transient like
+every other banner, because the standing answer to "where am I" is the strip, and a permanent
+announcement would cover playable floor for the rest of the run.
 
 Derive a deterministic seed for each floor from the run seed so one `--seed` reproduces the
 whole run. Prove this seam first by configuring Help Desk twice. A repeated floor is ugly but

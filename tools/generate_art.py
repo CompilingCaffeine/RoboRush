@@ -372,6 +372,85 @@ def merge_conflict_sprite() -> list[str]:
 
 MERGE_CONFLICT = merge_conflict_sprite()
 
+
+def runtime_error_sprite() -> list[str]:
+    """Runtime Error, 20x20 — deliberately the smallest body in the game that is a boss.
+
+    The Scrap King is 32x32, wider than tall, stands on feet and has antennae: a *machine*,
+    built out of salvage. This one has to read as the opposite at a glance, because it is the
+    opposite fight — not a thing the megacorp assembled but a process that got loose. So it is
+    a diamond, which nothing else on screen is; it hovers, with no feet and no top; and it is
+    small enough that hitting it is a skill rather than a formality.
+
+    Small is also the mechanic. Its hitbox is a 7-pixel radius against the King's 14, so the
+    body is a quarter of the area to hit, and the sprite has to be honest about that or the
+    player is owed shots they think landed (the lesson boss_part.tscn's own comment records).
+    The concentric bands are what keep it honest: the solid core is the hitbox, and everything
+    outside it is either the thin diamond tip or a detached shard.
+
+    Built in code rather than typed as a grid for the same reason the King is — the shape that
+    matters is arithmetic. Here it is the displaced rows: two bands of the diamond shifted
+    sideways, so the silhouette does not line up with itself. A vertical seam is what a merge
+    conflict looks like; a horizontal slip is what a corrupted process looks like, and the two
+    bosses must not share a tell.
+
+    Neutral greys, and for exactly the King's reason: `RuntimeError` tints the body violet and
+    flashes it amber and red through `modulate`, which multiplies. Any colour baked in here
+    would fight the warning language the whole fight is built on.
+    """
+    size = 20
+    grid = [["."] * size for _ in range(size)]
+    cx = cy = 10
+    radius = 7
+
+    def diamond(limit: int, ch: str) -> None:
+        for y in range(size):
+            for x in range(size):
+                if abs(x - cx) + abs(y - cy) <= limit:
+                    grid[y][x] = ch
+
+    # Concentric bands, drawn largest first. The outermost is the outline and each step inward
+    # is brighter, so the core reads as the thing that is actually there.
+    #
+    # Weighted bright deliberately: `RuntimeError.BODY_TINT` is a violet whose red and green
+    # channels are below one, and `modulate` multiplies — so whatever is drawn here reaches the
+    # screen darker than it looks in a paint program. A body built from the dark end of the
+    # palette arrived as a smudge on a dark floor.
+    diamond(radius, "o")
+    diamond(radius - 1, "d")
+    diamond(radius - 2, "m")
+    diamond(radius - 4, "l")
+
+    # The eye: a small cross at the centre, the only part of the sprite that is not a band.
+    # Everything the player aims at is this, so it is the brightest thing on the body and
+    # sits exactly where the hitbox is centred.
+    for dx, dy in ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)):
+        grid[cy + dy][cx + dx] = "Y"
+
+    # The slip. Two bands shoved sideways in opposite directions, which breaks the diamond's
+    # symmetry without breaking its silhouette — it still reads as one shape, wrongly.
+    for row, shift in ((cy - 3, 2), (cy + 3, -2)):
+        moved = ["."] * size
+        for x in range(size):
+            target = x + shift
+            if 0 <= target < size:
+                moved[target] = grid[row][x]
+        grid[row] = moved
+
+    # Four shards, thrown off the flat faces of the diamond and clearly detached from it.
+    # Detached is the point: they enlarge the silhouette without enlarging what can be hit,
+    # so the boss looks bigger than its hitbox in the one way that is honest — the parts
+    # sticking out are visibly not the body.
+    for dx, dy in ((-5, -5), (5, -5), (-5, 5), (5, 5)):
+        x0, y0 = cx + dx, cy + dy
+        grid[y0][x0] = "m"
+        grid[y0 + (1 if dy > 0 else -1)][x0 + (1 if dx > 0 else -1)] = "o"
+
+    return ["".join(row) for row in grid]
+
+
+RUNTIME_ERROR = runtime_error_sprite()
+
 # --- Synchronization terminal: a squat server box with a status light.
 BOSS_TERMINAL = [
     "................",
@@ -848,6 +927,7 @@ SPRITES = {
     "art/effects/projectile_drone.png": DRONE_SHOT,
     "art/environments/shop_stand.png": SHOP_STAND,
     "art/bosses/merge_conflict.png": MERGE_CONFLICT,
+    "art/bosses/runtime_error.png": RUNTIME_ERROR,
     "art/bosses/boss_terminal.png": BOSS_TERMINAL,
     "art/effects/projectile_boss_red.png": BOSS_RED,
     "art/effects/projectile_boss_green.png": BOSS_GREEN,

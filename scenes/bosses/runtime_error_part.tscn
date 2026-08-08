@@ -1,0 +1,44 @@
+[gd_scene load_steps=5 format=3]
+
+; Runtime Error's body. Same `boss_part.gd` as The Scrap King's — a part is a damage receiver
+; that forwards its hits to the controller, and that job does not change between bosses — but
+; its own texture and its own hitbox, which do.
+;
+; A second scene rather than a `configure(texture, radius)` call on the shared one: the
+; CircleShape2D below is a sub-resource, and sub-resources are shared between every instance a
+; PackedScene produces. Resizing one at runtime would quietly resize The Scrap King's too.
+
+[ext_resource type="Script" path="res://scenes/bosses/boss_part.gd" id="1_part"]
+[ext_resource type="Texture2D" path="res://art/bosses/runtime_error.png" id="2_tex"]
+[ext_resource type="Script" path="res://scripts/components/health_component.gd" id="3_health"]
+[ext_resource type="Script" path="res://scripts/components/hurt_flash.gd" id="4_flash"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_runtime_error"]
+; Half The Scrap King's 14, which is a quarter of the area to hit. Matched to the 20x20
+; sprite's core diamond, whose points sit exactly 7 pixels out — so the circle covers the body
+; the player can see and nothing further. The four shards thrown off its faces are deliberately
+; outside it: they are the only part of the silhouette that is not the boss.
+radius = 7.0
+
+[node name="RuntimeErrorPart" type="CharacterBody2D"]
+collision_layer = 4
+collision_mask = 1
+motion_mode = 1
+script = ExtResource("1_part")
+
+[node name="Shape" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_runtime_error")
+
+[node name="Sprite" type="Sprite2D" parent="."]
+unique_name_in_owner = true
+texture = ExtResource("2_tex")
+
+[node name="Health" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("3_health")
+invulnerability_seconds = 0.0
+
+[node name="HurtFlash" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("4_flash")
+target = NodePath("../Sprite")
