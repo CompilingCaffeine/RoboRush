@@ -212,13 +212,22 @@ func _test_the_second_boss_is_a_fight_rather_than_a_bullet_sponge() -> void:
 		"and is not a bullet sponge (%.1fs)" % length,
 	)
 
-	# The floor the player arrives on with a whole extra floor's items. A second boss that was
-	# *shorter* than the first on identical damage would be a difficulty curve running backwards.
+	# Runtime Error is the longer of the two fights, which is no longer the same claim as "the
+	# second floor's boss is longer". Either boss can guard either floor now, so on roughly half
+	# of all runs the player meets this 110-point pool on the *first* floor, with a starting
+	# build and no items — while the other half meets a 60-point Scrap King on the second floor
+	# with a full one.
+	#
+	# The ordering assertion is kept because the two pools should still differ in this direction
+	# — a random boss order is only interesting while the bosses are not interchangeable — but
+	# the *spread* between them is now something a player feels as run-to-run difficulty rather
+	# than as a curve. Whether 60-against-110 is too wide a swing for a coin flip is a playtest
+	# question, and the first number to move if it is.
 	if _boss != null:
 		var first := _seconds_to_kill(_boss.max_health)
 		check(
 			length >= first,
-			"and the second floor's boss is at least the first one's pool (%.1fs against %.1fs)" % [
+			"Runtime Error is the longer of the two fights (%.1fs against %.1fs)" % [
 				length, first,
 			],
 		)
@@ -360,7 +369,7 @@ func _test_the_player_can_afford_something_but_not_everything() -> void:
 func _test_every_item_in_the_pool_has_a_price() -> void:
 	if not require(_floor, "floor config loads"):
 		return
-	for item: ItemConfig in _floor.item_pool:
+	for item: ItemConfig in _floor.get_items():
 		if item == null:
 			continue
 		check(
@@ -390,7 +399,7 @@ func _test_the_pool_cannot_run_dry_before_the_boss_reward() -> void:
 	if not require(_floor, "floor config loads"):
 		return
 
-	var pool_size := _floor.item_pool.size()
+	var pool_size := _floor.get_items().size()
 	var shelf := _shop.item_stand_count
 	var clear_rewards := _floor.item_clear_indices.size()
 	var treasure := 1 if _floor.treasure_grants_item else 0

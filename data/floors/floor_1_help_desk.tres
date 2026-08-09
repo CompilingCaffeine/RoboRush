@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="FloorConfig" load_steps=30 format=3]
+[gd_resource type="Resource" script_class="FloorConfig" load_steps=20 format=3]
 
 [ext_resource type="Script" path="res://scripts/resources/floor_config.gd" id="1_floor"]
 [ext_resource type="Resource" path="res://data/rooms/start_bay.tres" id="2_start"]
@@ -14,21 +14,11 @@
 [ext_resource type="Resource" path="res://data/spawns/pop_up_drone.tres" id="8_pop_up_drone"]
 [ext_resource type="Resource" path="res://data/spawns/memory_leech.tres" id="8_memory_leech"]
 [ext_resource type="Resource" path="res://data/spawns/firewall_node.tres" id="8_firewall_node"]
-[ext_resource type="Resource" path="res://data/items/ricochet_driver.tres" id="9_ricochet_driver"]
-[ext_resource type="Resource" path="res://data/items/fork_bomb.tres" id="10_fork_bomb"]
-[ext_resource type="Resource" path="res://data/items/magnetic_guidance.tres" id="11_magnetic_guidance"]
-[ext_resource type="Resource" path="res://data/items/return_protocol.tres" id="12_return_protocol"]
-[ext_resource type="Resource" path="res://data/items/capacitor_leak.tres" id="13_capacitor_leak"]
-[ext_resource type="Resource" path="res://data/items/volatile_kernel.tres" id="14_volatile_kernel"]
-[ext_resource type="Resource" path="res://data/items/cooling_fan.tres" id="15_cooling_fan"]
-[ext_resource type="Resource" path="res://data/items/reinforced_chassis.tres" id="16_reinforced_chassis"]
-[ext_resource type="Resource" path="res://data/items/backup_battery.tres" id="17_backup_battery"]
-[ext_resource type="Resource" path="res://data/items/unsafe_overclock.tres" id="18_unsafe_overclock"]
-[ext_resource type="Resource" path="res://data/items/scrap_magnet.tres" id="19_scrap_magnet"]
-[ext_resource type="Resource" path="res://data/items/debug_drone.tres" id="20_debug_drone"]
 [ext_resource type="Resource" path="res://data/floors/floor_2_development.tres" id="24_next"]
-[ext_resource type="PackedScene" path="res://scenes/bosses/merge_conflict.tscn" id="25_boss_scene"]
 [ext_resource type="Resource" path="res://data/floors/help_desk_theme.tres" id="26_theme"]
+[ext_resource type="Resource" path="res://data/pools/run_item_pool.tres" id="90_pool"]
+[ext_resource type="Resource" path="res://data/bosses/scrap_king_encounter.tres" id="92_king"]
+[ext_resource type="Resource" path="res://data/bosses/runtime_error_encounter.tres" id="93_error"]
 
 [resource]
 script = ExtResource("1_floor")
@@ -45,12 +35,9 @@ boss_templates = Array[RoomTemplate]([ExtResource("22_boss")])
 enemy_spawns = Array[EnemySpawn]([ExtResource("8_ticket_bot"), ExtResource("8_pop_up_drone"), ExtResource("8_memory_leech"), ExtResource("8_firewall_node")])
 clear_scrap_range = Vector2i(1, 3)
 enemy_scrap_range = Vector2i(0, 2)
-item_pool = Array[ItemConfig]([ExtResource("9_ricochet_driver"), ExtResource("10_fork_bomb"), ExtResource("11_magnetic_guidance"), ExtResource("12_return_protocol"), ExtResource("13_capacitor_leak"), ExtResource("14_volatile_kernel"), ExtResource("15_cooling_fan"), ExtResource("16_reinforced_chassis"), ExtResource("17_backup_battery"), ExtResource("18_unsafe_overclock"), ExtResource("19_scrap_magnet"), ExtResource("20_debug_drone")])
-item_clear_indices = Array[int]([1, 3, 5])
+item_pool = ExtResource("90_pool")
+item_clear_indices = Array[int]([2, 5])
 shop = ExtResource("23_shop_cfg")
 treasure_grants_item = true
 next_floor = ExtResource("24_next")
-boss_scene = ExtResource("25_boss_scene")
-boss_display_name = "THE SCRAP KING"
-boss_defeat_banner = "THE KING IS DEAD"
-boss_phase_banners = Array[String](["", "LONG LIVE THE KING  //  TWO CLAIMANTS", "THE KING REASSEMBLES  //  ONE UNSTABLE HEAP"])
+boss_pool = Array[BossEncounter]([ExtResource("92_king"), ExtResource("93_error")])

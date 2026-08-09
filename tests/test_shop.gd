@@ -97,7 +97,7 @@ func _test_stand_labels_cannot_overlap() -> void:
 
 	var widest := 0.0
 	var widest_label := ""
-	for item: ItemConfig in _floor_config.item_pool:
+	for item: ItemConfig in _floor_config.get_items():
 		# The label is the name and the price together, so it is the pair that has to fit.
 		var label := "%s  %d" % [item.display_name.to_upper(), _shop_config.price_for(item)]
 		var width := font.get_string_size(
@@ -366,7 +366,7 @@ func _test_stands_land_where_they_were_asked_to() -> void:
 		holder.global_position + Vector2(90.0, 20.0),
 		holder.global_position + Vector2(150.0, 20.0),
 	]
-	_shop.stock(_shop_config, _floor_config.item_pool, wanted, 99)
+	_shop.stock(_shop_config, _floor_config.get_items(), wanted, 99)
 	await advance_physics(2)
 
 	var stands := _shop.get_stands()
@@ -409,7 +409,7 @@ func _make_shop(scrap: int) -> void:
 	var positions: Array[Vector2] = [
 		Vector2(0.0, 0.0), Vector2(60.0, 0.0), Vector2(120.0, 0.0), Vector2(180.0, 0.0),
 	]
-	_shop.stock(_shop_config, _floor_config.item_pool, positions, 4242)
+	_shop.stock(_shop_config, _floor_config.get_items(), positions, 4242)
 	await advance_physics(2)
 
 

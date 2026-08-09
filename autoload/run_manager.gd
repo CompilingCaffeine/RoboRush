@@ -47,6 +47,15 @@ var offered_item_ids: Array[StringName] = []
 ## the fight.
 var enemy_health_scale: float = 1.0
 
+## Ids of every boss this run has already been sent to fight. Run-scoped for exactly the
+## reason `offered_item_ids` is: a floor drawing its boss cannot see what the previous floor
+## drew, and a two-floor run that rolled The Scrap King twice would be a run missing a boss.
+##
+## Recorded when the boss is *drawn*, not when it is defeated — a player who dies to the first
+## boss ends the run there, so the distinction never shows, and drawing is the only moment the
+## floor is deciding anything.
+var fought_boss_ids: Array[StringName] = []
+
 ## Spec section 25. Replaced wholesale on a new run rather than reset field by field, so a
 ## statistic added later cannot be forgotten in the reset.
 var stats := RunStats.new()
@@ -89,6 +98,7 @@ func begin_run(seed_value: int) -> void:
 	floor_seed = seed_value
 	offered_item_ids.clear()
 	enemy_health_scale = 1.0
+	fought_boss_ids.clear()
 	stats = RunStats.new()
 	records_beaten = []
 	_is_timing = true

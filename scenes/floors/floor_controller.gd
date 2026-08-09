@@ -87,6 +87,9 @@ var _clears := 0
 ## existed from the moment the floor was built would be a boss firing at an empty room.
 var _boss: Boss
 
+## Which boss guards this floor, drawn once in `build()`.
+var _boss_encounter: BossEncounter
+
 @onready var _rooms_container: Node2D = %Rooms
 @onready var _doors_container: Node2D = %Doors
 @onready var _loot: LootSpawner = %LootSpawner
@@ -109,10 +112,46 @@ func build(player: Player, seed_value: int) -> bool:
 	RunManager.floor_name = config.display_name
 	RunManager.floor_seed = seed_value
 
+	# Drawn here rather than when the player reaches the arena, so it is decided by the floor's
+	# seed alone. Drawing it on arrival would make which boss you fight depend on how the RNG
+	# had been consumed getting there, and one `--seed` would stop reproducing the whole run.
+	_boss_encounter = _draw_boss_encounter()
+
 	_instantiate_rooms()
 	_instantiate_doors()
 	_place_player_in_start_room()
 	return true
+
+
+## Which boss guards this floor. Null before `build()` has run.
+func get_boss_encounter() -> BossEncounter:
+	return _boss_encounter
+
+
+## Picks this floor's boss from its pool, preferring one the run has not fought yet.
+##
+## The preference is what turns two independent rolls into a shuffle: with two bosses and two
+## floors, whichever the Help Desk draws, Development is left with the other. Falling back to
+## the full pool when everything has been fought — rather than returning null — is what keeps a
+## hypothetical third floor working: a repeated boss is a worse run than a boss-less one is a
+## broken one.
+func _draw_boss_encounter() -> BossEncounter:
+	var unfought: Array[BossEncounter] = []
+	var all: Array[BossEncounter] = []
+	for entry: BossEncounter in config.boss_pool:
+		if entry == null or not entry.is_valid():
+			continue
+		all.append(entry)
+		if entry.id not in RunManager.fought_boss_ids:
+			unfought.append(entry)
+
+	var candidates := unfought if not unfought.is_empty() else all
+	if candidates.is_empty():
+		return null
+
+	var drawn := candidates[_rng.randi_range(0, candidates.size() - 1)]
+	RunManager.fought_boss_ids.append(drawn.id)
+	return drawn
 
 
 func get_room(id: int) -> Room:
@@ -166,7 +205,7 @@ func _stock_shop(room: Room) -> void:
 		return
 	var shop: ShopRoom = SHOP_ROOM_SCENE.instantiate()
 	room.add_child(shop)
-	shop.stock(config.shop, config.item_pool, positions, _rng.randi())
+	shop.stock(config.shop, config.get_items(), positions, _rng.randi())
 
 
 ## One door per link, filling the passage between two rooms. Each link is visited once — the
@@ -262,9 +301,14 @@ func _needs_clearing(id: int) -> bool:
 ## so the boss lays out its terminals and clamps its own movement without ever asking what
 ## room it is in.
 func _spawn_boss(room: Room) -> void:
-	_boss = config.boss_scene.instantiate()
+	if _boss_encounter == null or not _boss_encounter.is_valid():
+		push_error("FloorController: floor %d has no usable boss." % config.floor_number)
+		return
+	_boss = _boss_encounter.scene.instantiate()
 	boss_encountered.emit(
-		config.boss_display_name, config.boss_defeat_banner, config.boss_phase_banners
+		_boss_encounter.display_name,
+		_boss_encounter.defeat_banner,
+		_boss_encounter.phase_banners,
 	)
 	# One-shot: a boss is defeated exactly once per floor, and this controller now outlives a
 	# single floor. Without it, the next floor's boss spawn would stack a second connection,
@@ -377,7 +421,7 @@ func _derive_next_seed(seed_value: int) -> int:
 func _draw_boss_reward() -> Array[ItemConfig]:
 	var rares: Array[ItemConfig] = []
 	var rest: Array[ItemConfig] = []
-	for item: ItemConfig in config.item_pool:
+	for item: ItemConfig in config.get_items():
 		if item == null or item.id in RunManager.offered_item_ids:
 			continue
 		if item.rarity >= ItemConfig.Rarity.RARE:

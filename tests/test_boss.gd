@@ -88,19 +88,22 @@ func _test_config_matches_the_spec() -> void:
 	)
 
 
-## The boss's name exists in two places — its own resource and `FloorConfig.boss_display_name`,
-## which is what the HUD is actually bound to (see `FloorController.boss_encountered`) — because
-## nothing hands the HUD a `BossConfig` directly. Two copies of a name is exactly the arrangement
-## that ends with a boss bar labelled with the name the boss used to have, so the two are checked
-## against each other here. Casing aside: the HUD shouts, the resource does not.
+## The boss's name exists in two places — its own `BossConfig` and its `BossEncounter`, which
+## is what the HUD is actually bound to (see `FloorController.boss_encountered`) — because
+## nothing hands the HUD a `BossConfig` directly. Two copies of a name is exactly the
+## arrangement that ends with a boss bar labelled with the name the boss used to have, so the
+## two are checked against each other here. Casing aside: the HUD shouts, the resource does not.
 func _test_the_hud_calls_it_by_its_name() -> void:
 	var floor_config: FloorConfig = load(FLOOR_1_CONFIG_PATH) as FloorConfig
 	if not require(floor_config, "floor_1_help_desk.tres loads as a FloorConfig"):
 		return
+	var encounter := _find_encounter(floor_config, &"merge_conflict")
+	if not require(encounter, "the Help Desk's boss pool offers Merge Conflict"):
+		return
 	check(
-		floor_config.boss_display_name == _config.display_name.to_upper(),
+		encounter.display_name == _config.display_name.to_upper(),
 		"the boss bar says '%s' and the boss is called '%s'" % [
-			floor_config.boss_display_name, _config.display_name,
+			encounter.display_name, _config.display_name,
 		],
 	)
 	check(
@@ -605,3 +608,13 @@ func _destroy_all_terminals() -> void:
 		var terminal := node as BossTerminal
 		if terminal != null and is_instance_valid(terminal):
 			terminal.get_health_component().apply_damage(DamageInfo.new(999.0))
+
+
+## Looks up one boss in a floor's pool by id. Shared shape with test_runtime_error.gd's own
+## copy: since either boss may guard either floor, "this floor's boss" is no longer a single
+## value a test can read, and asking for a specific one by id is what replaces it.
+func _find_encounter(floor_config: FloorConfig, id: StringName) -> BossEncounter:
+	for entry: BossEncounter in floor_config.boss_pool:
+		if entry != null and entry.id == id:
+			return entry
+	return null

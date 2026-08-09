@@ -14,8 +14,8 @@ extends TestCase
 ## have passed happily while the HUD ignored it.
 
 const HUD_SCENE := preload("res://scenes/ui/combat_hud.tscn")
-const FLOOR_1_CONFIG_PATH := "res://data/floors/floor_1_help_desk.tres"
-const FLOOR_2_CONFIG_PATH := "res://data/floors/floor_2_development.tres"
+const KING_ENCOUNTER_PATH := "res://data/bosses/scrap_king_encounter.tres"
+const ERROR_ENCOUNTER_PATH := "res://data/bosses/runtime_error_encounter.tres"
 
 var _hud: CombatHUD
 var _banner: Label
@@ -24,15 +24,15 @@ var _banner: Label
 func run() -> void:
 	await _test_the_king_still_announces_his_own_phases()
 	await _test_a_boss_with_nothing_to_say_says_nothing()
-	await _test_no_floor_borrows_another_floors_boss_lines()
+	await _test_no_boss_borrows_another_bosss_lines()
 	await _test_each_level_announces_itself()
 
 
 ## The half of the fix that is easy to break by fixing the other half: moving these lines out of
 ## the HUD and into floor data must not have dropped them on the way.
 func _test_the_king_still_announces_his_own_phases() -> void:
-	var config := await _bind_floor(FLOOR_1_CONFIG_PATH)
-	if config == null:
+	var encounter := await _bind_boss(KING_ENCOUNTER_PATH)
+	if encounter == null:
 		return
 
 	for phase: int in [2, 3]:
@@ -43,8 +43,8 @@ func _test_the_king_still_announces_his_own_phases() -> void:
 			"The Scrap King announces phase %d" % phase,
 		)
 		check(
-			_banner.text == config.boss_phase_banners[phase - 1],
-			"in the words its own floor gives it ('%s')" % _banner.text,
+			_banner.text == encounter.phase_banners[phase - 1],
+			"in the words its own encounter gives it ('%s')" % _banner.text,
 		)
 
 	# Phase one opens the fight and has nothing to announce — the boss arriving is the
@@ -59,13 +59,13 @@ func _test_the_king_still_announces_his_own_phases() -> void:
 ## The bug itself, pinned. Runtime Error emits exactly the same signal from exactly the same
 ## phases; what has to differ is what the HUD does about it.
 func _test_a_boss_with_nothing_to_say_says_nothing() -> void:
-	var config := await _bind_floor(FLOOR_2_CONFIG_PATH)
-	if config == null:
+	var encounter := await _bind_boss(ERROR_ENCOUNTER_PATH)
+	if encounter == null:
 		return
 
 	check(
-		config.boss_phase_banners.is_empty(),
-		"Development gives its boss no phase lines to say",
+		encounter.phase_banners.is_empty(),
+		"Runtime Error is given no phase lines to say",
 	)
 	for phase: int in [1, 2, 3]:
 		_clear_banner()
@@ -78,30 +78,34 @@ func _test_a_boss_with_nothing_to_say_says_nothing() -> void:
 	# The bar's label is the one thing a phase change must still update, whatever the boss.
 	EventBus.boss_phase_changed.emit(2)
 	check(
-		(_hud.get_node("%BossLabel") as Label).text == config.boss_display_name,
+		(_hud.get_node("%BossLabel") as Label).text == encounter.display_name,
 		"though the boss bar is still labelled with the boss's own name",
 	)
 	await _teardown()
 
 
-## The general form of the same mistake, checked against the data rather than the HUD: no floor
-## may hand its boss a line naming a different floor's boss. Cheap now, and the check that keeps
-## being true when a third floor is added by somebody copying the second floor's resource.
-func _test_no_floor_borrows_another_floors_boss_lines() -> void:
-	var floor_one: FloorConfig = load(FLOOR_1_CONFIG_PATH) as FloorConfig
-	var floor_two: FloorConfig = load(FLOOR_2_CONFIG_PATH) as FloorConfig
-	if not require(floor_one and floor_two, "both floor configs load"):
+## The general form of the same mistake, checked against the data rather than the HUD: no boss
+## may be given a line that names a different boss.
+##
+## This used to be phrased per *floor* — "Development's boss lines do not crown it" — and that
+## phrasing died with the assumption behind it. Either boss can now guard either floor, so a
+## line naming the wrong boss is not a floor's mistake to make; the lines belong to the
+## encounter, and this is where they are checked.
+func _test_no_boss_borrows_another_bosss_lines() -> void:
+	var king: BossEncounter = load(KING_ENCOUNTER_PATH) as BossEncounter
+	var error: BossEncounter = load(ERROR_ENCOUNTER_PATH) as BossEncounter
+	if not require(king and error, "both boss encounters load"):
 		return
 
-	for banner: String in floor_two.boss_phase_banners:
+	for banner: String in error.phase_banners + [error.defeat_banner]:
 		check(
-			not banner.contains("KING"),
-			"Development's boss lines do not crown it ('%s')" % banner,
+			not banner.to_upper().contains("KING"),
+			"Runtime Error's lines do not crown it ('%s')" % banner,
 		)
-	for banner: String in floor_one.boss_phase_banners:
+	for banner: String in king.phase_banners + [king.defeat_banner]:
 		check(
 			not banner.to_upper().contains("RUNTIME"),
-			"and Help Desk's do not name the next floor's boss ('%s')" % banner,
+			"and The Scrap King's do not name the other boss ('%s')" % banner,
 		)
 
 
@@ -137,19 +141,17 @@ func _make_hud() -> void:
 	_banner = _hud.get_node("%Banner") as Label
 
 
-## A live HUD bound to a floor's shipped boss identity, exactly as `FloorController` binds it.
-## Returns the config so the checks can assert against the same data the HUD was given, rather
-## than against a copy of the strings written out again here — a test that restates the words it
-## is checking passes when both are wrong together.
-func _bind_floor(path: String) -> FloorConfig:
-	var config: FloorConfig = load(path) as FloorConfig
-	if not require(config, "%s loads as a FloorConfig" % path):
+## A live HUD bound to a boss's shipped identity, exactly as `FloorController` binds it.
+## Returns the encounter so the checks can assert against the same data the HUD was given,
+## rather than against a copy of the strings written out again here — a test that restates the
+## words it is checking passes when both are wrong together.
+func _bind_boss(path: String) -> BossEncounter:
+	var encounter: BossEncounter = load(path) as BossEncounter
+	if not require(encounter, "%s loads as a BossEncounter" % path):
 		return null
 	await _make_hud()
-	_hud.bind_boss(
-		config.boss_display_name, config.boss_defeat_banner, config.boss_phase_banners
-	)
-	return config
+	_hud.bind_boss(encounter.display_name, encounter.defeat_banner, encounter.phase_banners)
+	return encounter
 
 
 ## Hides the banner without waiting out its timer, so each check reads a banner this check

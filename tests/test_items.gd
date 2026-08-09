@@ -462,7 +462,7 @@ func _test_the_pool_fills_every_offer_of_a_two_floor_run() -> void:
 		if config.treasure_grants_item:
 			offers += 1
 		for _offer: int in offers:
-			if RunManager.draw_item(config.item_pool, rng) == null:
+			if RunManager.draw_item(config.get_items(), rng) == null:
 				empty_offers += 1
 			else:
 				filled += 1

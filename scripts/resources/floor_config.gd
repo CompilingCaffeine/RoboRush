@@ -37,28 +37,18 @@ extends Resource
 
 @export_group("Boss")
 
-## Which boss this floor's boss room spawns. A `Boss` scene, instantiated by
-## `FloorController` the same way any other floor-specific content is.
-@export var boss_scene: PackedScene
-
-## As the HUD shows it. Not read off the boss's own resource — nothing hands the HUD a
-## reference to one, and a name is cheaper to keep in step with data than to plumb a
-## cross-scene reference for.
-@export var boss_display_name: String = ""
-
-## Shown when the boss falls, alongside the reward choice.
-@export var boss_defeat_banner: String = ""
-
-## What the HUD announces as each of the boss's phases begins, indexed from phase one: element
-## 0 is phase one's banner, element 1 is phase two's, and so on. An empty string means that
-## phase is entered in silence, and an empty array means the boss never announces a phase at all.
+## Which bosses this floor's boss room may spawn. One is drawn per floor, avoiding any this
+## run has already fought — see `FloorController._draw_boss_encounter`.
 ##
-## Data rather than the constants the HUD used to hold, because those constants were The Scrap
-## King's lines — "LONG LIVE THE KING", "THE KING REASSEMBLES" — fired on a signal every boss
-## emits. The second floor's boss reached phase two and the HUD crowned it. A boss's own words
-## belong to that boss, and the only place the HUD already learns which boss it is looking at is
-## here, beside its name and its epitaph.
-@export var boss_phase_banners: Array[String] = []
+## A pool rather than a single boss, and a `BossEncounter` rather than four parallel fields,
+## because either boss can now guard either floor. Four fields cannot be shuffled together,
+## and the failure mode of them drifting apart is a bug this project has already shipped once:
+## the HUD announcing The Scrap King's lines over the second floor's boss.
+##
+## Every floor listing the same two entries is deliberate. It is what makes "either boss could
+## be on either level" true, and a floor that wants a fixed boss still says so by naming one
+## entry.
+@export var boss_pool: Array[BossEncounter] = []
 
 @export_group("Population")
 
@@ -83,7 +73,16 @@ extends Resource
 @export_group("Items")
 
 ## Items that may drop on this floor. Drawn without repetition within a run.
-@export var item_pool: Array[ItemConfig] = []
+##
+## A shared `ItemPool` rather than a per-floor array. It was per-floor, and the result was
+## that Development's nine items could only ever be found on Development — the Help Desk's
+## pool listed the original twelve and nothing else, so half the game's items were invisible
+## for the whole first floor. Pointing every floor at one pool is what makes "any item can
+## drop on any level" true by construction rather than by two lists agreeing.
+##
+## Floors may still differ here. Nothing stops a later floor naming a pool of its own; what
+## is gone is the *accident* of differing because two lists were edited at different times.
+@export var item_pool: ItemPool
 
 ## Which combat-room clears drop an item, counted from one. `[1, 3, 5]` means the first,
 ## third, and fifth room the player clears.
@@ -91,7 +90,7 @@ extends Resource
 ## A list rather than "every Nth clear" because the interesting number is not the interval,
 ## it is *how many items a run hands out and how early the first one lands* — and both of
 ## those are legible here and invisible in a modulo.
-@export var item_clear_indices: Array[int] = [1, 3, 5]
+@export var item_clear_indices: Array[int] = [2, 5]
 
 ## Whether the treasure room hands over an item. Spec section 9 says a treasure room
 ## contains one; this exists so a floor built around a shop instead can say otherwise.
@@ -142,3 +141,10 @@ func templates_for(type: RoomTemplate.Type) -> Array[RoomTemplate]:
 		if template != null and template.is_eligible(floor_number, floor_tags):
 			eligible.append(template)
 	return eligible
+
+
+## The items this floor may offer. Empty for a floor with no pool assigned, which every
+## caller already handles — `RunManager.draw_item` returns null on an empty candidate list and
+## the loot spawner falls back to a repair cell.
+func get_items() -> Array[ItemConfig]:
+	return item_pool.items if item_pool != null else [] as Array[ItemConfig]

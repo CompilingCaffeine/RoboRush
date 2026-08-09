@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="ItemPool" load_steps=23 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/item_pool.gd" id="1_pool"]
+[ext_resource type="Resource" path="res://data/items/blocking_io.tres" id="2_blocking_io"]
+[ext_resource type="Resource" path="res://data/items/tech_debt.tres" id="3_tech_debt"]
+[ext_resource type="Resource" path="res://data/items/legacy_runtime.tres" id="4_legacy_runtime"]
+[ext_resource type="Resource" path="res://data/items/memory_spike.tres" id="5_memory_spike"]
+[ext_resource type="Resource" path="res://data/items/core_dump.tres" id="6_core_dump"]
+[ext_resource type="Resource" path="res://data/items/cold_cache.tres" id="7_cold_cache"]
+[ext_resource type="Resource" path="res://data/items/hot_reload.tres" id="8_hot_reload"]
+[ext_resource type="Resource" path="res://data/items/breakpoint.tres" id="9_breakpoint"]
+[ext_resource type="Resource" path="res://data/items/stack_overflow.tres" id="10_stack_overflow"]
+[ext_resource type="Resource" path="res://data/items/ricochet_driver.tres" id="11_ricochet_driver"]
+[ext_resource type="Resource" path="res://data/items/fork_bomb.tres" id="12_fork_bomb"]
+[ext_resource type="Resource" path="res://data/items/magnetic_guidance.tres" id="13_magnetic_guidance"]
+[ext_resource type="Resource" path="res://data/items/return_protocol.tres" id="14_return_protocol"]
+[ext_resource type="Resource" path="res://data/items/capacitor_leak.tres" id="15_capacitor_leak"]
+[ext_resource type="Resource" path="res://data/items/volatile_kernel.tres" id="16_volatile_kernel"]
+[ext_resource type="Resource" path="res://data/items/cooling_fan.tres" id="17_cooling_fan"]
+[ext_resource type="Resource" path="res://data/items/reinforced_chassis.tres" id="18_reinforced_chassis"]
+[ext_resource type="Resource" path="res://data/items/backup_battery.tres" id="19_backup_battery"]
+[ext_resource type="Resource" path="res://data/items/unsafe_overclock.tres" id="20_unsafe_overclock"]
+[ext_resource type="Resource" path="res://data/items/scrap_magnet.tres" id="21_scrap_magnet"]
+[ext_resource type="Resource" path="res://data/items/debug_drone.tres" id="22_debug_drone"]
+
+[resource]
+script = ExtResource("1_pool")
+items = Array[ItemConfig]([ExtResource("2_blocking_io"), ExtResource("3_tech_debt"), ExtResource("4_legacy_runtime"), ExtResource("5_memory_spike"), ExtResource("6_core_dump"), ExtResource("7_cold_cache"), ExtResource("8_hot_reload"), ExtResource("9_breakpoint"), ExtResource("10_stack_overflow"), ExtResource("11_ricochet_driver"), ExtResource("12_fork_bomb"), ExtResource("13_magnetic_guidance"), ExtResource("14_return_protocol"), ExtResource("15_capacitor_leak"), ExtResource("16_volatile_kernel"), ExtResource("17_cooling_fan"), ExtResource("18_reinforced_chassis"), ExtResource("19_backup_battery"), ExtResource("20_unsafe_overclock"), ExtResource("21_scrap_magnet"), ExtResource("22_debug_drone")])

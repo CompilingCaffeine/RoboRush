@@ -37,6 +37,7 @@ func run() -> void:
 	_test_forced_enemies_never_exceed_their_spawn_points()
 	_test_combat_templates_skew_easier_near_the_start()
 	_test_each_floor_looks_and_sounds_like_itself()
+	await _test_a_run_never_fights_the_same_boss_twice()
 	await _test_a_room_wears_its_floors_theme()
 	await _test_repair_cells_drop_on_every_third_clear()
 	await _test_boss_defeat_advances_to_the_next_floor_and_only_the_last_wins()
@@ -480,6 +481,58 @@ func _test_each_floor_looks_and_sounds_like_itself() -> void:
 			)
 
 
+## Either boss may guard either floor, which is only a feature if a run cannot draw the same
+## one twice — a two-floor run that fought The Scrap King on both floors would be a run missing
+## a boss, and the player would have no way to know they had been shortchanged.
+##
+## Driven through real `FloorController.build` calls rather than by reimplementing the draw,
+## because the property being checked is that the *shuffle spans floors*, and the thing that
+## makes it span them (`RunManager.fought_boss_ids` surviving a floor rebuild) is exactly what a
+## reimplementation would assume rather than test.
+func _test_a_run_never_fights_the_same_boss_twice() -> void:
+	var second := load(FLOOR_2_CONFIG_PATH) as FloorConfig
+	if not require(second, "floor_2_development.tres loads"):
+		return
+
+	var first_seen: Dictionary[StringName, bool] = {}
+	var repeats := 0
+	var runs := 0
+
+	for seed_value: int in [1, 7, 12, 20, 33, 41, 58, 64, 77, 91]:
+		var arena := Node2D.new()
+		add_child(arena)
+		var floor_node: FloorController = FLOOR_SCENE.instantiate()
+		floor_node.config = _config
+		arena.add_child(floor_node)
+		var player: Player = PLAYER_SCENE.instantiate()
+		arena.add_child(player)
+		await advance_physics(1)
+
+		RunManager.begin_run(seed_value)
+		if floor_node.build(player, seed_value):
+			var one := floor_node.get_boss_encounter()
+			# The same controller rebuilds itself for the next floor, which is how a descent
+			# actually works — see `FloorController._advance_to_next_floor`.
+			floor_node.config = second
+			if floor_node.build(player, seed_value + 1):
+				var two := floor_node.get_boss_encounter()
+				if one != null and two != null:
+					runs += 1
+					first_seen[one.id] = true
+					if one.id == two.id:
+						repeats += 1
+
+		arena.queue_free()
+		await advance_physics(2)
+
+	check(runs > 0, "the two-floor draw ran (%d times)" % runs)
+	check(repeats == 0, "no run fought the same boss on both floors (%d did)" % repeats)
+	check(
+		first_seen.size() == 2,
+		"and both bosses turn up first across seeds (%d of 2 did)" % first_seen.size(),
+	)
+
+
 ## The textures have to reach the geometry, not just sit on the resource. Walls and obstacles
 ## are checked separately from the floor because they are built by different code paths and
 ## an obstacle wearing the wrong sheet is exactly the kind of half-themed room that reads as
@@ -623,7 +676,7 @@ func _test_boss_defeat_advances_to_the_next_floor_and_only_the_last_wins() -> vo
 			"defeating floor 1's boss does not end the run",
 		)
 
-		floor_node._on_boss_reward_taken(floor_config.item_pool[0])
+		floor_node._on_boss_reward_taken(floor_config.get_items()[0])
 		await advance_physics(1)
 		check(
 			GameManager.state == GameManager.State.RUN,
@@ -640,7 +693,7 @@ func _test_boss_defeat_advances_to_the_next_floor_and_only_the_last_wins() -> vo
 		var boss_room_2 := _find_boss_room(floor_node)
 		if require(boss_room_2, "floor 2 has a boss room"):
 			floor_node._on_boss_defeated(Node.new(), boss_room_2)
-			floor_node._on_boss_reward_taken(floor_config.next_floor.item_pool[0])
+			floor_node._on_boss_reward_taken(floor_config.next_floor.get_items()[0])
 			await advance_physics(1)
 			check(
 				GameManager.state == GameManager.State.VICTORY,

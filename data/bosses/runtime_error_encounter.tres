@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="BossEncounter" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/boss_encounter.gd" id="1_encounter"]
+[ext_resource type="PackedScene" path="res://scenes/bosses/runtime_error.tscn" id="2_scene"]
+
+[resource]
+script = ExtResource("1_encounter")
+id = &"runtime_error"
+scene = ExtResource("2_scene")
+display_name = "RUNTIME ERROR"
+defeat_banner = "THE PROCESS HAS TERMINATED"
+; Deliberately empty. Runtime Error's phases announce themselves by changing what is on the
+; floor — one lane becomes two, two become a checkerboard — and a banner saying so would be
+; explaining a change the player is already looking at.
+phase_banners = Array[String]([])

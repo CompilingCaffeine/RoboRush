@@ -1211,8 +1211,10 @@ something any of this can tell you.
 
 ### Six new items
 
-Floor 1 can reserve nine unique item ids before it ends: two shop offers, three combat rewards,
-one treasure reward, and three boss choices. Only three of the current twelve remain unseen.
+Floor 1 could reserve nine unique item ids before it ended: two shop offers, three combat
+rewards, one treasure reward, and three boss choices. Only three of the current twelve remained
+unseen. Both halves of that arithmetic have since moved — see
+[One pool, fewer handouts](#one-pool-fewer-handouts).
 Development's planned two combat rewards, two shop offers, treasure reward, and three boss
 choices need eight unseen items. Five additions are the mathematical minimum; six leave one
 spare rather than balancing the final reward on an exact-capacity edge.
@@ -1295,7 +1297,64 @@ a negative safely, so `add_charges` became `set_bonus_charges`.
 Development drops items on combat clears two and five, grants one treasure item, uses the same
 learned shop prices, and ends with three boss choices. Tune its scrap income before introducing
 floor-specific inflation: a common item should not silently cost more because the elevator went
-down one level.
+down one level. The Help Desk now uses that same cadence — see
+[One pool, fewer handouts](#one-pool-fewer-handouts) for why it stopped being more generous
+than the floor after it.
+
+### One pool, fewer handouts
+
+Two things about item distribution were wrong once Development shipped its nine, and both were
+found by playing rather than by any check here.
+
+**The pool was per floor, so Development's items only ever dropped on Development.** The Help
+Desk listed the original twelve and nothing else, which meant half the game's items were
+invisible for the whole first floor and no run could ever find Cold Cache early enough to build
+around it. There is now one [`ItemPool`](scripts/resources/item_pool.gd) at
+[`data/pools/run_item_pool.tres`](data/pools/run_item_pool.tres) holding all twenty-one, and both
+floors point at it — so any item can drop on any level, and adding item twenty-two is a one-file
+edit rather than two lists that can drift. `RunManager.offered_item_ids` still prevents repeats
+and is still run-scoped, which is the only reason sharing a pool between floors is coherent at
+all: the pool is what *exists*, the offered list is what has been *spent*, and the spend list
+already spanned floors.
+
+**The player arrived on Development too strong.** The Help Desk was handing out three
+combat-clear items against Development's two, which is a difficulty curve running backwards —
+the first floor should not be the generous one. Floor 1's `item_clear_indices` is now `[2, 5]`,
+matching Development's. In practice a Help Desk run goes from about six acquired items to about
+five: two clear rewards, one treasure, one boss choice, and whatever the shop can be afforded.
+
+If that is still too fast, `item_clear_indices` is the one line to change, and dropping floor 1
+to `[3]` takes it to four.
+
+### Either boss, either floor
+
+Boss identity — the scene, the name, the defeat banner, the phase banners — moved off
+`FloorConfig` into a [`BossEncounter`](scripts/resources/boss_encounter.gd), and each floor now
+carries a *pool* of them. Both floors list both bosses, so a run may meet The Scrap King in
+Development and Runtime Error on the Help Desk.
+
+Bundling the four fields was not tidiness. Four parallel fields cannot be shuffled together, and
+the failure mode of getting it wrong is precisely the bug this project already shipped once: the
+HUD announcing "LONG LIVE THE KING" over a boss with no claim to the title. A floor now draws
+*a boss*, not four values it has to keep in step.
+
+The draw is a shuffle rather than two independent rolls. `RunManager.fought_boss_ids` is
+run-scoped for the same reason `offered_item_ids` is — a floor cannot see what the previous floor
+drew — so with two bosses and two floors, whichever the first floor takes, the second is left
+with the other. It is drawn inside `build()` from the floor's own seed rather than when the
+player reaches the arena, so one `--seed` still reproduces the whole run; drawing on arrival
+would make the boss depend on how the RNG had been consumed getting there. Across 200 runs the
+split is roughly 55/45 and no run ever fought the same boss twice, and the no-repeat rule was
+confirmed to fail when deliberately broken.
+
+**This is a real difficulty swing and it has not been played.** Runtime Error's pool is 110
+against The Scrap King's 60, so about half of all runs now open with the longer fight against a
+starting build and no items, and close with the shorter one against a full build. Worse for
+readability: Runtime Error is a compile-lane fight, and the Compiler that teaches that language
+is a Development enemy — on a Help Desk draw the player meets the boss's amber-then-red warnings
+having never seen them before. The honest options if that reads badly are to teach the lane
+earlier, to tune the two pools closer together, or to weight the draw rather than leave it even.
+`tests/test_balance.gd` records the reasoning beside the assertion.
 
 ### The floor's own look and sound
 
@@ -1394,7 +1453,9 @@ reason.
 
 ### Acceptance criteria
 
-- The first boss reward advances the run; only Runtime Error's reward produces victory.
+- The first boss reward advances the run; only the *last floor's* boss reward produces victory.
+  Written as Runtime Error's originally, which stopped being the same statement once either boss
+  could guard either floor — what ends the run is the floor, not which boss was drawn onto it.
 - The exact same player reaches Development with the same integrity, items, scrap, shot count,
   and accumulated statistics.
 - One run seed reproduces both layouts, and each floor passes the structural sweep across at

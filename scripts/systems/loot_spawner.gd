@@ -60,7 +60,7 @@ func spawn_treasure(position: Vector2) -> ItemConfig:
 ## Draws one item from the floor's pool and drops it. Returns null when the pool has nothing
 ## left to offer this run.
 func spawn_item(position: Vector2) -> ItemConfig:
-	var item := RunManager.draw_item(_config.item_pool, _rng)
+	var item := RunManager.draw_item(_config.get_items(), _rng)
 	if item == null:
 		return null
 	_spawn(PickupConfig.for_item(item), position, false)

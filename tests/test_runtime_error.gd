@@ -76,6 +76,7 @@ func run() -> void:
 	_test_config_matches_the_plan()
 	_test_it_speaks_the_compilers_warning_language()
 	_test_the_hud_calls_it_by_its_name()
+	_test_either_floor_can_draw_either_boss()
 
 	await _test_it_starts_in_its_first_phase()
 	await _test_it_is_a_smaller_target_than_the_first_boss()
@@ -165,25 +166,57 @@ func _test_it_speaks_the_compilers_warning_language() -> void:
 	)
 
 
-## The boss's name exists in two places — its own resource and `FloorConfig.boss_display_name`,
-## which is what the HUD is actually bound to — because nothing hands the HUD a config directly.
-## The same guard test_boss.gd puts on The Scrap King, for the same reason: two copies of a name
-## is the arrangement that ends with a boss bar labelled with the name the boss used to have.
+## The boss's name exists in two places — its own resource and its `BossEncounter`, which is
+## what the HUD is actually bound to — because nothing hands the HUD a config directly. The
+## same guard test_boss.gd puts on The Scrap King, for the same reason: two copies of a name is
+## the arrangement that ends with a boss bar labelled with the name the boss used to have.
 func _test_the_hud_calls_it_by_its_name() -> void:
 	var floor_config: FloorConfig = load(FLOOR_2_CONFIG_PATH) as FloorConfig
 	if not require(floor_config, "floor_2_development.tres loads as a FloorConfig"):
 		return
+	var encounter := _find_encounter(floor_config, &"runtime_error")
+	if not require(encounter, "Development's boss pool offers Runtime Error"):
+		return
 	check(
-		floor_config.boss_display_name == _config.display_name.to_upper(),
+		encounter.display_name == _config.display_name.to_upper(),
 		"the boss bar says '%s' and the boss is called '%s'" % [
-			floor_config.boss_display_name, _config.display_name,
+			encounter.display_name, _config.display_name,
 		],
 	)
 	check(
-		floor_config.boss_scene != null
-			and floor_config.boss_scene.resource_path == BOSS_SCENE.resource_path,
-		"and Development actually fights this boss rather than the greybox it replaced",
+		encounter.scene != null and encounter.scene.resource_path == BOSS_SCENE.resource_path,
+		"and it points at this boss rather than the greybox it replaced",
 	)
+
+
+## Either boss may now guard either floor. Checked from Runtime Error's suite because it is the
+## boss that *gained* a floor — it was Development's and nothing else's, and the interesting new
+## claim is that the Help Desk can hand the player a compile-lane fight too.
+func _test_either_floor_can_draw_either_boss() -> void:
+	var first := load("res://data/floors/floor_1_help_desk.tres") as FloorConfig
+	var second := load(FLOOR_2_CONFIG_PATH) as FloorConfig
+	if first == null or second == null:
+		fail("both floor configs are needed to check the boss draw")
+		return
+
+	for pair: Array in [[first, "the Help Desk"], [second, "Development"]]:
+		var config: FloorConfig = pair[0]
+		check(
+			config.boss_pool.size() >= 2,
+			"%s can draw more than one boss (%d in its pool)" % [pair[1], config.boss_pool.size()],
+		)
+		for id: StringName in [&"merge_conflict", &"runtime_error"]:
+			check(
+				_find_encounter(config, id) != null,
+				"%s can draw '%s'" % [pair[1], id],
+			)
+
+
+func _find_encounter(floor_config: FloorConfig, id: StringName) -> BossEncounter:
+	for entry: BossEncounter in floor_config.boss_pool:
+		if entry != null and entry.id == id:
+			return entry
+	return null
 
 
 # --- The fight ----------------------------------------------------------------
@@ -670,9 +703,21 @@ func _test_real_projectiles_drive_the_whole_fight() -> void:
 ## wiring: what is asserted is that the boss arrives, and that what it paints lands in the room
 ## the player is sealed into rather than somewhere on the grid beside it.
 func _test_the_floor_spawns_it_in_a_real_boss_room() -> void:
-	var floor_config: FloorConfig = load(FLOOR_2_CONFIG_PATH) as FloorConfig
-	if not require(floor_config, "the Development floor config loads"):
+	var shipped: FloorConfig = load(FLOOR_2_CONFIG_PATH) as FloorConfig
+	if not require(shipped, "the Development floor config loads"):
 		return
+
+	# Either boss can guard either floor now, so the shipped config would spawn whichever the
+	# seed drew and this check would pass or fail by coin flip. The pool is narrowed to Runtime
+	# Error on a *duplicate*, leaving everything else about the floor shipped — the point of
+	# this check is the floor's wiring around a boss, not which boss it happened to pick.
+	var floor_config := shipped.duplicate() as FloorConfig
+	var only_runtime_error: Array[BossEncounter] = []
+	var wanted := _find_encounter(shipped, &"runtime_error")
+	if not require(wanted, "Runtime Error is in Development's boss pool"):
+		return
+	only_runtime_error.append(wanted)
+	floor_config.boss_pool = only_runtime_error
 
 	var arena := Node2D.new()
 	add_child(arena)
