@@ -250,8 +250,26 @@ func _place_player_in_start_room() -> void:
 	_enter_room(start.id)
 
 
+## The trigger is not taken at its word, because a descent can make it lie. `build()` puts the
+## new floor's rooms into the world before `_place_player_in_start_room` moves the player off
+## the old floor's coordinates, so the new room that lands on the spot the player took the boss
+## reward from registers an overlap the moment it is added. Godot delivers that `body_entered`
+## on the next physics flush — after the start room was entered explicitly, which is what let it
+## win — and the room it names is a room the player has never been in.
+##
+## Cosmetic for a combat room, which is re-entered properly a moment later. Not cosmetic for the
+## boss room: `_enter_room` spawns the boss, so Development opened with its boss already awake in
+## an empty arena and its health bar on screen for the whole floor. Room ids are assigned in a
+## fixed order (`FloorGenerator.SPECIAL_TYPES`), so the boss is id 7 on every ten-room floor and
+## the two floors' boss rooms landing on the same cell is all it takes.
+##
+## Asking where the player actually is costs one rect test and never rejects a real entry: the
+## entry Area2D is inset from the interior this is testing against, so a player far enough in to
+## trip the trigger is comfortably inside the rect.
 func _on_player_entered_room(room: Room) -> void:
 	if room.plan.id == current_room_id:
+		return
+	if _player == null or not room.get_interior_rect().has_point(_player.global_position):
 		return
 	_enter_room(room.plan.id)
 

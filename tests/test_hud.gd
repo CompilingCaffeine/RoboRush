@@ -26,6 +26,7 @@ func run() -> void:
 	await _test_a_boss_with_nothing_to_say_says_nothing()
 	await _test_no_boss_borrows_another_bosss_lines()
 	await _test_each_level_announces_itself()
+	await _test_a_new_floor_starts_without_a_boss_bar()
 
 
 ## The half of the fix that is easy to break by fixing the other half: moving these lines out of
@@ -127,6 +128,30 @@ func _test_each_level_announces_itself() -> void:
 	_hud.announce_floor(2)
 	await advance_physics(int(CombatHUD.BANNER_SECONDS * 60.0) + 8)
 	check(not _banner.visible, "and gets out of the way again")
+
+	await _teardown()
+
+
+## The bar is raised by a health reading and lowered by a defeat, and for one shipped bug there
+## was no third way down: a boss spawned early by a bad room trigger put the bar on screen with
+## no defeat coming, and it stayed there for the whole floor. Whatever puts it up, a floor
+## beginning takes it down — which is what README's acceptance criteria have always asked for
+## ("the floor name, minimap, room theme, music, boss name, boss bar ... reset at the
+## transition") and what nothing actually did.
+func _test_a_new_floor_starts_without_a_boss_bar() -> void:
+	await _make_hud()
+	var bar := _hud.get_node("%BossBar") as Control
+
+	EventBus.boss_health_changed.emit(1.0)
+	check(bar.visible, "a boss's health reading raises the bar")
+
+	_hud.announce_floor(2)
+	check(not bar.visible, "and the next floor beginning takes it down again")
+
+	# The floor after that still gets a bar when its own boss turns up: the reset must not be a
+	# latch that leaves the HUD unable to show the fight it is there to show.
+	EventBus.boss_health_changed.emit(0.75)
+	check(bar.visible, "while the new floor's own boss still raises it")
 
 	await _teardown()
 

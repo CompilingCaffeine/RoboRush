@@ -18,6 +18,10 @@ const SEED_COUNT := 120
 
 var _config: FloorConfig
 
+## Room ids `EventBus.room_entered` reported while a descent was in progress. See
+## `_test_a_descent_enters_only_the_new_floors_start_room`.
+var _entered_during_descent: Array[int] = []
+
 
 const FLOOR_SCENE := preload("res://scenes/floors/floor.tscn")
 const PLAYER_SCENE := preload("res://scenes/player/player.tscn")
@@ -41,6 +45,7 @@ func run() -> void:
 	await _test_a_room_wears_its_floors_theme()
 	await _test_repair_cells_drop_on_every_third_clear()
 	await _test_boss_defeat_advances_to_the_next_floor_and_only_the_last_wins()
+	await _test_a_descent_enters_only_the_new_floors_start_room()
 
 
 func _test_config_has_content() -> void:
@@ -705,6 +710,142 @@ func _test_boss_defeat_advances_to_the_next_floor_and_only_the_last_wins() -> vo
 	GameManager.start_run()
 	arena.queue_free()
 	await advance_physics(1)
+
+
+## A floor begins in its start room and nowhere else. This looks like a statement too obvious
+## to spend a test on, and it is the one that shipped broken.
+##
+## `build()` instantiates the new floor's rooms before `_place_player_in_start_room` moves the
+## player off the old floor's coordinates, so the new room that lands on the spot where the
+## player took the boss reward registers an overlap on its entry Area2D. Godot delivers that
+## `body_entered` on the next physics flush — after the start room was entered explicitly,
+## which is what lets it win. The room ids are assigned in a fixed order
+## (`FloorGenerator.SPECIAL_TYPES`), so on a ten-room floor the boss is always id 7 and the
+## spurious entry lands on the *boss room* whenever the two floors put their boss on the same
+## cell. That spawned Development's boss into an empty arena the moment the floor opened and
+## left its health bar on screen for the entire floor.
+##
+## The seeds below are three that reproduced it; the sweep is what stops the fix from being
+## "those three seeds". Nothing here spawns floor 1's boss, because the trigger depends only
+## on where the player is standing when the floor is rebuilt under them.
+func _test_a_descent_enters_only_the_new_floors_start_room() -> void:
+	var floor_config: FloorConfig = load(FLOOR_CONFIG_PATH) as FloorConfig
+	if not require(floor_config.next_floor, "floor 1 has a next floor to descend into"):
+		return
+
+	var arena := Node2D.new()
+	add_child(arena)
+	var player: Player = PLAYER_SCENE.instantiate()
+	arena.add_child(player)
+	await advance_physics(1)
+
+	var wrong_rooms: Array[String] = []
+	var bosses_spawned := 0
+	# The three known-bad seeds first, then a short sweep so a fix that only moves the
+	# coincidence around still has to be lucky repeatedly. Kept short deliberately: each entry
+	# here rebuilds two whole floors, and the runner's watchdog covers the entire run rather
+	# than one suite — this file is not the one that gets to spend the budget.
+	var seeds: Array[int] = [177, 187, 198]
+	for seed_value: int in range(1, 7):
+		seeds.append(seed_value)
+
+	# Watched rather than read afterwards: the spurious entry is corrected a frame later by the
+	# player's own overlap with the start room, so `current_room_id` looks innocent by the time
+	# the dust settles. What the boss room does on the way through is the whole bug.
+	_entered_during_descent.clear()
+	EventBus.room_entered.connect(_on_room_entered_during_descent)
+
+	for seed_value: int in seeds:
+		GameManager.start_run()
+		RunManager.begin_run(seed_value)
+
+		var floor_node: FloorController = FLOOR_SCENE.instantiate()
+		floor_node.config = floor_config
+		arena.add_child(floor_node)
+		if not floor_node.build(player, seed_value):
+			floor_node.queue_free()
+			await advance_physics(1)
+			continue
+
+		# Where the player is standing when they take the reward: inside floor 1's boss room.
+		var boss_room := _find_boss_room(floor_node)
+		if boss_room == null:
+			floor_node.queue_free()
+			await advance_physics(1)
+			continue
+		player.global_position = boss_room.get_interior_rect().get_center()
+		floor_node._enter_room(boss_room.plan.id)
+		await advance_physics(2)
+
+		floor_node._on_boss_defeated(Node.new(), boss_room)
+		_entered_during_descent.clear()
+		floor_node._on_boss_reward_taken(floor_config.get_items()[0])
+		# Long enough for the deferred rebuild and for the physics flush that delivers a
+		# body_entered the rebuild caused — one frame is not.
+		await advance_physics(8)
+
+		var start_id: int = floor_node.layout.get_start_room().id
+		for id: int in _entered_during_descent:
+			if id == start_id:
+				continue
+			var entered: Room = floor_node.get_room(id)
+			wrong_rooms.append("seed %d entered %s#%d" % [
+				seed_value,
+				RoomTemplate.Type.keys()[entered.plan.type] if entered else "?",
+				id,
+			])
+		if floor_node._boss != null:
+			bosses_spawned += 1
+
+		floor_node.queue_free()
+		await advance_physics(1)
+
+	EventBus.room_entered.disconnect(_on_room_entered_during_descent)
+
+	check(
+		wrong_rooms.is_empty(),
+		"a descent enters the new floor's start room and nothing else (%s)" % (
+			"across %d seeds" % seeds.size() if wrong_rooms.is_empty() else ", ".join(wrong_rooms)
+		),
+	)
+	check(
+		bosses_spawned == 0,
+		"and none of them spawns the new floor's boss before the player walks into its room (%d did)"
+			% bosses_spawned,
+	)
+
+	# The other half of that fix, and the half it could quietly break: a player who really is in
+	# the room must still be registered as entering it, through the Area2D rather than through a
+	# direct `_enter_room` call. A guard that rejected real entries would leave doors unlocked
+	# behind an uncleared room and never spawn a boss at all.
+	GameManager.start_run()
+	RunManager.begin_run(9001)
+	var floor_node: FloorController = FLOOR_SCENE.instantiate()
+	floor_node.config = floor_config
+	arena.add_child(floor_node)
+	if require(floor_node.build(player, 9001), "a floor builds to check real entries still land"):
+		var start_id: int = floor_node.layout.get_start_room().id
+		var walked_into := -1
+		for plan: RoomPlan in floor_node.layout.rooms:
+			if plan.id != start_id:
+				walked_into = plan.id
+				break
+		var destination := floor_node.get_room(walked_into)
+		player.global_position = destination.get_interior_rect().get_center()
+		await advance_physics(4)
+		check(
+			floor_node.current_room_id == walked_into,
+			"a player standing in room %d is registered as entering it (current room is %d)"
+				% [walked_into, floor_node.current_room_id],
+		)
+	floor_node.queue_free()
+
+	arena.queue_free()
+	await advance_physics(1)
+
+
+func _on_room_entered_during_descent(_type: int, id: int) -> void:
+	_entered_during_descent.append(id)
 
 
 func _find_boss_room(floor_node: FloorController) -> Room:

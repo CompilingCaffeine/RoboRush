@@ -155,6 +155,12 @@ func bind_boss(display_name: String, defeat_banner: String, phase_banners: Array
 ## and a banner that repeated it would be the only banner in the game that told the player
 ## something they were already looking at.
 func announce_floor(number: int) -> void:
+	# A floor begins with no boss on screen. The bar is normally already down — the defeat that
+	# ended the floor before took it down — but "normally" is exactly what left it up for the
+	# whole of Development the one time that floor's boss was spawned early (see
+	# `FloorController._on_player_entered_room`). The bar belongs to a fight in progress, and
+	# the two moments a floor begins are the two moments there cannot be one.
+	_hide_boss_bar()
 	_show_banner("LEVEL %d" % number, BANNER_CLEAR)
 
 
@@ -265,6 +271,13 @@ func _on_boss_health_changed(ratio: float) -> void:
 	_boss_fill.anchor_right = clampf(ratio, 0.0, 1.0)
 
 
+## Emptied as well as hidden, so the bar cannot be shown again holding the last fight's fill for
+## the frame before its first health reading arrives.
+func _hide_boss_bar() -> void:
+	_boss_bar.visible = false
+	_boss_fill.anchor_right = 0.0
+
+
 ## No phase number anywhere on screen, deliberately. "PHASE 1" tells the player there are more
 ## coming, and The Scrap King's bar is built to convince them there are none left — see
 ## MergeConflict._begin_feint. What a phase gets instead is a name, which says what changed
@@ -300,7 +313,7 @@ func _on_boss_feigned_defeat(_boss: Node, _at: Vector2) -> void:
 
 
 func _on_boss_defeated(_boss: Node) -> void:
-	_boss_bar.visible = false
+	_hide_boss_bar()
 	_show_banner("%s  //  CHOOSE ONE REWARD" % _boss_defeat_banner, BANNER_CLEAR)
 
 

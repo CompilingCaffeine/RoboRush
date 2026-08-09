@@ -72,6 +72,7 @@ func run() -> void:
 	await _test_volatile_kernel_detonates_on_a_kill()
 	await _test_scrap_magnet_pulls_nearby_pickups()
 	await _test_scrap_scatter_avoids_geometry()
+	await _test_drop_point_inside_geometry_relocates()
 	await _test_debug_drone_fires_with_the_player()
 	await _test_drone_shots_advance_the_chain_trigger()
 
@@ -861,6 +862,38 @@ func _test_scrap_scatter_avoids_geometry() -> void:
 		if _is_solid_at((node as Pickup).global_position):
 			embedded += 1
 	check(embedded == 0, "no scrap landed inside the wall (%d of %d did)" % [embedded, pickups.size()])
+
+	await _teardown(arena)
+
+
+## Reported: a drop point *inside* an obstacle — an enemy knocked into a corner dying with its
+## origin embedded, or a reward point's fixed offset poking into an authored block — fell
+## through every scatter attempt and landed the pickup at the blocked point verbatim, and the
+## no-scatter item path never checked at all. Both must relocate to the nearest clear point.
+## The drop point is the dead centre of a 32px block, so every +/-9px scatter candidate is
+## blocked too and only the relocation path can produce a reachable pickup.
+func _test_drop_point_inside_geometry_relocates() -> void:
+	var arena := _make_arena()
+	_add_wall(arena, Vector2(100.0, 100.0), Vector2i(32, 32))
+	await advance_physics(1)
+
+	var spawner := LootSpawner.new()
+	arena.add_child(spawner)
+	spawner._rng.seed = 4242
+
+	var inside := Vector2(116.0, 116.0)
+	spawner._spawn_scrap(inside, 10)
+	# The scatter=false route items take — previously returned the blocked point unchecked.
+	spawner._spawn(LootSpawner.REPAIR_CELL_CONFIG, inside, false)
+	await advance_physics(2)
+
+	var pickups := arena.get_tree().get_nodes_in_group(Pickup.GROUP)
+	check(pickups.size() == 11, "every pickup spawned (%d of 11)" % pickups.size())
+	var embedded := 0
+	for node: Node in pickups:
+		if _is_solid_at((node as Pickup).global_position):
+			embedded += 1
+	check(embedded == 0, "no pickup stayed inside the block (%d of %d did)" % [embedded, pickups.size()])
 
 	await _teardown(arena)
 

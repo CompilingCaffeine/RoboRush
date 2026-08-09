@@ -19,8 +19,18 @@ const SCATTER := 9.0
 
 ## How many scattered offsets to try before giving up and dropping the pickup exactly where
 ## it died instead of taking a chance on the last one. Mirrors PopUpDrone._pick_destination:
-## retry against real geometry, then fall back to a position already known to be clear.
+## retry against real geometry, then fall back to the unscattered point — which is itself
+## verified and relocated if blocked, see _resolve_position.
 const SCATTER_ATTEMPTS := 6
+
+## Ring search used when the drop point itself sits inside geometry: step outward this far per
+## ring, testing this many evenly spaced directions per ring, nearest ring first. 8px steps out
+## to 64px clears every authored obstacle a drop point can realistically end up inside — the
+## widest template blocks are a few tiles (TILE_SIZE is 16), and a blocked point is at worst
+## half a block's width from open floor.
+const CLEAR_SEARCH_STEP := 8.0
+const CLEAR_SEARCH_RINGS := 8
+const CLEAR_SEARCH_DIRECTIONS := 8
 
 var _config: FloorConfig
 var _rng := RandomNumberGenerator.new()
@@ -105,19 +115,39 @@ func _spawn(config: PickupConfig, position: Vector2, scatter := true) -> void:
 ##
 ## Retried against real physics geometry rather than the room template, so obstacles the
 ## template does not know about are covered too (see PopUpDrone._is_blocked, the same check).
-## Falling back to the unscattered `position` after exhausting the attempts is safe because
-## that point is always somewhere already clear of geometry — an enemy's collision-safe death
-## position, or an authored room reward point.
+##
+## The requested `position` itself is not trusted either: an enemy can die knocked into a wall
+## corner with its origin inside the block, and the fixed offsets callers add to reward points
+## (the repair cell's -14y nudge, the floor's item offset) can poke into an authored obstacle.
+## Any point that fails the geometry check — the no-scatter point included — is relocated to
+## the nearest clear spot instead of being dropped where the player can never reach it.
 func _resolve_position(position: Vector2, scatter: bool) -> Vector2:
-	if not scatter:
+	if scatter:
+		for _attempt: int in SCATTER_ATTEMPTS:
+			var candidate := position + Vector2(
+				_rng.randf_range(-SCATTER, SCATTER), _rng.randf_range(-SCATTER, SCATTER)
+			)
+			if not _is_blocked(candidate):
+				return candidate
+	if not _is_blocked(position):
 		return position
-	for _attempt: int in SCATTER_ATTEMPTS:
-		var candidate := position + Vector2(
-			_rng.randf_range(-SCATTER, SCATTER), _rng.randf_range(-SCATTER, SCATTER)
-		)
-		if not _is_blocked(candidate):
-			return candidate
-	return position
+	return _nearest_clear_position(position)
+
+
+## Walks outward in rings from a blocked origin and returns the first clear point, so the
+## result is the nearest open floor in search order. Deterministic — no RNG draw — so taking
+## this path does not shift the seeded scatter sequence of later drops. Returns the origin
+## unchanged when every ring is blocked too: at that point there is no sensible nearby answer,
+## and teleporting the pickup somewhere distant would be worse than the bug being fixed.
+func _nearest_clear_position(origin: Vector2) -> Vector2:
+	for ring: int in range(1, CLEAR_SEARCH_RINGS + 1):
+		var radius := ring * CLEAR_SEARCH_STEP
+		for index: int in CLEAR_SEARCH_DIRECTIONS:
+			var direction := Vector2.from_angle(TAU * index / CLEAR_SEARCH_DIRECTIONS)
+			var candidate := origin + direction * radius
+			if not _is_blocked(candidate):
+				return candidate
+	return origin
 
 
 func _is_blocked(point: Vector2) -> bool:
