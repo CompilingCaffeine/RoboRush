@@ -1,21 +1,51 @@
 extends Node
 ## Runs every TestCase child, aggregates the results, and exits with a status code.
 ##
-##     godot --headless res://tests/test_runner.tscn
+##     godot --headless --fixed-fps 60 res://tests/test_runner.tscn
+##
+## `--fixed-fps` is not decoration. The suites assert against real physics frames, and the
+## engine paces those frames in real time, so the run spends essentially all of its wall clock
+## asleep: 7137 frames at 60Hz is 119 seconds during which nothing computes. The flag pins the
+## delta at 1/60 — every frame-counting assertion keeps exactly the meaning it had — and drops
+## the pacing. The same 1496 checks take under two seconds with it and two minutes without.
 ##
 ## Exits 0 only if at least one suite ran, every suite ran at least one check, and no
 ## check failed. The "at least one check" rule is deliberate: a suite that crashes
 ## before asserting anything must be a failure, not a silent pass.
 
-## Guards against a suite that awaits something that never arrives.
-const TIMEOUT_SECONDS := 120.0
+## How long any one suite may take. Per suite rather than per run, so the budget does not
+## depend on how many suites precede it, and a slow host does not decide which of them get to
+## run at all.
+##
+## Checked in `_process` rather than after `await suite.run()`, because the failure it exists
+## for cannot be caught there: a suite awaiting something that never arrives never returns
+## control, so a check placed after the await is a check that never executes. That was the
+## whole of what the previous whole-run budget could do — notice, once a suite had already
+## finished, that the suites collectively took too long — and it is not what the comment on it
+## claimed.
+##
+## An await that never resolves still yields to the engine, which is what gives `_process` a
+## frame to notice. A suite that spins in a loop without awaiting freezes the engine outright,
+## and nothing inside the process can catch that — only a timeout in whatever launched it.
+const SUITE_TIMEOUT_SECONDS := 60.0
 
 ## Set once the run has reported. Anything that ends the process before then is a failure,
 ## however cleanly it did it — see _exit_tree.
 var _finished := false
 
+## The suite currently inside `run()`, and when it runs out of time. Empty between suites, so
+## the watchdog has nothing to accuse while the runner itself is between jobs.
+var _running_suite := ""
+var _suite_deadline := 0
+
 
 func _ready() -> void:
+	# The watchdog has to tick while the tree is paused. GameManager pauses on victory and on
+	# game over, and suites drive both — test_floor restarts the run after winning precisely so
+	# the suites after it still get frames. A watchdog that stopped with the tree would sleep
+	# through exactly the states most likely to strand a suite.
+	process_mode = Node.PROCESS_MODE_ALWAYS
+
 	# The suites begin and end real runs, which would otherwise fold made-up statistics into
 	# the save file of whoever is running the tests — and, worse, make the tests pass or fail
 	# differently depending on what that file already said.
@@ -44,10 +74,12 @@ func _ready() -> void:
 		return
 
 	var total_checks := 0
-	var timeout := Time.get_ticks_msec() + int(TIMEOUT_SECONDS * 1000.0)
 
 	for suite: TestCase in suites:
+		_running_suite = suite.name
+		_suite_deadline = Time.get_ticks_msec() + int(SUITE_TIMEOUT_SECONDS * 1000.0)
 		await suite.run()
+		_running_suite = ""
 		total_checks += suite.checks
 
 		if suite.checks == 0:
@@ -59,21 +91,44 @@ func _ready() -> void:
 			suite.name, suite.checks, suite.failures.size(),
 		])
 
-		if Time.get_ticks_msec() > timeout:
-			failures.append("run exceeded %.0fs; remaining suites skipped" % TIMEOUT_SECONDS)
-			break
-
 	var elapsed := (Time.get_ticks_msec() - start) / 1000.0
 	_finished = true
 	if failures.is_empty():
 		print("PASS  %d suites, %d checks in %.1fs" % [suites.size(), total_checks, elapsed])
+		_warn_if_paced(elapsed)
 		get_tree().quit(0)
 		return
 
 	printerr("FAIL  %d problems across %d checks:" % [failures.size(), total_checks])
 	for failure: String in failures:
 		printerr("  - %s" % failure)
+	_warn_if_paced(elapsed)
 	get_tree().quit(1)
+
+
+## The watchdog. See SUITE_TIMEOUT_SECONDS for why it lives here and not after the await.
+func _process(_delta: float) -> void:
+	if _finished or _running_suite.is_empty() or Time.get_ticks_msec() <= _suite_deadline:
+		return
+	_finished = true
+	printerr(
+		"FAIL  %s exceeded %.0fs and was stopped. A suite that stops making progress is "
+		% [_running_suite, SUITE_TIMEOUT_SECONDS]
+		+ "usually awaiting a signal that no longer fires."
+	)
+	get_tree().quit(1)
+
+
+## The usage line above is only useful to somebody reading this file. This is for everybody
+## else: the flag is worth two orders of magnitude, and the run most in need of being told is
+## the one that has just spent two minutes not being told.
+func _warn_if_paced(elapsed: float) -> void:
+	if elapsed < 10.0:
+		return
+	print(
+		"      (most of those %.0fs was real-time pacing, not work — rerun with " % elapsed
+		+ "`--fixed-fps 60` for the same checks in under two seconds.)"
+	)
 
 
 ## Catches the run being ended by something other than this function.

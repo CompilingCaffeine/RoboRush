@@ -741,12 +741,13 @@ func _test_a_descent_enters_only_the_new_floors_start_room() -> void:
 
 	var wrong_rooms: Array[String] = []
 	var bosses_spawned := 0
-	# The three known-bad seeds first, then a short sweep so a fix that only moves the
-	# coincidence around still has to be lucky repeatedly. Kept short deliberately: each entry
-	# here rebuilds two whole floors, and the runner's watchdog covers the entire run rather
-	# than one suite — this file is not the one that gets to spend the budget.
+	# The three known-bad seeds first, then the same sweep width the rest of this file uses. The
+	# bug was a coincidence between two floors' layouts that held on 2% of seeds, so a handful
+	# of them would pass against a fix that merely moved the coincidence somewhere else. This
+	# was briefly cut to six while the runner still paced itself in real time; it costs about a
+	# second now, and this is the check that most repays the seeds.
 	var seeds: Array[int] = [177, 187, 198]
-	for seed_value: int in range(1, 7):
+	for seed_value: int in range(1, SEED_COUNT + 1):
 		seeds.append(seed_value)
 
 	# Watched rather than read afterwards: the spurious entry is corrected a frame later by the
