@@ -42,6 +42,10 @@ const SHAKE_COMPILE_LANE := 0.2
 ## this converts a requested radius into a scale for anything else.
 const EXPLOSION_REFERENCE_RADIUS := 36.0
 
+## Tracks used by a floor that names none of its own.
+const DEFAULT_EXPLORE_MUSIC := &"explore"
+const DEFAULT_BOSS_MUSIC := &"boss"
+
 ## Fire is pitch-varied because it repeats constantly; a perfectly identical sound
 ## four times a second is what makes an arcade shooter tiring.
 const FIRE_PITCH_VARIATION := 0.12
@@ -52,6 +56,11 @@ const PICKUP_PITCH_VARIATION := 0.22
 const PICKUP_VOLUME_DB := -6.0
 
 var _shake: ShakeCamera
+
+## The current floor's two tracks. Defaults match what every floor used before themes
+## existed, so a floor with no theme sounds exactly as it did.
+var _explore_music: StringName = DEFAULT_EXPLORE_MUSIC
+var _boss_music: StringName = DEFAULT_BOSS_MUSIC
 
 
 func _ready() -> void:
@@ -142,13 +151,29 @@ func _on_player_died() -> void:
 	AudioManager.stop_music()
 
 
-## Which music plays is decided here rather than by the floor, for the same reason every other
-## sound is: the room should not know what a soundtrack is. Two tracks and one rule — the boss
-## arena gets the boss loop, everywhere else gets the explore loop — and `play_music` ignores a
-## request for the track already playing, so walking through a door does not restart it.
+## *When* the music changes is decided here rather than by the floor, for the same reason
+## every other sound is: the room should not know what a soundtrack is. Two situations and one
+## rule — the boss arena gets the boss loop, everywhere else gets the explore loop — and
+## `play_music` ignores a request for the track already playing, so walking through a door does
+## not restart it.
+##
+## *Which* tracks those two are is the floor's business, and comes from its theme. The split
+## matters: adding a floor with its own soundtrack must not mean adding a branch here, and this
+## file naming `dev_explore` would be exactly the kind of content knowledge it exists to avoid.
 func _on_room_entered(type: int, _room_id: int) -> void:
 	var wants_boss := type == RoomTemplate.Type.BOSS
-	AudioManager.play_music(&"boss" if wants_boss else &"explore")
+	AudioManager.play_music(_boss_music if wants_boss else _explore_music)
+
+
+## Points the two situations at this floor's tracks. Called by `main.gd` on startup and on
+## every descent, which are the only two ways a floor ever begins.
+##
+## A null theme restores the defaults rather than leaving the previous floor's tracks playing,
+## so a floor authored without one is silent about music instead of inheriting a soundtrack
+## from whatever came before it.
+func set_floor_theme(theme: FloorTheme) -> void:
+	_explore_music = theme.explore_music if theme != null else DEFAULT_EXPLORE_MUSIC
+	_boss_music = theme.boss_music if theme != null else DEFAULT_BOSS_MUSIC
 
 
 ## Distinct from the item fanfare, because buying something and finding it are different
@@ -170,7 +195,7 @@ func _on_boss_phase_changed(phase: int) -> void:
 	if phase > 1:
 		AudioManager.play_sfx(&"boss_phase")
 		_add_trauma(SHAKE_BOSS_PHASE)
-		AudioManager.play_music(&"boss")
+		AudioManager.play_music(_boss_music)
 
 
 ## The boss playing dead gets exactly what dying gets: the death burst, the death sound, a kill's

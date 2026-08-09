@@ -22,6 +22,7 @@ const RECEIVER_POOL := 100000.0
 @onready var _health: HealthComponent = %Health
 @onready var _sprite: Sprite2D = %Sprite
 @onready var _hurt_flash: HurtFlash = %HurtFlash
+@onready var _status: StatusEffectController = StatusEffectController.find_on(self)
 
 
 func _ready() -> void:
@@ -51,6 +52,17 @@ func set_inert(inert: bool) -> void:
 
 func get_sprite() -> Sprite2D:
 	return _sprite
+
+
+## How much of its own movement this part currently gets, from any status on it. One when
+## unaffected, or when the scene was never given a controller.
+##
+## A part is where statuses land, because a part is what a projectile can hit — but a part
+## does not move itself, so the boss controller reads this and scales the motion it applies.
+## The alternative, having the controller carry the status, would mean a boss with two bodies
+## could be frozen by hitting either one and slowed twice by hitting both.
+func get_status_speed_scale() -> float:
+	return _status.get_speed_scale() if _status != null else 1.0
 
 
 func _on_damaged(info: DamageInfo, _remaining: float) -> void:

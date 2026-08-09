@@ -19,6 +19,10 @@ const DRONE_SCENE := preload("res://scenes/player/player_drone.tscn")
 ## stands are far enough apart that the nearest is never ambiguous.
 const INTERACT_RANGE := 26.0
 
+## Speed at or below which the robot counts as standing still, for Blocking I/O. See
+## `_can_fire_while_moving` for why this is not zero.
+const STILLNESS_SPEED := 8.0
+
 @export var config: PlayerConfig
 
 @onready var _input: PlayerInput = %Input
@@ -90,7 +94,7 @@ func _physics_process(delta: float) -> void:
 	_apply_knockback(delta)
 
 	_weapon.step(delta)
-	if _input.is_firing():
+	if _input.is_firing() and _can_fire_while_moving():
 		_weapon.try_fire(global_position, _input.aim_direction)
 
 	if _input.has_interact_request():
@@ -137,6 +141,22 @@ func get_health_component() -> HealthComponent:
 	return _health
 
 
+## Blocking I/O. False only while that item is held and the robot is actually moving.
+##
+## Measured against real velocity rather than against input, so a robot shoved by knockback
+## or still coasting to a halt is genuinely blocked — the item's promise is "you cannot
+## shoot on the move", and reading the stick instead would let the player fire mid-slide by
+## letting go a frame early.
+##
+## The threshold is not zero. Deceleration is 600 px/s² from a top speed of 160, so the tail
+## end of every stop is several frames of drifting under a pixel per frame; requiring exact
+## stillness would make the item read as "your weapon is broken" rather than as a rule.
+func _can_fire_while_moving() -> bool:
+	if not _items.requires_stillness_to_fire():
+		return true
+	return velocity.length() <= STILLNESS_SPEED
+
+
 func get_weapon_controller() -> WeaponController:
 	return _weapon
 
@@ -159,6 +179,8 @@ func _apply_item_stats() -> void:
 	_weapon.modifiers = _items.build_modifier_stack()
 	_weapon.fire_rate_multiplier = _items.get_fire_rate_multiplier()
 	_health.set_max_health(config.max_integrity + _items.get_max_integrity_delta())
+	_dash.set_bonus_charges(_items.get_dash_charges_delta())
+	_dash.set_cooldown_scale(_items.get_dash_cooldown_multiplier())
 	_sync_drones()
 
 
@@ -190,8 +212,9 @@ func _on_item_added(item: ItemConfig) -> void:
 
 	if item.heal_on_pickup > 0.0:
 		_health.heal(item.heal_on_pickup)
-	if item.dash_charges_delta > 0:
-		_dash.add_charges(item.dash_charges_delta)
+	# Dash charges are no longer applied here. They are an aggregate like every other one,
+	# and `_apply_item_stats` above has already recomputed them from the whole inventory —
+	# which is what lets an item take a charge away as well as grant one.
 	if item.accent_color.a > 0.0:
 		_visuals.set_accent(item.accent_color)
 

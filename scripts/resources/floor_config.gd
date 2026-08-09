@@ -17,6 +17,12 @@ extends Resource
 ## adding a floor is a new .tres with this field pointed at it, not new code.
 @export var next_floor: FloorConfig
 
+## How this floor looks and sounds. Null falls back to the textures authored into
+## `room.tscn` and `wall_block.tscn` and to the shared `explore`/`boss` tracks, so a floor
+## built without one still renders — which is what keeps a test arena and a greybox floor
+## from needing a theme before they need a look.
+@export var theme: FloorTheme
+
 @export_group("Rooms")
 
 ## Total rooms including the start and the treasure room. Spec section 9 suggests a start,

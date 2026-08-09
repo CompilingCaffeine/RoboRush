@@ -316,7 +316,8 @@ curve.
 
 ### The twelve items
 
-Spec section 12's full pool ships.
+Spec section 12's full pool ships. Development adds nine more on top of these — see
+[Six new items](#six-new-items) and the three that follow it.
 
 | Item | Rarity | What it does | How |
 | --- | --- | --- | --- |
@@ -394,11 +395,12 @@ would have exactly one implementation:
 - **DamageResolver** — [damage_info.gd](scripts/combat/damage_info.gd) is already the
   thing it would resolve, including an unused `is_critical` and a tag list that
   explosions and chain lightning now actually populate (`explosion`, `electric`).
-- **StatusEffectController** — `ProjectileConfig.status_effects` is declared and
-  carried; nothing reads it yet. It is the last field left in the "declared, not yet
-  honoured" group, and no shipped item needs it. Cold Cache and Hot Reload in the
-  Development plan below are the first two real callers, which is when the controller earns
-  its place.
+- **StatusEffectController** — now [built](scripts/components/status_effect_controller.gd),
+  on exactly the terms this entry set: it stayed unwritten until Cold Cache and Hot Reload
+  needed it, and `ProjectileConfig.status_effects` is no longer a declared-and-unread field.
+  It is a `Node2D` rather than a plain `Node` so it can draw its own indicator ring — the
+  parent's `modulate` already has two writers in every enemy telegraph and `HurtFlash`, and a
+  third is how a telegraph ends up invisible.
 
 `ShotContext` was considered and rejected. `ProjectileFactory.spawn` now takes nine
 parameters, four of them optional, and bundling the trailing ones into an object would
@@ -916,12 +918,17 @@ resulting frames, and by nothing else. The suite was green for all of them.
    `target = NodePath("../Sprite")` — which is how the editor serialises a node reference, and
    which a hand-authored scene does not carry the extra state to resolve. `target` was
    therefore null on every enemy, both bosses' parts, and the boss terminal. `flash()` returns
-   early on a null target, so the failure was total, silent, and years-of-code old: shooting
-   anything produced no hit feedback at all, and the 1246 checks in the suite were all
-   satisfied by a component doing nothing.
+   early on a null target, so the failure was total, silent, and old: shooting anything
+   produced no hit feedback at all, and the 1246 checks in the suite were all satisfied by a
+   component doing nothing.
 
-   The fix is a `NodePath` the component resolves itself, which cannot half-succeed the same
-   way. The lesson is the same one the HUD taught: **every check that touched this component
+   The sharpest part is that **this project already knew the rule.** Known limitation 14 has
+   said "hand-authored `NodePath` literals do not resolve into exported `Node` properties, so
+   text-authored scenes pass node references explicitly" for milestones. `HurtFlash` was the
+   one component that did not, and writing the rule down did not catch it. The fix is a
+   `NodePath` the component resolves itself, which cannot half-succeed the same way.
+
+   The lesson is the same one the HUD taught: **every check that touched this component
    asserted behaviour it was allowed to skip.** There is now a check that the wiring itself
    resolved, separate from the one that the colour changes and comes back — because a test of
    the second kind alone is satisfied by a dead component twice over.
@@ -972,8 +979,9 @@ resulting frames, and by nothing else. The suite was green for all of them.
    it can get. The environment, the boss, and the upgrade attachments were the three things
    worth the effort this milestone; the enemy and player silhouettes are milestone 5's and
    hold up.
-5. **The music is three short loops** — 20, 14, and 12 seconds. A boss fight outlasts its
-   track several times over. The tracker can express more than this; nobody has written more.
+5. **The music is five short loops** — 20, 14, 12, 13, and 11 seconds. A boss fight outlasts
+   its track several times over. The tracker can express more than this; nobody has written
+   longer. Development's two are a second *pair*, not a second length.
 6. **Only three items visibly change the robot.** Spec section 20 asks for sprite changes
    from major items and an eleven-pixel robot has room for about that many before it stops
    being a robot. The other nine still get only a tinted cannon.
@@ -988,27 +996,32 @@ resulting frames, and by nothing else. The suite was green for all of them.
 9. **No elite modifiers and no risk-and-reward rooms.** Spec sections 15 and 19 both mark
    these optional for the prototype. The generator's `_attach_dead_end` is the hook the rooms
    would use.
-10. **`ProjectileConfig.status_effects` is still declared and unread.** No shipped item needs
-    it; freezing and burning are planned for Development's pool, but the status system does
-    not exist yet.
-11. **Nothing removes an item**, so Corrupted Firmware choices are permanent. Arguably right
-    for a roguelite, but still undecided rather than designed.
-12. **All rooms are the same size**, including the boss arena — deliberate, see the
+10. **Nothing removes an item**, so Corrupted Firmware choices are permanent — and that now
+    matters far more than it did when this entry was written. Development ships three items
+    with no upside at all, in the full pool, and the player is warned only by an icon and a
+    rarity: the pickup banner carries a name and no description, and an item is collected by
+    walking over it. Still arguably right for a roguelite, still undecided rather than
+    designed, and now the sharpest edge in the game.
+11. **All rooms are the same size**, including the boss arena — deliberate, see the
     architecture note, but it does mean the boss fight is a single screen.
-13. **Rooms are built from `WallBlock` bodies, not a TileMap.** The 64x64 tile sheets hide
+12. **Rooms are built from `WallBlock` bodies, not a TileMap.** The 64x64 tile sheets hide
     the repetition far better than a single 16x16 tile did, but there is still no autotiling
     and no variation between rooms.
-14. **Physics changes made during physics callbacks must be deferred**, and this project has
+13. **Physics changes made during physics callbacks must be deferred**, and this project has
     been bitten by it five times. Every site is deferred and commented. Any new code that
     adds a body should assume it is inside a callback until it has checked.
-15. **Hand-authored `NodePath` literals do not resolve into exported `Node` properties**, so
-    text-authored scenes pass node references explicitly.
-16. **The settings list cannot be operated with a mouse.** It is a keyboard and gamepad list —
+14. **Hand-authored `NodePath` literals do not resolve into exported `Node` properties**, so
+    text-authored scenes pass node references explicitly. Writing this down was not enough:
+    `HurtFlash` broke the rule for its entire existence and nothing flashed when hit until
+    Development's second wave of enemies found it. Components that need a sibling now take a
+    `NodePath` and resolve it themselves, and a test asserts the wiring resolved rather than
+    only that the behaviour looked right.
+15. **The settings list cannot be operated with a mouse.** It is a keyboard and gamepad list —
     up and down choose, left and right adjust — and now that it correctly blocks clicks rather
     than passing them through, a mouse user can open it and click nothing. Escape closes it and
     the hint line along the bottom says so, but a player who reaches for the mouse gets no
     response at all.
-17. **Quitting within a second of a sound starting can still print leak warnings at exit**,
+16. **Quitting within a second of a sound starting can still print leak warnings at exit**,
     roughly one run in four when quitting during the 1.1-second victory fanfare. The specific
     reported case — a menu button that played a sound and quit on the same frame — is fixed,
     and `AudioManager.stop_all()` is confirmed to run and to find nothing playing. Adding
@@ -1045,7 +1058,9 @@ or removing whole systems.
 The presentation should read as an unfinished development lab rather than another Help Desk:
 cyan and violet machinery, amber warnings, red execution errors, broken IDE windows, temporary
 build scaffolds, and a distinct exploration and boss loop. Rooms stay the existing 26-by-12
-tile single-screen arenas.
+tile single-screen arenas. **Built** — see
+[The floor's own look and sound](#the-floors-own-look-and-sound), including the one place this
+brief and the floor's warning language turned out to contradict each other.
 
 ### Encounter curve
 
@@ -1211,15 +1226,123 @@ spare rather than balancing the final reward on an exact-capacity edge.
 | Breakpoint | Dashing emits a short slowing pulse |
 | Stack Overflow | Corrupted: larger, harder-hitting projectiles travel more slowly |
 
-Cold Cache and Hot Reload are the reason to implement the small status system already implied
-by `ProjectileConfig.status_effects`. Multiple statuses must compose rather than overwrite one
-another, and boss resistance should shorten control effects rather than make those items do
-nothing in the fight.
+**All six are built, plus three more.** Cold Cache and Hot Reload were the reason to implement
+the small status system implied by `ProjectileConfig.status_effects`, and it now exists as
+[`StatusEffectController`](scripts/components/status_effect_controller.gd).
+
+Both of the constraints above are load-bearing and both are asserted. Statuses **compose**:
+each effect is tracked independently and the movement penalty is the *product* across them, so
+a chilled and burning enemy is both and neither item cancels the other. That requirement also
+decided the mechanism — `projectile_add` now appends to array fields, because reaching
+`status_effects` through `projectile_set` would have looked identical in a `.tres` and silently
+kept only whichever item the stack reached last. Boss resistance **shortens** rather than
+nullifies: boss parts carry `control_resistance = 0.65`, so an 0.8s freeze becomes 0.28s,
+floored at `MIN_CONTROL_SECONDS` so even total resistance leaves a real window. Burn is
+deliberately not resisted, because shortening a burn and shortening a freeze are not the same
+promise.
+
+Two things worth recording that the plan did not anticipate:
+
+- **Cold Cache needed a freeze immunity window.** It chills on every hit and the starting
+  weapon fires four times a second, so four hits is a freeze and the fourth arrives about a
+  second after the first. Without a lockout the item does not make a build, it removes a
+  target from the fight permanently. Chill still lands during the window, so the item keeps
+  working; only the loop is broken.
+- **`spawn_copy()` was sharing its status array.** `duplicate()` is shallow, and items append
+  to `status_effects`, so the weapon's own resource would have grown by an entry per shot for
+  the rest of the run — a Cold Cache build stacking dozens of chills within a room, with the
+  source `.tres` on disk staying innocent. Only `status_effects` is re-created; deep-duplicating
+  the resource would also clone the texture sixty times a second.
+
+### Three items that are purely a cost
+
+| Item | Effect |
+| --- | --- |
+| Blocking I/O | The weapon will not fire while the robot is moving |
+| Tech Debt | Every room cleared permanently toughens every enemy, compounding |
+| Legacy Runtime | Dash cooldown tripled, one charge gone |
+
+These are the first items in the pool with **no upside whatsoever**. Everything else that costs
+the player something buys them something: Unsafe Overclock trades integrity for damage, Stack
+Overflow trades speed for size. These trade nothing, and they sit in the *full* pool — shop
+stands and boss choices included. An offer the player should refuse is what makes the offers
+they accept a decision.
+
+Three consequences that follow from the delivery model and are worth knowing before playtesting:
+
+- **Nothing warns the player.** Items are collected by walking over them, the pickup banner
+  carries a name and no description, and nothing removes an item. Rarity, category, and a red
+  icon with no bright core are the entire signal. This is deliberate but it is the sharpest
+  edge in the game, and it is the first thing to revisit if the floor reads as unfair rather
+  than as hostile.
+- **A boss choice of one-of-three containing one of these is effectively one-of-two.**
+- **Legacy Runtime's charge penalty is floored at one.** Base dash charges are one, so a naive
+  −1 leaves a robot that can never dash — a different game, not a harder one. It therefore
+  costs a Backup Battery its charge and otherwise costs nothing, and the tripled cooldown is
+  where the item does its real damage.
+
+Tech Debt accrues into `RunManager.enemy_health_scale` rather than being asked of the inventory
+at spawn time, because the debt has to outlive the room it was incurred in; recomputing from
+"rooms cleared so far" would silently backdate the whole bill onto a player who picked it up
+late. It is not applied to bosses — a boss pool is tuned to the minute, and compounding it with
+a penalty accepted eight rooms earlier would end runs at the door rather than in the fight.
+
+Legacy Runtime also forced a fix worth noting: dash charges were the one aggregate applied
+*incrementally* on pickup, which contradicted the recompute-from-the-whole-inventory rule
+`Player._apply_item_stats` states in its own doc comment. An incremental applier cannot express
+a negative safely, so `add_charges` became `set_bonus_charges`.
 
 Development drops items on combat clears two and five, grants one treasure item, uses the same
 learned shop prices, and ends with three boss choices. Tune its scrap income before introducing
 floor-specific inflation: a common item should not silently cost more because the elevator went
 down one level.
+
+### The floor's own look and sound
+
+A floor's presentation is a [`FloorTheme`](scripts/resources/floor_theme.gd) — two tile sheets
+and two music ids — hung off `FloorConfig`. Split out rather than added as four more fields for
+the reason `FloorConfig` exists at all: a floor's content and a floor's look are edited at
+different times, and a theme is the half a later floor could reuse wholesale. Both floors carry
+one explicitly; a null theme falls back to the authored textures and the shared tracks, which
+is what keeps every test arena from needing a look before it needs one.
+
+**The art.** `art/environments/dev_floor.png` and `dev_wall.png`, same 64x64 sheet
+construction as the Help Desk's — sixteen different 16x16 panels, so the repeat period is four
+tiles rather than one. The two floors are told apart by *shape* as much as by colour, so a
+colour-blind player still knows where they are: the Help Desk's panels are closed and finished
+(rivets, louvres, sealed conduit), Development's are open and unfinished (a broken IDE window
+with its own title bar and one line gone red, a diagonal scaffold brace, a server rack with its
+front off).
+
+One of those panels was a real bug before it was a style question. The floor's hazard-tape
+panel was drawn in **amber** first, which is correct for a work-in-progress lab and wrong for
+this game: amber on this floor means "a compile lane is about to execute here", from the
+Compiler, from Runtime Error, and from the Null Pointer. Permanent amber stripes painted across
+the ground the lanes are drawn on would teach the player to ignore the one colour their
+survival depends on reading. The tape is drawn in the floor's own dim ramp instead.
+
+**The music.** `dev_explore` and `dev_boss`, and both are still in A minor like every other
+track — the crossfade rule in `AudioManager.MUSIC_LIBRARY` is what makes descending a floor
+mid-phrase sound like the game changing its mind rather than a track ending. What makes them a
+different floor is everything except the key: the explore loop runs a sixteenth-note arpeggio
+underneath like a progress bar, keeps landing on the flat second, and puts the bass on the
+offbeat; the boss loop is built on a chromatic descent, A - G# - G - F#, because Runtime Error
+does not get angrier, it degrades.
+
+**The seam.** `FeedbackDirector` still decides *when* the music changes — boss arena gets the
+boss loop, everywhere else gets the explore loop — and the theme decides only *which* two
+tracks those are. That split is the point: adding a floor with its own soundtrack must not mean
+adding a branch to the director, and the director naming `dev_explore` would be exactly the
+content knowledge it exists not to have.
+
+The theme is announced by `FloorController.floor_theme_changed`, emitted at the *top* of
+`build()` rather than through the existing `floor_advanced`. That is not tidiness. `build()`
+places the player in the start room, which emits `room_entered`, which starts the music — so a
+theme applied after the build plays the previous floor's explore loop over the new floor's
+opening room and only corrects itself at the next door.
+
+Both halves were confirmed to fail when deliberately broken: walls ignoring the theme, and the
+director reverting to its hardcoded track ids. A test that cannot fail is not evidence.
 
 ### The multi-floor seam
 
@@ -1262,9 +1385,10 @@ reason.
 4. Add a Development greybox: its floor resource, four combat templates, returning enemies,
    placeholder Runtime Error, and a developer-only direct-start path.
 5. Add the Code Runner, Compiler, compile lanes, finished boss, six items, status effects,
-   environment art, and music. **The Code Runner, the Compiler, compile lanes, and the finished
-   boss are done.** What is left in this step is the six items, the status system those items
-   are the reason for, the environment art, and the music.
+   environment art, and music. **Done.** The Code Runner, the Compiler, compile lanes, and the
+   finished boss, plus three more enemies (Null Pointer, Deadlock, Recursion), nine items
+   rather than six, the status system those items were the reason for, and Development's own
+   tile sheets and soundtrack — see [The floor's own look and sound](#the-floors-own-look-and-sound).
 6. Play full two-floor runs with keyboard and controller, tune against the carried Help Desk
    build rather than a fresh debug character, then verify the exported builds.
 

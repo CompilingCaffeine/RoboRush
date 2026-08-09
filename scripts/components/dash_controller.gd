@@ -32,6 +32,9 @@ var _dash_time_left := 0.0
 var _recharge_time_left := 0.0
 var _invulnerable_time_left := 0.0
 
+## Item-driven multiplier on `PlayerConfig.dash_cooldown`. One until something changes it.
+var _cooldown_scale := 1.0
+
 
 func setup(config: PlayerConfig) -> void:
 	_config = config
@@ -72,20 +75,41 @@ func try_start(requested_direction: Vector2) -> bool:
 	# Only kick off the recharge clock if it is not already running, so spending a
 	# second charge mid-cooldown does not restart the first charge's timer.
 	if _recharge_time_left <= 0.0:
-		_recharge_time_left = _config.dash_cooldown
+		_recharge_time_left = get_cooldown()
 
 	dash_started.emit(direction)
 	return true
 
 
-## Raises the charge ceiling and hands the new charges over ready to use. Backup Battery
-## calls this. Granted immediately rather than left to recharge, because an item that
-## does nothing for two seconds after you pick it up reads as an item that did nothing.
-func add_charges(count: int) -> void:
-	if count <= 0:
-		return
-	_max_charges += count
-	charges_available += count
+## Sets the item-granted charges on top of the config's own, replacing whatever the last
+## call set rather than accumulating.
+##
+## This used to be `add_charges`, called once per pickup, which was fine for as long as
+## every item that touched dash charges *granted* one. Legacy Runtime takes one away, and an
+## incremental applier cannot express that safely: the player's total would depend on the
+## order items arrived and on how many times the owner happened to reapply them. Recomputing
+## from the whole inventory is what `Player._apply_item_stats` already promises in its own
+## doc comment; dash charges were the one aggregate not keeping that promise.
+##
+## Floored at one. A robot that cannot dash at all is not a hindrance, it is a different and
+## much worse game — so Legacy Runtime's −1 costs a Backup Battery its charge and otherwise
+## costs nothing, and the cooldown is where that item does its real damage.
+func set_bonus_charges(bonus: int) -> void:
+	var previous := _max_charges
+	_max_charges = maxi(_config.dash_charges + bonus, 1)
+	# A raised ceiling hands the new charge over immediately, so Backup Battery is usable
+	# the moment it is picked up rather than after a cooldown the player did not cause.
+	var gained := maxi(_max_charges - previous, 0)
+	charges_available = clampi(charges_available + gained, 0, _max_charges)
+
+
+## Multiplies the configured cooldown. Legacy Runtime's whole effect.
+func set_cooldown_scale(scale: float) -> void:
+	_cooldown_scale = maxf(scale, 0.01)
+
+
+func get_cooldown() -> float:
+	return _config.dash_cooldown * _cooldown_scale
 
 
 func can_dash() -> bool:
@@ -138,6 +162,6 @@ func _tick_recharge(delta: float) -> void:
 	if charges_available < _max_charges:
 		# Carry the overshoot (a negative value) into the next charge so refills
 		# stay evenly paced instead of drifting by up to one frame each time.
-		_recharge_time_left = _config.dash_cooldown + _recharge_time_left
+		_recharge_time_left = get_cooldown() + _recharge_time_left
 	else:
 		_recharge_time_left = 0.0

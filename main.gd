@@ -36,6 +36,10 @@ func _ready() -> void:
 	_floor.boss_encountered.connect(_combat_hud.bind_boss)
 
 	_apply_dev_floor_override()
+	# Connected before the build, because the floor announces its theme from inside it — see
+	# `FloorController.floor_theme_changed` for why that has to happen before the player is
+	# placed. One connection covers both the opening floor and every descent.
+	_floor.floor_theme_changed.connect(_feedback.set_floor_theme)
 	if not _floor.build(_player, seed_value):
 		# Generation failing is a content bug, not something to hide from the player behind a
 		# blank screen (spec section 31.10 forbids placeholder error messages reaching them).

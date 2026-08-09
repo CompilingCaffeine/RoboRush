@@ -449,7 +449,9 @@ func _step_charge(delta: float) -> void:
 	if _charge_left <= 0.0:
 		return
 	_charge_left -= delta
-	_primary.global_position += _charge_direction * config.charge_speed * delta
+	_primary.global_position += (
+		_charge_direction * config.charge_speed * _primary.get_status_speed_scale() * delta
+	)
 	_clamp_to_arena(_primary)
 
 	if _charge_hit_player or _player == null:
@@ -476,7 +478,11 @@ func _step_drift(delta: float) -> void:
 		var target := _player.global_position + Vector2(0.0, -70.0)
 		if part == _clone:
 			target = _mirror_of(target)
-		part.global_position = part.global_position.move_toward(target, config.move_speed * delta)
+		# Per part rather than per boss: the two bodies are chilled independently, so freezing
+		# one of the King's claimants while the other keeps coming is a real outcome.
+		part.global_position = part.global_position.move_toward(
+			target, config.move_speed * part.get_status_speed_scale() * delta
+		)
 		_clamp_to_arena(part)
 
 

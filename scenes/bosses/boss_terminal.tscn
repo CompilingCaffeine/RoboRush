@@ -1,9 +1,10 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scenes/bosses/boss_terminal.gd" id="1_terminal"]
 [ext_resource type="Texture2D" path="res://art/bosses/boss_terminal.png" id="2_tex"]
 [ext_resource type="Script" path="res://scripts/components/health_component.gd" id="3_health"]
 [ext_resource type="Script" path="res://scripts/components/hurt_flash.gd" id="4_flash"]
+[ext_resource type="Script" path="res://scripts/components/status_effect_controller.gd" id="99_status"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_terminal"]
 radius = 7.0
@@ -31,3 +32,14 @@ invulnerability_seconds = 0.0
 unique_name_in_owner = true
 script = ExtResource("4_flash")
 target_path = NodePath("../Sprite")
+
+[node name="Status" type="Node2D" parent="."]
+unique_name_in_owner = true
+; Resistant, not immune. A boss that shrugged control effects off entirely would make
+; Cold Cache dead weight in exactly the fight the player bought it for; at 0.65 a freeze
+; that lasts 0.8s on an enemy lasts 0.28s here — a real opening, and not a stunlock.
+; Burn is deliberately not resisted: this part forwards every hit to the controller, so
+; damage over time reaches the real pool the same way a rivet does.
+script = ExtResource("99_status")
+indicator_radius = 10.0
+control_resistance = 0.65

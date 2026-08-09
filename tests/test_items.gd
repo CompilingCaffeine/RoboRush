@@ -46,7 +46,17 @@ func run() -> void:
 	_test_inventory_aggregates()
 	_test_inventory_find_on()
 	_test_run_manager_draws_without_repeats()
+	_test_the_pool_fills_every_offer_of_a_two_floor_run()
 	_test_pickup_config_for_item()
+
+	_test_add_appends_to_array_fields()
+	_test_two_status_items_compose_on_one_shot()
+	_test_spawn_copy_does_not_share_its_status_array()
+	await _test_chill_stacks_then_freezes()
+	await _test_freeze_cannot_be_chained_indefinitely()
+	await _test_resistance_shortens_control_without_removing_it()
+	await _test_burn_damages_over_time_and_is_not_resisted()
+	await _test_statuses_compose_rather_than_overwrite()
 
 	await _test_player_gains_integrity_and_repairs()
 	await _test_player_pays_for_overclock()
@@ -64,6 +74,17 @@ func run() -> void:
 	await _test_scrap_scatter_avoids_geometry()
 	await _test_debug_drone_fires_with_the_player()
 	await _test_drone_shots_advance_the_chain_trigger()
+
+	await _test_memory_spike_pierces_one_extra_enemy()
+	await _test_core_dump_explodes_on_impact()
+	await _test_cold_cache_chills_what_it_hits()
+	await _test_hot_reload_burns_on_the_fifth_shot()
+	await _test_breakpoint_chills_on_a_dash()
+
+	_test_the_harmful_three_are_labelled_as_such()
+	await _test_blocking_io_forbids_firing_on_the_move()
+	await _test_tech_debt_compounds_across_rooms()
+	await _test_legacy_runtime_cripples_the_dash_without_removing_it()
 
 
 # --- Data ---------------------------------------------------------------------
@@ -412,6 +433,47 @@ func _test_run_manager_draws_without_repeats() -> void:
 
 	# Autoload state is process-wide; leave it as it was found.
 	RunManager.offered_item_ids = previous
+
+
+## The Development plan's acceptance criterion: "The item pool can always fill every planned
+## offer, including the final three choices." It was false until Development got its own six
+## items, and it failed *silently* — `draw_item` returns null on an exhausted pool, and every
+## caller has a graceful fallback, so a starved run drops repair cells into treasure rooms and
+## puts fewer than three stands in front of the last boss rather than erroring.
+##
+## Counted the way a run actually spends the pool: clear rewards, then two shop stands, then
+## the treasure, then three boss choices, per floor, against one shared reservation list.
+func _test_the_pool_fills_every_offer_of_a_two_floor_run() -> void:
+	var first := load("res://data/floors/floor_1_help_desk.tres") as FloorConfig
+	if not require(first, "floor 1 loads"):
+		return
+	if not require(first.next_floor, "floor 1 chains to a second floor"):
+		return
+
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 20260808
+	var restore := RunManager.offered_item_ids.duplicate()
+	RunManager.offered_item_ids.clear()
+
+	var empty_offers := 0
+	var filled := 0
+	for config: FloorConfig in [first, first.next_floor]:
+		var offers := config.item_clear_indices.size() + config.shop.item_stand_count + 3
+		if config.treasure_grants_item:
+			offers += 1
+		for _offer: int in offers:
+			if RunManager.draw_item(config.item_pool, rng) == null:
+				empty_offers += 1
+			else:
+				filled += 1
+
+	RunManager.offered_item_ids = restore
+	check(
+		empty_offers == 0,
+		"a two-floor run fills all %d item offers (%d came up empty)" % [
+			filled + empty_offers, empty_offers,
+		],
+	)
 
 
 func _test_pickup_config_for_item() -> void:
@@ -913,6 +975,522 @@ func _count_drones(player: Player) -> int:
 		if child is PlayerDrone:
 			total += 1
 	return total
+
+
+# --- Status effects -----------------------------------------------------------
+#
+# The system Cold Cache and Hot Reload are the reason for. Two rules from the Development
+# plan are what these checks are actually defending: statuses must compose rather than
+# overwrite, and resistance must shorten control effects rather than make the items that
+# apply them do nothing.
+
+
+## `projectile_add` on an array field appends. This is the mechanism the two status items
+## compose through, and it is worth checking directly because the alternative — using
+## `projectile_set` — looks identical in a `.tres` and silently keeps only one of them.
+func _test_add_appends_to_array_fields() -> void:
+	var existing: Array[StringName] = [&"existing"]
+	var addition: Array[StringName] = [&"added"]
+	var expected: Array[StringName] = [&"existing", &"added"]
+
+	var config := _rivet_variant()
+	config.status_effects = existing
+
+	var item := ItemConfig.new()
+	item.projectile_add = {&"status_effects": addition}
+	ProjectileModifierStack.from_items([item]).apply(config, 1)
+
+	check(
+		config.status_effects == expected,
+		"adding to an array field appends rather than replacing (got %s)" % [config.status_effects],
+	)
+
+
+func _test_two_status_items_compose_on_one_shot() -> void:
+	var cold := _require_item(&"cold_cache")
+	var hot := _require_item(&"hot_reload")
+	if cold == null or hot == null:
+		return
+
+	# Shot five, so Hot Reload's every-fifth gate is open and both items contribute.
+	var both := _config_with([&"cold_cache", &"hot_reload"] as Array[StringName])
+	var fifth := _rivet_variant()
+	ProjectileModifierStack.from_items([cold, hot]).apply(fifth, 5)
+	check(
+		StatusEffectController.CHILL in fifth.status_effects
+			and StatusEffectController.BURN in fifth.status_effects,
+		"a fifth shot with both items carries both statuses (got %s)" % [fifth.status_effects],
+	)
+
+	# Shot four: Cold Cache is unconditional, Hot Reload is not.
+	var chill_only: Array[StringName] = [StatusEffectController.CHILL]
+	check(
+		both.status_effects == chill_only,
+		"a shot outside the fifth carries only the unconditional one (got %s)" % [both.status_effects],
+	)
+
+
+## `duplicate()` is shallow, so every "copy" of a projectile config used to share one array
+## object. Items append to `status_effects`, which means the weapon's own resource would have
+## grown by an entry per shot and a Cold Cache run would have been applying dozens of stacked
+## chills within a room — while the source `.tres` on disk stayed innocent.
+func _test_spawn_copy_does_not_share_its_status_array() -> void:
+	var source := load(RIVET_PATH) as ProjectileConfig
+	var before := source.status_effects.size()
+
+	var first := source.spawn_copy()
+	first.status_effects.append(&"chill")
+	var second := source.spawn_copy()
+
+	check(source.status_effects.size() == before, "appending to a copy leaves the source alone")
+	check(second.status_effects.is_empty(), "and the next copy does not inherit it")
+
+
+func _test_chill_stacks_then_freezes() -> void:
+	var arena := _make_arena()
+	var bot := _add_bot(arena, Vector2.ZERO)
+	await advance_physics(2)
+
+	var status := bot.get_status_controller()
+	if not require(status, "the enemy has a status controller"):
+		await _teardown(arena)
+		return
+
+	var definition: Dictionary = StatusEffectController.DEFINITIONS[StatusEffectController.CHILL]
+	var to_freeze := int(definition["max_stacks"])
+
+	for _stack: int in to_freeze - 1:
+		status.apply(StatusEffectController.CHILL)
+	var slowed := status.get_speed_scale()
+	check(slowed < 1.0 and slowed > 0.0, "chill slows without stopping (scale %.2f)" % slowed)
+	check(
+		status.get_stacks(StatusEffectController.CHILL) == to_freeze - 1,
+		"and accumulates one stack per hit",
+	)
+
+	status.apply(StatusEffectController.CHILL)
+	check(status.is_frozen(), "the last chill freezes the target outright")
+	check(
+		not status.has_effect(StatusEffectController.CHILL),
+		"and spends the chill stacks rather than carrying both",
+	)
+	await _teardown(arena)
+
+
+## Cold Cache chills on *every* hit and the starting weapon fires four times a second, so
+## without an immunity window one item removes a target from the fight permanently. The
+## window is what keeps it a strong item rather than an off switch.
+func _test_freeze_cannot_be_chained_indefinitely() -> void:
+	var arena := _make_arena()
+	var bot := _add_bot(arena, Vector2.ZERO)
+	await advance_physics(2)
+	var status := bot.get_status_controller()
+
+	status.apply(StatusEffectController.FREEZE)
+	check(status.is_frozen(), "the target freezes")
+
+	var definition: Dictionary = StatusEffectController.DEFINITIONS[StatusEffectController.FREEZE]
+	var frames := int(float(definition["seconds"]) * Engine.physics_ticks_per_second) + 4
+	await advance_physics(frames)
+	check(not status.is_frozen(), "and thaws on its own")
+
+	check(
+		not status.apply(StatusEffectController.FREEZE),
+		"a freeze arriving immediately after is refused",
+	)
+	check(not status.is_frozen(), "so the target actually gets to move")
+
+	# Chill must keep working during the window, or the item stops doing anything at all
+	# rather than merely stopping the lock.
+	check(status.apply(StatusEffectController.CHILL), "but chill still lands during it")
+	await _teardown(arena)
+
+
+## The Development plan is explicit that boss resistance "should shorten control effects
+## rather than make those items do nothing", which is two assertions, not one.
+func _test_resistance_shortens_control_without_removing_it() -> void:
+	var plain := StatusEffectController.new()
+	var resistant := StatusEffectController.new()
+	resistant.control_resistance = 0.65
+	add_child(plain)
+	add_child(resistant)
+	await advance_physics(1)
+
+	plain.apply(StatusEffectController.FREEZE)
+	resistant.apply(StatusEffectController.FREEZE)
+
+	var plain_left := plain.get_seconds_left(StatusEffectController.FREEZE)
+	var resistant_left := resistant.get_seconds_left(StatusEffectController.FREEZE)
+	check(resistant_left < plain_left, "resistance shortens the freeze (%.2fs against %.2fs)" % [
+		resistant_left, plain_left,
+	])
+	check(resistant.is_frozen(), "but the freeze still happens")
+
+	# The floor is what makes that true at the extreme, so it is checked at the extreme.
+	var immovable := StatusEffectController.new()
+	immovable.control_resistance = 1.0
+	add_child(immovable)
+	await advance_physics(1)
+	immovable.apply(StatusEffectController.FREEZE)
+	check(
+		immovable.get_seconds_left(StatusEffectController.FREEZE)
+			>= StatusEffectController.MIN_CONTROL_SECONDS,
+		"even total resistance leaves a real, if brief, window",
+	)
+
+	plain.queue_free()
+	resistant.queue_free()
+	immovable.queue_free()
+	await advance_physics(2)
+
+
+func _test_burn_damages_over_time_and_is_not_resisted() -> void:
+	var arena := _make_arena()
+	var bot := _add_bot(arena, Vector2.ZERO)
+	await advance_physics(2)
+
+	var status := bot.get_status_controller()
+	var health := bot.get_health_component()
+	var before := health.current
+
+	status.apply(StatusEffectController.BURN)
+	var definition: Dictionary = StatusEffectController.DEFINITIONS[StatusEffectController.BURN]
+	await advance_physics(int(float(definition["tick_seconds"]) * Engine.physics_ticks_per_second) + 4)
+
+	check(health.current < before, "burning costs integrity over time (%.2f -> %.2f)" % [
+		before, health.current,
+	])
+	check(
+		is_equal_approx(status.get_speed_scale(), 1.0),
+		"and does not slow the target — burn is damage, not control",
+	)
+
+	# Resistance is for control effects only; shortening a burn would make one number mean
+	# two different things depending on which item the player brought.
+	var resistant := StatusEffectController.new()
+	resistant.control_resistance = 1.0
+	add_child(resistant)
+	await advance_physics(1)
+	resistant.apply(StatusEffectController.BURN)
+	check_near(
+		resistant.get_seconds_left(StatusEffectController.BURN),
+		float(definition["seconds"]),
+		"a fully resistant target still burns for the full duration",
+		0.1,
+	)
+	resistant.queue_free()
+	await _teardown(arena)
+
+
+func _test_statuses_compose_rather_than_overwrite() -> void:
+	var arena := _make_arena()
+	var bot := _add_bot(arena, Vector2.ZERO)
+	await advance_physics(2)
+	var status := bot.get_status_controller()
+
+	status.apply(StatusEffectController.CHILL)
+	status.apply(StatusEffectController.BURN)
+
+	check(
+		status.has_effect(StatusEffectController.CHILL)
+			and status.has_effect(StatusEffectController.BURN),
+		"an enemy can be chilled and burning at once",
+	)
+	check(
+		status.get_speed_scale() < 1.0,
+		"the chill still slows it while the burn runs (%.2f)" % status.get_speed_scale(),
+	)
+
+	# And the slow is the product across sources rather than the worst single one, which is
+	# what stops a second slow item from being worth nothing.
+	var single := status.get_speed_scale()
+	status.apply(StatusEffectController.CHILL)
+	check(status.get_speed_scale() < single, "a second chill compounds rather than replacing")
+	await _teardown(arena)
+
+
+# --- Development's six items ---------------------------------------------------
+
+
+func _test_memory_spike_pierces_one_extra_enemy() -> void:
+	var arena := _make_arena()
+	var near := _add_bot(arena, Vector2(60.0, 0.0))
+	var far := _add_bot(arena, Vector2(110.0, 0.0))
+	await advance_physics(2)
+
+	var near_before := near.get_health_component().current
+	var far_before := far.get_health_component().current
+
+	_fire_at(arena, Vector2.ZERO, Vector2.RIGHT, _config_with([&"memory_spike"] as Array[StringName]))
+	await advance_physics(20)
+
+	check(near.get_health_component().current < near_before, "the first enemy is hit")
+	check(
+		far.get_health_component().current < far_before,
+		"and the shot carries on into the one behind it",
+	)
+	await _teardown(arena)
+
+
+func _test_core_dump_explodes_on_impact() -> void:
+	var arena := _make_arena()
+	var struck := _add_bot(arena, Vector2(60.0, 0.0))
+	# Beside the target rather than behind it, so what kills it can only be the blast.
+	var neighbour := _add_bot(arena, Vector2(60.0, 20.0))
+	await advance_physics(2)
+
+	var neighbour_before := neighbour.get_health_component().current
+	_fire_at(arena, Vector2.ZERO, Vector2.RIGHT, _config_with([&"core_dump"] as Array[StringName]))
+	await advance_physics(20)
+
+	check(struck.get_health_component().current < 3.0, "the shot hits what it was aimed at")
+	check(
+		neighbour.get_health_component().current < neighbour_before,
+		"and the blast catches the enemy beside it",
+	)
+	await _teardown(arena)
+
+
+func _test_cold_cache_chills_what_it_hits() -> void:
+	var arena := _make_arena()
+	var bot := _add_bot(arena, Vector2(60.0, 0.0))
+	await advance_physics(2)
+
+	_fire_at(arena, Vector2.ZERO, Vector2.RIGHT, _config_with([&"cold_cache"] as Array[StringName]))
+	await advance_physics(20)
+
+	var status := bot.get_status_controller()
+	check(status.has_effect(StatusEffectController.CHILL), "a Cold Cache hit chills the target")
+	check(status.get_speed_scale() < 1.0, "which actually slows it")
+	await _teardown(arena)
+
+
+func _test_hot_reload_burns_on_the_fifth_shot() -> void:
+	var arena := _make_arena()
+	var bot := _add_bot(arena, Vector2(60.0, 0.0))
+	await advance_physics(2)
+
+	var hot := _require_item(&"hot_reload")
+	if hot == null:
+		await _teardown(arena)
+		return
+	var stack := ProjectileModifierStack.from_items([hot])
+
+	var fourth := _rivet_variant()
+	stack.apply(fourth, 4)
+	_fire_at(arena, Vector2.ZERO, Vector2.RIGHT, fourth)
+	await advance_physics(20)
+	check(
+		not bot.get_status_controller().has_effect(StatusEffectController.BURN),
+		"a fourth shot does not burn",
+	)
+
+	var fifth := _rivet_variant()
+	stack.apply(fifth, 5)
+	_fire_at(arena, Vector2.ZERO, Vector2.RIGHT, fifth)
+	await advance_physics(20)
+	check(
+		bot.get_status_controller().has_effect(StatusEffectController.BURN),
+		"the fifth one does",
+	)
+	await _teardown(arena)
+
+
+## Breakpoint is the only one of the six whose effect is not carried by a projectile, so it
+## is the only one that can be broken by the dash signal changing shape.
+func _test_breakpoint_chills_on_a_dash() -> void:
+	var arena := _make_arena()
+	var effects := ItemEffects.new()
+	arena.add_child(effects)
+
+	var player := _add_player(arena)
+	player.global_position = Vector2.ZERO
+	var inventory := ItemInventory.find_on(player)
+	var item := _require_item(&"breakpoint")
+	if item == null or inventory == null:
+		await _teardown(arena)
+		return
+	inventory.add(item)
+	effects.bind_player(player)
+
+	var near := _add_bot(arena, Vector2(40.0, 0.0))
+	var far := _add_bot(arena, Vector2(item.dash_pulse_radius + 60.0, 0.0))
+	await advance_physics(2)
+
+	EventBus.player_dash_started.emit(Vector2.RIGHT)
+	await advance_physics(2)
+
+	check(
+		near.get_status_controller().has_effect(StatusEffectController.CHILL),
+		"dashing chills an enemy inside the pulse",
+	)
+	check(
+		not far.get_status_controller().has_effect(StatusEffectController.CHILL),
+		"and leaves one outside it alone",
+	)
+	await _teardown(arena)
+
+
+# --- The three that are purely a cost ------------------------------------------
+#
+# Blocking I/O, Tech Debt, and Legacy Runtime are the first items in the pool with no upside
+# at all. They sit in the full pool — shop stands and boss choices included — so an offer the
+# player should refuse is what makes the offers they accept a decision.
+
+
+## The player is never shown a description, so rarity, category, and the accent colour are
+## the entire warning. An item that hurts and looks like a reward is a lie the pickup banner
+## cannot correct.
+func _test_the_harmful_three_are_labelled_as_such() -> void:
+	for id: StringName in [&"blocking_io", &"tech_debt", &"legacy_runtime"]:
+		var item := _require_item(id)
+		if item == null:
+			continue
+		check(item.rarity == ItemConfig.Rarity.CORRUPTED, "%s is flagged corrupted" % id)
+		check(
+			item.category == ItemConfig.Category.CORRUPTED_FIRMWARE,
+			"%s is categorised as corrupted firmware" % id,
+		)
+		check(item.has_tag(&"hindrance"), "%s is tagged as a hindrance" % id)
+		check(
+			item.fire_rate_scale <= 1.0
+				and item.max_integrity_delta <= 0.0
+				and item.heal_on_pickup <= 0.0
+				and item.drone_count <= 0
+				and item.projectile_scale.is_empty()
+				and item.projectile_add.is_empty(),
+			"%s grants nothing — it is a cost, not a trade" % id,
+		)
+
+
+func _test_blocking_io_forbids_firing_on_the_move() -> void:
+	var arena := _make_arena()
+	var player := _add_player(arena)
+	await advance_physics(2)
+
+	# Moving, with nothing held: the ordinary robot fires on the move.
+	player.velocity = Vector2(Player.STILLNESS_SPEED + 60.0, 0.0)
+	check(player._can_fire_while_moving(), "without the item, moving does not block the weapon")
+
+	var inventory := ItemInventory.find_on(player)
+	var item := _require_item(&"blocking_io")
+	if item == null or inventory == null:
+		await _teardown(arena)
+		return
+	inventory.add(item)
+	await advance_physics(1)
+
+	check(not player._can_fire_while_moving(), "with it held, a moving robot cannot fire")
+
+	player.velocity = Vector2.ZERO
+	check(player._can_fire_while_moving(), "and a stopped one can")
+
+	# The threshold exists so the deceleration tail is not a permanent jam; a robot barely
+	# drifting has stopped as far as the player is concerned.
+	player.velocity = Vector2(Player.STILLNESS_SPEED * 0.5, 0.0)
+	check(player._can_fire_while_moving(), "a robot coasting to a halt counts as stopped")
+	await _teardown(arena)
+
+
+## The debt has to survive the room it was incurred in, apply to enemies spawned later, and
+## reach Recursion's fragments — which size themselves *after* spawning and would otherwise
+## be a debt-free enemy farmed out of a debt-scaled one.
+func _test_tech_debt_compounds_across_rooms() -> void:
+	var restore := RunManager.enemy_health_scale
+	RunManager.enemy_health_scale = 1.0
+
+	var arena := _make_arena()
+	var effects := ItemEffects.new()
+	arena.add_child(effects)
+	var player := _add_player(arena)
+	var inventory := ItemInventory.find_on(player)
+	var item := _require_item(&"tech_debt")
+	if item == null or inventory == null:
+		RunManager.enemy_health_scale = restore
+		await _teardown(arena)
+		return
+	inventory.add(item)
+	effects.bind_player(player)
+	await advance_physics(2)
+
+	var baseline := _add_bot(arena, Vector2(200.0, 0.0))
+	await advance_physics(2)
+	var plain_health := baseline.get_health_component().max_health
+
+	EventBus.room_cleared.emit()
+	EventBus.room_cleared.emit()
+	await advance_physics(1)
+
+	check_near(
+		RunManager.enemy_health_scale,
+		1.0 + item.enemy_health_growth_per_room * 2.0,
+		"two cleared rooms accrue two rooms' worth of debt",
+	)
+
+	var later := _add_bot(arena, Vector2(240.0, 0.0))
+	await advance_physics(2)
+	check(
+		later.get_health_component().max_health > plain_health,
+		"an enemy met after the debt is tougher (%.2f against %.2f)" % [
+			later.get_health_component().max_health, plain_health,
+		],
+	)
+
+	# The enemy already standing there keeps the pool it was built with. Retroactively
+	# healing live enemies mid-room would be a different and much stranger item.
+	check_near(
+		baseline.get_health_component().max_health,
+		plain_health,
+		"and one already in the room is untouched",
+	)
+
+	RunManager.enemy_health_scale = restore
+	await _teardown(arena)
+
+
+func _test_legacy_runtime_cripples_the_dash_without_removing_it() -> void:
+	var arena := _make_arena()
+	var player := _add_player(arena)
+	await advance_physics(2)
+
+	var dash: DashController = player.get_node("%Dash")
+	var base_cooldown := dash.get_cooldown()
+	var base_charges := dash.get_max_charges()
+
+	var inventory := ItemInventory.find_on(player)
+	var item := _require_item(&"legacy_runtime")
+	var battery := _require_item(&"backup_battery")
+	if item == null or battery == null or inventory == null:
+		await _teardown(arena)
+		return
+
+	inventory.add(item)
+	await advance_physics(1)
+	check_near(
+		dash.get_cooldown(),
+		base_cooldown * item.dash_cooldown_scale,
+		"the dash cooldown is multiplied",
+	)
+
+	# The floor is the point. Base charges are one, so a naive −1 would leave a robot that
+	# can never dash — a different game, not a harder one.
+	check(
+		dash.get_max_charges() >= 1,
+		"but the robot can still dash at all (%d charges)" % dash.get_max_charges(),
+	)
+	check_near(float(dash.get_max_charges()), float(base_charges), "the last charge is protected")
+
+	# Held alongside Backup Battery, the −1 finally has something to take.
+	inventory.add(battery)
+	await advance_physics(1)
+	check(
+		dash.get_max_charges() == base_charges,
+		"and with a Backup Battery held it cancels that charge instead (%d)" % dash.get_max_charges(),
+	)
+	await _teardown(arena)
+
+
+# --- Fixtures -----------------------------------------------------------------
 
 
 func _add_pickup(arena: Node2D, at: Vector2) -> Pickup:

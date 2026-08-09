@@ -52,11 +52,23 @@ const WALL_BLOCK := preload("res://scenes/rooms/wall_block.tscn")
 
 var plan: RoomPlan
 
+## The floor's look, or null for a room built without one. Kept because walls and obstacles
+## are built lazily during `build` and again nowhere else — but a room that later grows a
+## destructible block would want it too.
+var theme: FloorTheme
+
 
 ## Builds the room's geometry. Must be called after the room is in the tree.
-func build(room_plan: RoomPlan) -> void:
+##
+## `room_theme` is optional and defaults to null, which keeps the textures authored into
+## `room.tscn` and `wall_block.tscn`. Every test arena in the suite builds a room without one
+## and should keep working without knowing themes exist.
+func build(room_plan: RoomPlan, room_theme: FloorTheme = null) -> void:
 	plan = room_plan
+	theme = room_theme
 
+	if theme != null and theme.floor_texture != null:
+		_floor.texture = theme.floor_texture
 	_floor.region_rect = Rect2(Vector2.ZERO, Vector2(INTERIOR_SIZE))
 	_build_wall_ring(plan.get_door_directions())
 	_build_obstacles()
@@ -246,8 +258,16 @@ func _add_wall(top_left: Vector2i, size: Vector2i) -> void:
 		return
 	var block: WallBlock = WALL_BLOCK.instantiate()
 	block.size = size
+	block.texture = _wall_texture()
 	block.position = Vector2(top_left)
 	_walls.add_child(block)
+
+
+## The theme's wall sheet, or null to leave the authored one alone. One accessor for both
+## the perimeter and the obstacles, because a room whose walls and racks were made of
+## different materials would look like two rooms.
+func _wall_texture() -> Texture2D:
+	return theme.wall_texture if theme != null else null
 
 
 func _build_obstacles() -> void:
@@ -256,6 +276,7 @@ func _build_obstacles() -> void:
 	for tile_rect: Rect2i in plan.template.obstacles:
 		var block: WallBlock = WALL_BLOCK.instantiate()
 		block.size = tile_rect.size * TILE_SIZE
+		block.texture = _wall_texture()
 		block.position = Vector2(tile_rect.position * TILE_SIZE)
 		_obstacles.add_child(block)
 

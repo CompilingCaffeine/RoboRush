@@ -36,6 +36,17 @@ var floor_seed: int = 0
 ## game did not notice".
 var offered_item_ids: Array[StringName] = []
 
+## Multiplier on every enemy's maximum integrity, for the rest of the run. One unless
+## something has accrued against it — Tech Debt is the only thing that does, adding to it on
+## every room cleared.
+##
+## Run-scoped rather than carried on the item, because the debt has to outlive the room it
+## was incurred in and apply to enemies the inventory will never meet. It is deliberately not
+## applied to bosses: a boss pool is already tuned to the minute, and compounding it with a
+## penalty the player accepted eight rooms earlier would end runs at the door rather than in
+## the fight.
+var enemy_health_scale: float = 1.0
+
 ## Spec section 25. Replaced wholesale on a new run rather than reset field by field, so a
 ## statistic added later cannot be forgotten in the reset.
 var stats := RunStats.new()
@@ -77,6 +88,7 @@ func begin_run(seed_value: int) -> void:
 	floor_number = 1
 	floor_seed = seed_value
 	offered_item_ids.clear()
+	enemy_health_scale = 1.0
 	stats = RunStats.new()
 	records_beaten = []
 	_is_timing = true

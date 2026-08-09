@@ -197,7 +197,24 @@ func _on_body_entered(body: Node2D) -> void:
 			DamageInfo.new(config.damage, get_shooter(), _direction, config.knockback)
 		)
 
+	_apply_status_effects(body)
 	_impact(body, global_position, -_direction)
+
+
+## Applies whatever statuses this shot is carrying to the body it hit.
+##
+## Separate from the damage above and not gated on it: a status is a consequence of being
+## hit, not of losing integrity, so a shot that lands on something already at zero still
+## chills it. Bodies with no controller — walls, and any enemy scene not given one — simply
+## have nothing to apply to, which is how they opt out without a check here naming them.
+func _apply_status_effects(body: Node) -> void:
+	if config.status_effects.is_empty():
+		return
+	var status := StatusEffectController.find_on(body)
+	if status == null:
+		return
+	for id: StringName in config.status_effects:
+		status.apply(id)
 
 
 ## The shooter, or null if it has been freed since firing. Passing a freed Object into

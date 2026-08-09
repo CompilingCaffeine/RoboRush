@@ -19,6 +19,8 @@ var _owner_body: Node2D
 
 func _ready() -> void:
 	EventBus.enemy_killed.connect(_on_enemy_killed)
+	EventBus.player_dash_started.connect(_on_player_dash_started)
+	EventBus.room_cleared.connect(_on_room_cleared)
 
 
 ## Scrap Magnet. Pickups are dragged rather than teleported, so the player can see what is
@@ -68,3 +70,57 @@ func _on_enemy_killed(_enemy: Node, position: Vector2) -> void:
 			Teams.Id.PLAYER,
 			_owner_body,
 		)
+
+
+## Breakpoint. A dash leaves a status pulse behind it, which turns the dodge the player
+## already had into a repositioning tool: you get out, and what you got out of is slower.
+##
+## Fired on the *start* of the dash and centred on where the robot was standing, not where
+## it lands. Dashing away from a pack and slowing it is the intended play; dashing into a
+## pack, slowing it and then being inside it is not a reward, and centring on the departure
+## point is what makes the first one the natural read.
+##
+## Enemies are found by group rather than by shape query, which is the convention `Teams`
+## already documents: this can be reached from inside a physics callback, and a room holds a
+## handful of enemies.
+##
+## Nothing is emitted for the pulse itself. `explosion_triggered` was the obvious candidate
+## and is wrong: it means "a blast went off", and the feedback director answers it with a
+## fireball, screen shake, and a detonation — on every dash, for an effect that deals no
+## damage. What the player needs to see is *which enemies got slowed*, and
+## `StatusEffectController` already draws that on each of them.
+func _on_player_dash_started(_direction: Vector2) -> void:
+	if _inventory == null or _owner_body == null:
+		return
+	var pulses := _inventory.get_dash_pulses()
+	if pulses.is_empty():
+		return
+
+	var origin := _owner_body.global_position
+	for item: ItemConfig in pulses:
+		for node: Node in get_tree().get_nodes_in_group(Teams.GROUP_ENEMY):
+			var enemy := node as Node2D
+			if enemy == null or origin.distance_to(enemy.global_position) > item.dash_pulse_radius:
+				continue
+			var status := StatusEffectController.find_on(enemy)
+			if status == null:
+				continue
+			for id: StringName in item.dash_pulse_effects:
+				status.apply(id)
+
+
+## Tech Debt. Clearing a room makes every enemy the player meets afterwards tougher, for the
+## rest of the run.
+##
+## Charged on `room_cleared` rather than on entering a room, so the debt is incurred by the
+## thing the player most wants to do. It accrues into `RunManager` rather than being asked of
+## the inventory at spawn time, because it has to outlive the room: an enemy in room nine is
+## carrying interest from room two, and the alternative — recomputing from "rooms cleared so
+## far" — would silently backdate the whole debt onto a player who picked the item up late.
+func _on_room_cleared() -> void:
+	if _inventory == null:
+		return
+	var growth := _inventory.get_enemy_health_growth_per_room()
+	if growth <= 0.0:
+		return
+	RunManager.enemy_health_scale += growth

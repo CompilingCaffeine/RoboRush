@@ -20,6 +20,17 @@ signal room_entered(plan: RoomPlan)
 ## the same reasoning that keeps `room_entered` a plain signal too.
 signal floor_advanced(config: FloorConfig)
 
+## This floor's look and sound, emitted at the *top* of `build()` — before any room exists and
+## before the player is placed.
+##
+## Separate from `floor_advanced`, which fires after the build, because presentation has to be
+## in place before the floor starts announcing itself. Placing the player in the start room
+## emits `room_entered`, which starts the music; a theme applied after that plays the previous
+## floor's explore loop over the new floor's opening room and only corrects itself at the next
+## door. Two signals rather than one moved earlier, because everything else listening to
+## `floor_advanced` genuinely does want the finished floor.
+signal floor_theme_changed(theme: FloorTheme)
+
 ## Emitted once the boss is in its arena, carrying this floor's boss identity — plain signal
 ## for the same reason `floor_advanced` is: only main.gd needs it, to hand the HUD a name it
 ## has no other way to learn (see `FloorConfig.boss_display_name`).
@@ -87,6 +98,7 @@ func build(player: Player, seed_value: int) -> bool:
 	assert(config != null, "FloorController.config is unset: assign a FloorConfig resource.")
 	_player = player
 	_rng.seed = seed_value
+	floor_theme_changed.emit(config.theme)
 
 	layout = FloorGenerator.generate(config, seed_value)
 	if layout == null:
@@ -133,7 +145,7 @@ func _instantiate_rooms() -> void:
 		room.position = Vector2(plan.cell * Room.OUTER_SIZE + Vector2i.ONE * Room.WALL_THICKNESS)
 		_rooms_container.add_child(room)
 
-		room.build(plan)
+		room.build(plan, config.theme)
 		if plan.type == RoomTemplate.Type.COMBAT:
 			room.populate(config, _rng)
 		elif plan.type == RoomTemplate.Type.SHOP:

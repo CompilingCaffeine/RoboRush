@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="FloorTheme" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/floor_theme.gd" id="1_theme"]
+[ext_resource type="Texture2D" path="res://art/environments/floor.png" id="2_floor"]
+[ext_resource type="Texture2D" path="res://art/environments/wall.png" id="3_wall"]
+
+[resource]
+script = ExtResource("1_theme")
+floor_texture = ExtResource("2_floor")
+wall_texture = ExtResource("3_wall")
+explore_music = &"explore"
+boss_music = &"boss"

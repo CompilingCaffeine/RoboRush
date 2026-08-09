@@ -16,12 +16,22 @@ extends StaticBody2D
 @export var size := Vector2i(16, 16):
 	set = _set_size
 
+## The tile sheet this block repeats. Assigned from the floor's theme; null keeps whatever
+## the scene was authored with, which is what an unthemed floor and every test arena get.
+##
+## A property with a setter rather than a method, so it can be assigned before the block
+## enters the tree the same way `size` can — the room builds a block, sets both, and adds it,
+## and neither ordering produces a frame of the wrong texture.
+@export var texture: Texture2D:
+	set = _set_texture
+
 @onready var _sprite: Sprite2D = $Sprite
 @onready var _shape: CollisionShape2D = $Shape
 
 
 func _ready() -> void:
 	_apply_size()
+	_apply_texture()
 
 
 func _set_size(value: Vector2i) -> void:
@@ -31,6 +41,19 @@ func _set_size(value: Vector2i) -> void:
 	# final value in that case.
 	if is_node_ready():
 		_apply_size()
+
+
+func _set_texture(value: Texture2D) -> void:
+	texture = value
+	if is_node_ready():
+		_apply_texture()
+
+
+## Null is deliberately not applied. An unset theme means "keep the authored texture", not
+## "show nothing" — a floor that forgot to name a wall sheet should look plain, not invisible.
+func _apply_texture() -> void:
+	if texture != null:
+		_sprite.texture = texture
 
 
 func _apply_size() -> void:

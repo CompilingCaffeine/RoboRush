@@ -90,9 +90,13 @@ extends Resource
 @export var return_enabled: bool = false
 
 
-@export_group("Composition (declared, not yet honoured)")
-
-## Status effect ids applied on hit, resolved by a StatusEffectController. Milestone 5.
+## Status effect ids applied to whatever this hits, resolved by that body's
+## `StatusEffectController`. Cold Cache appends `chill` and Hot Reload appends `burn`; a
+## shot carrying both applies both, which is why items *append* here rather than assigning.
+##
+## Unknown ids are reported by the controller rather than ignored, the same guard
+## `ProjectileModifierStack` puts on field names and for the same reason: a typo that
+## silently does nothing is the failure mode a string-keyed design is most exposed to.
 @export var status_effects: Array[StringName] = []
 
 @export_group("Presentation")
@@ -109,5 +113,14 @@ extends Resource
 ## Projectiles decrement their own pierce and bounce counters as they travel, so
 ## each one must own its config. Handing a projectile the shared resource would let
 ## the first shot permanently spend the weapon's bounces.
+##
+## `status_effects` is re-created rather than left to `duplicate()`, which is shallow and
+## would hand every copy the *same* array. Items append to that field, so the shared array
+## would have grown by one entry per shot fired for the rest of the run — a Cold Cache build
+## reaching a hundred stacked chills a few rooms in. Deep-duplicating the whole resource
+## would fix it and also clone the texture on every shot, which is the wrong trade sixty
+## times a second.
 func spawn_copy() -> ProjectileConfig:
-	return duplicate() as ProjectileConfig
+	var copy := duplicate() as ProjectileConfig
+	copy.status_effects = status_effects.duplicate()
+	return copy

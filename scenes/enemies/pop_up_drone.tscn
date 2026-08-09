@@ -1,4 +1,4 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://scenes/enemies/pop_up_drone.gd" id="1_script"]
 [ext_resource type="Resource" path="res://data/enemies/pop_up_drone.tres" id="2_config"]
@@ -7,6 +7,7 @@
 [ext_resource type="Script" path="res://scripts/components/hurt_flash.gd" id="5_flash"]
 [ext_resource type="Script" path="res://scripts/components/weapon_controller.gd" id="6_weapon"]
 [ext_resource type="Resource" path="res://data/weapons/drone_spread.tres" id="7_weapon_res"]
+[ext_resource type="Script" path="res://scripts/components/status_effect_controller.gd" id="99_status"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_body"]
 radius = 6.0
@@ -39,3 +40,8 @@ config = ExtResource("7_weapon_res")
 unique_name_in_owner = true
 script = ExtResource("5_flash")
 target_path = NodePath("../Sprite")
+
+[node name="Status" type="Node2D" parent="."]
+unique_name_in_owner = true
+script = ExtResource("99_status")
+indicator_radius = 9.0

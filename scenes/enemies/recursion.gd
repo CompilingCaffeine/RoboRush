@@ -66,7 +66,7 @@ func _become_fragment() -> void:
 	config = own_config
 	_tuning = own_config
 
-	get_health_component().configure(_tuning.fragment_health, 0.0)
+	get_health_component().configure(scaled_max_health(_tuning.fragment_health), 0.0)
 
 	var factor := maxf(_tuning.fragment_scale, 0.1)
 	_sprite.scale = Vector2.ONE * factor

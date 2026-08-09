@@ -48,6 +48,16 @@ PALETTE = {
     "c": (0x58, 0xF0, 0xC8, 255),  # item cyan (same as screen glow, reads as "system")
     "x": (0xE0, 0x4A, 0x4A, 255),  # item red / danger
     "V": (0xC8, 0x8C, 0xFF, 255),  # leech highlight
+    # --- Development's environment. The Help Desk is grey chassis and amber accents; this
+    # --- floor is the same machinery built out of cyan and violet, per the floor brief. Kept
+    # --- as its own ramp rather than tinting the existing one, because the two sheets sit
+    # --- beside each other in a diff and a reader should be able to see which is which.
+    "n": (0x2A, 0x26, 0x40, 255),  # dev chassis dark
+    "u": (0x45, 0x3F, 0x63, 255),  # dev chassis mid
+    "U": (0x6B, 0x62, 0x91, 255),  # dev chassis light
+    "z": (0x14, 0x15, 0x22, 255),  # dev floor base
+    "Z": (0x25, 0x2A, 0x3E, 255),  # dev floor grid
+    "t": (0x34, 0x3B, 0x56, 255),  # dev floor speck
 }
 
 
@@ -762,6 +772,116 @@ ITEM_ICONS = {
         "xxxYYxxx",
         "xxxxxxxx",
     ],
+    # --- Development's six. ---
+    # Memory Spike: a nail driven through a stack of plates. Pierce, drawn as the thing
+    # being pierced rather than as an arrow, so it does not read as another shot icon.
+    "memory_spike": [
+        "...YY...",
+        "...bb...",
+        "mmmbbmmm",
+        "...bb...",
+        "mmmbbmmm",
+        "...bb...",
+        "mmmbbmmm",
+        "...bb...",
+    ],
+    # Core Dump: a shot bursting on contact. The burst is offset to the right so it reads
+    # as "on impact" rather than as Volatile Kernel's symmetric fireball.
+    "core_dump": [
+        "......x.",
+        "y....xax",
+        "yy..xaYa",
+        "yyy.xaYY",
+        "yyy.xaYY",
+        "yy..xaYa",
+        "y....xax",
+        "......x.",
+    ],
+    # Cold Cache: a snowflake over a frozen block. Cyan, and the only icon built from
+    # single pixels — frost should look brittle next to Hot Reload's solid flame.
+    "cold_cache": [
+        "..b.b...",
+        "...b....",
+        "b.bbb.b.",
+        ".bbbbb..",
+        "b.bbb.b.",
+        "...b....",
+        "..b.b...",
+        "cccccccc",
+    ],
+    # Hot Reload: a flame over a reload arrow. Reads as the fifth-shot item it is — the
+    # arrow is the cycle, the flame is what arrives at the end of it.
+    "hot_reload": [
+        "....a...",
+        "...aY...",
+        "..aYYa..",
+        ".aYYYYa.",
+        ".aYYYYa.",
+        "..aaaa..",
+        ".x....x.",
+        "..xxxx..",
+    ],
+    # Breakpoint: the debugger's dot on a line of execution, with the line stopped dead at
+    # it. The one icon that is a *symbol* rather than an object, because the item is too.
+    "breakpoint": [
+        "........",
+        "..xxxx..",
+        ".xxRRxx.",
+        "cxxRRxxc",
+        "cxxRRxxc",
+        ".xxRRxx.",
+        "..xxxx..",
+        "cc....cc",
+    ],
+    # Stack Overflow: a stack grown past its frame. Corrupted, so it wears Unsafe
+    # Overclock's red — the plates are spilling out of the container that should hold them.
+    "stack_overflow": [
+        "vvvvvvvv",
+        "v......v",
+        "vvvvvvvv",
+        ".vvvvvv.",
+        "..vvvv..",
+        "xxxxxxxx",
+        ".xxxxxx.",
+        "..xxxx..",
+    ],
+    # --- The three that are purely a cost. All red-on-red with no bright core, so the row
+    # --- of them in the item bar reads as a warning label rather than as equipment. This is
+    # --- the only signal the player gets: the pickup banner carries a name and no
+    # --- description, so an icon that looked like a reward would be a lie.
+    # Blocking I/O: a pause symbol jammed into a barrier.
+    "blocking_io": [
+        "xxxxxxxx",
+        "x......x",
+        "x.RR.R.x",
+        "x.RR.R.x",
+        "x.RR.R.x",
+        "x.RR.R.x",
+        "x......x",
+        "xxxxxxxx",
+    ],
+    # Tech Debt: a bar chart that only goes one way, with the ground falling out under it.
+    "tech_debt": [
+        ".......x",
+        ".....x.x",
+        ".....x.x",
+        "...x.x.x",
+        "...x.x.x",
+        ".x.x.x.x",
+        ".x.x.x.x",
+        "wwwwwwww",
+    ],
+    # Legacy Runtime: an hourglass, nearly all of it still in the top bulb.
+    "legacy_runtime": [
+        "xxxxxxxx",
+        ".xwwwwx.",
+        "..xwwx..",
+        "...xx...",
+        "...xx...",
+        "..x..x..",
+        ".xw..wx.",
+        "xxxxxxxx",
+    ],
 }
 
 
@@ -919,6 +1039,161 @@ def floor_tile() -> list[str]:
     return compose_sheet(FLOOR_LAYOUT, floor_panel)
 
 
+# --- Development's environment ------------------------------------------------------
+#
+# The floor brief asks for "cyan and violet machinery, amber warnings, red execution errors,
+# broken IDE windows, temporary build scaffolds". Same 64x64 sheet construction as the Help
+# Desk's, same four-tile repeat period, different vocabulary — this is a lab someone is still
+# working in rather than a corridor someone gave up on.
+#
+# The two floors are told apart by *shape* as much as by colour. The Help Desk's panels are
+# closed and finished: rivets, louvres, sealed conduit. Development's are open and unfinished:
+# a window with its own title bar, a diagonal brace holding something up, a rack with its guts
+# showing. A player who is colour-blind should still know which floor they are on.
+
+
+def _dev_wall_base() -> list[list[str]]:
+    """Development's bevel. Same lit-top/shaded-bottom read as the Help Desk's so walls still
+    look like walls, in the violet ramp so they do not look like the same walls."""
+    grid = _blank_panel("u")
+    for x in range(TILE):
+        grid[0][x] = "o"
+        grid[1][x] = "U"
+        grid[TILE - 2][x] = "n"
+        grid[TILE - 1][x] = "o"
+    for y in range(TILE):
+        grid[y][0] = "o"
+        grid[y][TILE - 1] = "o"
+    return grid
+
+
+def dev_wall_panel(kind: str) -> list[list[str]]:
+    """One 16x16 Development wall panel."""
+    grid = _dev_wall_base()
+
+    if kind == "window":
+        # A broken IDE window: title bar, close box, three lines of text, and one line that
+        # has become a red error. The single most on-brief marking on the floor.
+        for y in range(3, 13):
+            for x in range(2, 14):
+                grid[y][x] = "z"
+        for x in range(2, 14):
+            grid[3][x] = "n"
+            grid[12][x] = "o"
+        for y in range(3, 13):
+            grid[y][2] = "o"
+            grid[y][13] = "o"
+        grid[3][12] = "x"  # close box, always red
+        for x in range(4, 11):
+            grid[6][x] = "c"
+        for x in range(4, 9):
+            grid[8][x] = "c"
+        for x in range(4, 12):
+            grid[10][x] = "x"  # the line that failed
+    elif kind == "scaffold":
+        # Temporary bracing: a diagonal strut with bolt plates at both ends. Reads as
+        # "this was put up in a hurry and never taken down".
+        for index in range(2, TILE - 2):
+            grid[index][index] = "U"
+            grid[index][TILE - 1 - index] = "n"
+        for y, x in ((3, 3), (3, 12), (12, 3), (12, 12)):
+            grid[y][x] = "a"
+    elif kind == "rack":
+        # A server rack with its front off: two columns of drive bays, some lit.
+        for y in range(3, 13):
+            for x in (4, 5, 6, 9, 10, 11):
+                grid[y][x] = "n"
+        for y in range(4, 12, 3):
+            grid[y][4] = "c"
+            grid[y][9] = "v"
+            grid[y + 1][6] = "v"
+    elif kind == "pipes":
+        # Two cable runs crossing, one live. Violet on violet, so it is texture rather than a
+        # focal point — most of a wall has to be quiet.
+        for x in range(2, TILE - 2):
+            grid[5][x] = "n"
+            grid[6][x] = "U"
+        for y in range(2, TILE - 2):
+            grid[y][10] = "n"
+            grid[y][11] = "U"
+
+    return grid
+
+
+def dev_floor_panel(kind: str) -> list[list[str]]:
+    """One 16x16 Development floor panel. Darker than the Help Desk's, because this floor
+    throws amber and red warning rectangles across it constantly and every one of them has to
+    read instantly against whatever it lands on."""
+    grid = _blank_panel("z")
+    for x in range(TILE):
+        grid[0][x] = "Z"
+    for y in range(TILE):
+        grid[y][0] = "Z"
+
+    if kind == "cable":
+        # A cable run under a floor panel, one strand lit. Development's answer to the Help
+        # Desk's "seam" — same job, visibly powered.
+        for x in range(1, TILE):
+            grid[8][x] = "t"
+            grid[9][x] = "Z"
+        for x in range(3, TILE, 6):
+            grid[8][x] = "e"
+    elif kind == "hatch":
+        # A lifted access hatch, corners bolted.
+        for y in range(3, 13):
+            for x in range(3, 13):
+                grid[y][x] = "Z"
+        for y in range(5, 11):
+            for x in range(5, 11):
+                grid[y][x] = "t"
+        for y, x in ((4, 4), (4, 11), (11, 4), (11, 11)):
+            grid[y][x] = "t"
+    elif kind == "tape":
+        # Hazard tape across a corner: work in progress, do not stand here.
+        #
+        # Drawn in the floor's own dim ramp and *not* in amber, which was the first attempt
+        # and was a real bug rather than a taste call. Amber on this floor means "a compile
+        # lane is about to execute here" — from the Compiler, from Runtime Error, from the
+        # Null Pointer — and the whole floor is built on that warning meaning one thing.
+        # Painting permanent amber stripes across the ground the lanes are drawn on would
+        # teach the player to ignore the colour their survival depends on reading.
+        for index in range(2, 9):
+            grid[index][index] = "t"
+            grid[index + 1][index] = "Z"
+    elif kind == "chips":
+        for x, y in ((4, 6), (10, 4), (6, 11), (12, 9), (9, 13)):
+            grid[y][x] = "t"
+
+    return grid
+
+
+## Deliberately not the Help Desk's layout with different panel names. That sheet is mostly
+## "plain"; this one is busier, because a lab in use should look inhabited — but the two most
+## eye-catching panels, `window` and `rack`, are still kept off adjacent cells so the sheet
+## does not read as a repeating pattern.
+DEV_WALL_LAYOUT = [
+    ["window", "plain", "pipes", "plain"],
+    ["plain", "rack", "plain", "scaffold"],
+    ["pipes", "plain", "window", "plain"],
+    ["plain", "scaffold", "plain", "rack"],
+]
+
+DEV_FLOOR_LAYOUT = [
+    ["plain", "cable", "plain", "chips"],
+    ["hatch", "plain", "plain", "plain"],
+    ["plain", "plain", "tape", "plain"],
+    ["chips", "plain", "plain", "hatch"],
+]
+
+
+def dev_wall_tile() -> list[str]:
+    return compose_sheet(DEV_WALL_LAYOUT, dev_wall_panel)
+
+
+def dev_floor_tile() -> list[str]:
+    return compose_sheet(DEV_FLOOR_LAYOUT, dev_floor_panel)
+
+
 
 # --- Application icon -------------------------------------------------------------
 #
@@ -1021,6 +1296,8 @@ def main() -> int:
     write_png(os.path.join(root, "art/environments/wall.png"), wall_tile())
     write_png(os.path.join(root, "art/environments/door.png"), door_tile())
     write_png(os.path.join(root, "art/environments/floor.png"), floor_tile())
+    write_png(os.path.join(root, "art/environments/dev_wall.png"), dev_wall_tile())
+    write_png(os.path.join(root, "art/environments/dev_floor.png"), dev_floor_tile())
     return 0
 
 

@@ -36,6 +36,8 @@ func run() -> void:
 	_test_generator_refuses_impossible_configs()
 	_test_forced_enemies_never_exceed_their_spawn_points()
 	_test_combat_templates_skew_easier_near_the_start()
+	_test_each_floor_looks_and_sounds_like_itself()
+	await _test_a_room_wears_its_floors_theme()
 	await _test_repair_cells_drop_on_every_third_clear()
 	await _test_boss_defeat_advances_to_the_next_floor_and_only_the_last_wins()
 
@@ -440,6 +442,106 @@ func _describe(layout: FloorLayout) -> String:
 ##
 ## The check drives clears in the same order the real signals fire, because that order *is* the
 ## bug: anything that steps a counter itself and then asks would pass over it.
+## The Development plan asks for a floor that "reads as an unfinished development lab rather
+## than another Help Desk". Two floors sharing a theme resource would satisfy every other
+## check in this suite and look identical in play, so the distinctness is the assertion.
+func _test_each_floor_looks_and_sounds_like_itself() -> void:
+	var second := load(FLOOR_2_CONFIG_PATH) as FloorConfig
+	if not require(second, "floor_2_development.tres loads") :
+		return
+	if not require(_config.theme, "the Help Desk has a theme"):
+		return
+	if not require(second.theme, "Development has a theme"):
+		return
+
+	for pair: Array in [[_config, "Help Desk"], [second, "Development"]]:
+		var theme: FloorTheme = (pair[0] as FloorConfig).theme
+		check(theme.floor_texture != null, "%s names a floor texture" % pair[1])
+		check(theme.wall_texture != null, "%s names a wall texture" % pair[1])
+
+	check(
+		_config.theme.floor_texture != second.theme.floor_texture
+			and _config.theme.wall_texture != second.theme.wall_texture,
+		"the two floors are built out of different tiles",
+	)
+	check(
+		_config.theme.explore_music != second.theme.explore_music
+			and _config.theme.boss_music != second.theme.boss_music,
+		"and play different music in both situations",
+	)
+
+	# A theme naming a track the library does not have is silent, not loud — `play_music`
+	# warns and returns, so the floor would simply have no soundtrack.
+	for config: FloorConfig in [_config, second]:
+		for id: StringName in [config.theme.explore_music, config.theme.boss_music]:
+			check(
+				AudioManager.MUSIC_LIBRARY.has(id),
+				"'%s' names a track that exists in the library" % id,
+			)
+
+
+## The textures have to reach the geometry, not just sit on the resource. Walls and obstacles
+## are checked separately from the floor because they are built by different code paths and
+## an obstacle wearing the wrong sheet is exactly the kind of half-themed room that reads as
+## a bug rather than as a style.
+func _test_a_room_wears_its_floors_theme() -> void:
+	var second := load(FLOOR_2_CONFIG_PATH) as FloorConfig
+	if second == null or second.theme == null:
+		return
+
+	# A template with obstacles, so there is something in the middle of the room to check.
+	var template: RoomTemplate = null
+	for candidate: RoomTemplate in second.combat_templates:
+		if not candidate.obstacles.is_empty():
+			template = candidate
+			break
+	if not require(template, "Development has a combat template with obstacles"):
+		return
+
+	var plan := RoomPlan.new(0, Vector2i.ZERO, RoomTemplate.Type.COMBAT)
+	plan.template = template
+
+	var room: Room = load("res://scenes/rooms/room.tscn").instantiate()
+	add_child(room)
+	room.build(plan, second.theme)
+	await advance_physics(1)
+
+	check(
+		(room.get_node("%Floor") as Sprite2D).texture == second.theme.floor_texture,
+		"the room's floor wears the theme's tile sheet",
+	)
+
+	var walls := room.get_node("%Walls").get_children()
+	var obstacles := room.get_node("%Obstacles").get_children()
+	check(not walls.is_empty() and not obstacles.is_empty(), "the room built walls and obstacles")
+
+	var wrong := 0
+	for block: Node in walls + obstacles:
+		if (block as WallBlock).get_node("Sprite").texture != second.theme.wall_texture:
+			wrong += 1
+	check(
+		wrong == 0,
+		"every wall and obstacle wears it too (%d of %d did not)" % [
+			wrong, walls.size() + obstacles.size(),
+		],
+	)
+	room.queue_free()
+	await advance_physics(2)
+
+	# And a room built without one keeps what its scene was authored with, which is what every
+	# test arena in the suite relies on.
+	var bare: Room = load("res://scenes/rooms/room.tscn").instantiate()
+	add_child(bare)
+	bare.build(plan)
+	await advance_physics(1)
+	check(
+		(bare.get_node("%Floor") as Sprite2D).texture != second.theme.floor_texture,
+		"a room built with no theme keeps its authored textures",
+	)
+	bare.queue_free()
+	await advance_physics(2)
+
+
 func _test_repair_cells_drop_on_every_third_clear() -> void:
 	var arena := Node2D.new()
 	add_child(arena)

@@ -46,12 +46,22 @@ const LIBRARY := {
 }
 
 ## Spec section 22: chiptune, industrial percussion, fast arcade loops. One track per
-## situation the player can be in for minutes at a time, all three in A minor so a crossfade
-## between any two is a key change nobody notices.
+## situation the player can be in for minutes at a time, and *all five* in A minor so a
+## crossfade between any two is a key change nobody notices.
+##
+## That rule is why Development sounds different without being in a different key: its two
+## loops are told apart by tempo, by an offbeat bass, and by leaning on the flat second rather
+## than by moving the tonic. Descending a floor crossfades between two of these mid-phrase,
+## and it should sound like the same game changing its mind, not like a track ending.
+##
+## Which floor gets which pair is `FloorTheme`'s business, not this file's. Nothing here knows
+## what a floor is; it owns the library and the crossfade and nothing else.
 const MUSIC_LIBRARY := {
 	&"menu": "res://audio/music/menu.wav",
 	&"explore": "res://audio/music/explore.wav",
 	&"boss": "res://audio/music/boss.wav",
+	&"dev_explore": "res://audio/music/dev_explore.wav",
+	&"dev_boss": "res://audio/music/dev_boss.wav",
 }
 
 ## Seconds to crossfade between tracks. Long enough not to read as a cut, short enough that

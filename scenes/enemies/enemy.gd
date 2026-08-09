@@ -25,6 +25,7 @@ const WEAPON_PATH := "%Weapon"
 @onready var _sprite: Sprite2D = %Sprite
 @onready var _hurt_flash: HurtFlash = %HurtFlash
 @onready var _weapon: WeaponController = get_node_or_null(WEAPON_PATH)
+@onready var _status: StatusEffectController = StatusEffectController.find_on(self)
 
 ## The player, cached once found. Re-resolved if it is freed, so a restart does not leave
 ## every enemy chasing a corpse.
@@ -51,7 +52,7 @@ func _ready() -> void:
 	collision_mask = Teams.LAYER_WORLD
 	_resting_tint = _sprite.modulate
 
-	_health.configure(config.max_health, 0.0)
+	_health.configure(scaled_max_health(config.max_health), 0.0)
 	_health.damaged.connect(_on_damaged)
 	_health.died.connect(_on_died)
 
@@ -70,7 +71,11 @@ func _physics_process(delta: float) -> void:
 	if _weapon != null:
 		_weapon.step(delta)
 
-	var desired := _act(delta)
+	# Statuses scale what the enemy *wants* to do rather than the velocity it ends up with,
+	# so a chilled enemy still accelerates and decelerates like itself — it is slowed, not
+	# put on ice. It also means no enemy script has to know statuses exist: `_act` returns an
+	# intention and this is the one place intentions become motion.
+	var desired := _act(delta) * get_status_speed_scale()
 	var rate := config.acceleration if not desired.is_zero_approx() else config.deceleration
 	velocity = velocity.move_toward(desired, rate * delta)
 
@@ -121,6 +126,27 @@ func get_health_component() -> HealthComponent:
 
 func get_weapon_controller() -> WeaponController:
 	return _weapon
+
+
+func get_status_controller() -> StatusEffectController:
+	return _status
+
+
+## An enemy's real starting integrity: its configured pool times whatever the run has accrued
+## against it. Tech Debt is the only thing that ever moves that multiplier.
+##
+## Static, and every place an enemy sizes its own pool goes through it — including Recursion,
+## which reconfigures its fragments after spawning and would otherwise hand the player a way
+## to farm debt-free enemies out of a debt-scaled one.
+static func scaled_max_health(base: float) -> float:
+	return base * RunManager.enemy_health_scale
+
+
+## How much of its own movement this enemy currently gets. One for an enemy with no status
+## controller at all, so a scene that has not been given one behaves exactly as before
+## rather than standing still.
+func get_status_speed_scale() -> float:
+	return _status.get_speed_scale() if _status != null else 1.0
 
 
 func is_dead() -> bool:

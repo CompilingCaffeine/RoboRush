@@ -308,10 +308,102 @@ def boss_track(noise: random.Random) -> list[float]:
     ], 32, beat)
 
 
+def dev_explore_track(noise: random.Random) -> list[float]:
+    """Development's room-clearing loop. The Help Desk's explore theme is a robot doing its
+    rounds; this one is a build running — mechanical, unhurried on the surface, and never
+    quite settling.
+
+    Still A minor, like every other track here, so descending a floor mid-crossfade is not a
+    key change. What makes it a different floor is everything else: a sixteenth-note arpeggio
+    running underneath the whole loop like a progress bar, a lead that keeps landing on the
+    flat second (Bb) instead of the comfortable B, and a bass on the offbeat so the groove
+    never sits down. Phrygian colour rather than a new key is the cheapest way to sound
+    unfamiliar while staying compatible.
+    """
+    beat = 60.0 / 150.0
+
+    lead = [
+        ("A4", 1), ("Bb4", 0.5), ("A4", 0.5), ("E5", 1), ("D5", 1),
+        ("C5", 0.5), ("Bb4", 0.5), ("A4", 1), ("Bb4", 2),
+        ("A4", 1), ("C5", 0.5), ("D5", 0.5), ("E5", 1), ("F5", 1),
+        ("E5", 0.5), ("D5", 0.5), ("C5", 1), ("A4", 2),
+        ("F4", 1), ("G4", 0.5), ("A4", 0.5), ("Bb4", 1), ("A4", 1),
+        ("G4", 0.5), ("F4", 0.5), ("E4", 1), ("E4", 2),
+        ("A4", 1), ("E5", 0.5), ("F5", 0.5), ("E5", 1), ("C5", 1),
+        ("Bb4", 1), ("A4", 0.5), ("Bb4", 0.5), ("A4", 2),
+    ]
+    # Offbeat: the downbeat is a rest, so the bass answers the drum instead of doubling it.
+    bass = [
+        (".", 0.5), ("A2", 0.5), (".", 0.5), ("A2", 0.5),
+        (".", 0.5), ("Bb2", 0.5), (".", 0.5), ("A2", 0.5),
+        (".", 0.5), ("F2", 0.5), (".", 0.5), ("F2", 0.5),
+        (".", 0.5), ("E2", 0.5), (".", 0.5), ("E2", 0.5),
+    ] * 2
+    # The progress bar. Four sixteenths per beat, climbing and never arriving.
+    arp = [
+        ("A5", 0.25), ("C6", 0.25), ("E6", 0.25), ("C6", 0.25),
+        ("Bb5", 0.25), ("D6", 0.25), ("F6", 0.25), ("D6", 0.25),
+    ] * 16
+    drums = "k.h.s.hkk.h.s.h." * 8
+
+    return mix([
+        render_melodic(lead, beat, lead_voice),
+        render_melodic(bass * 2, beat, bass_voice),
+        render_melodic(arp, beat, arp_voice),
+        render_drums(drums, beat, noise),
+    ], 32, beat)
+
+
+def dev_boss_track(noise: random.Random) -> list[float]:
+    """Runtime Error. The Merge Conflict's theme is two things that do not agree; this one is
+    one thing coming apart.
+
+    Built on a descending chromatic line — A, G#, G, F# — under a lead that keeps restating
+    the same figure a semitone lower each time, so the whole loop sinks. That is the fight:
+    the boss does not get angrier, it degrades, and the player's job is to predict where the
+    next failure lands. The tritone is here too, but as a passing note rather than the hook,
+    so the two boss themes are recognisably from the same game and not the same fight.
+    """
+    beat = 60.0 / 168.0
+
+    lead = [
+        ("A5", 0.5), ("E5", 0.5), ("A5", 0.5), ("C6", 0.5),
+        ("A5", 0.5), ("E5", 0.5), ("D#5", 1),
+        ("G#5", 0.5), ("D#5", 0.5), ("G#5", 0.5), ("B5", 0.5),
+        ("G#5", 0.5), ("D#5", 0.5), ("D5", 1),
+        ("G5", 0.5), ("D5", 0.5), ("G5", 0.5), ("Bb5", 0.5),
+        ("G5", 0.5), ("D5", 0.5), ("C#5", 1),
+        ("F#5", 0.5), ("C#5", 0.5), ("F#5", 0.5), ("A5", 0.5),
+        ("E5", 1), ("A4", 1),
+    ]
+    # The collapse, one semitone per bar.
+    bass = [
+        ("A2", 0.5), ("A2", 0.5), ("A2", 0.5), ("E3", 0.5),
+        ("A2", 0.5), ("A2", 0.5), ("A2", 0.5), ("A2", 0.5),
+        ("G#2", 0.5), ("G#2", 0.5), ("G#2", 0.5), ("D#3", 0.5),
+        ("G#2", 0.5), ("G#2", 0.5), ("G#2", 0.5), ("G#2", 0.5),
+        ("G2", 0.5), ("G2", 0.5), ("G2", 0.5), ("D3", 0.5),
+        ("G2", 0.5), ("G2", 0.5), ("G2", 0.5), ("G2", 0.5),
+        ("F#2", 0.5), ("F#2", 0.5), ("F#2", 0.5), ("C#3", 0.5),
+        ("F#2", 0.5), ("F#2", 0.5), ("F#2", 0.5), ("F#2", 0.5),
+    ]
+    drums = "ksh.ks.hksh.kshh" * 8
+
+    return mix([
+        # Both the melody and the collapse run twice, so the loop is thirty-two beats and the
+        # bass descends A - G# - G - F# twice rather than once over a longer bar.
+        render_melodic(lead + lead, beat, lead_voice),
+        render_melodic(bass * 2, beat, bass_voice),
+        render_drums(drums, beat, noise),
+    ], 32, beat)
+
+
 TRACKS = {
     "audio/music/menu.wav": menu_track,
     "audio/music/explore.wav": explore_track,
     "audio/music/boss.wav": boss_track,
+    "audio/music/dev_explore.wav": dev_explore_track,
+    "audio/music/dev_boss.wav": dev_boss_track,
 }
 
 

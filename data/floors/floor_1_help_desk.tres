@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="FloorConfig" load_steps=29 format=3]
+[gd_resource type="Resource" script_class="FloorConfig" load_steps=30 format=3]
 
 [ext_resource type="Script" path="res://scripts/resources/floor_config.gd" id="1_floor"]
 [ext_resource type="Resource" path="res://data/rooms/start_bay.tres" id="2_start"]
@@ -28,11 +28,13 @@
 [ext_resource type="Resource" path="res://data/items/debug_drone.tres" id="20_debug_drone"]
 [ext_resource type="Resource" path="res://data/floors/floor_2_development.tres" id="24_next"]
 [ext_resource type="PackedScene" path="res://scenes/bosses/merge_conflict.tscn" id="25_boss_scene"]
+[ext_resource type="Resource" path="res://data/floors/help_desk_theme.tres" id="26_theme"]
 
 [resource]
 script = ExtResource("1_floor")
 display_name = "Help Desk"
 floor_number = 1
+theme = ExtResource("26_theme")
 floor_tags = Array[StringName]([&"help_desk"])
 room_count = 10
 start_templates = Array[RoomTemplate]([ExtResource("2_start")])

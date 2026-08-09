@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="ItemConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/item_config.gd" id="1_item"]
+[ext_resource type="Texture2D" path="res://art/items/breakpoint.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"breakpoint"
+display_name = "Breakpoint"
+description = "Dashing chills every nearby enemy, slowing them briefly."
+rarity = 2
+category = 4
+tags = Array[StringName]([&"mobility", &"status", &"chill"])
+dash_pulse_radius = 62.0
+dash_pulse_effects = Array[StringName]([&"chill"])
+icon = ExtResource("2_icon")
+accent_color = Color(0.42, 0.78, 0.98, 1)
+pickup_sound = &"item_pickup"

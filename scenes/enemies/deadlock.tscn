@@ -1,10 +1,11 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://scenes/enemies/deadlock.gd" id="1_script"]
 [ext_resource type="Resource" path="res://data/enemies/deadlock.tres" id="2_config"]
 [ext_resource type="Texture2D" path="res://art/enemies/deadlock.png" id="3_tex"]
 [ext_resource type="Script" path="res://scripts/components/health_component.gd" id="4_health"]
 [ext_resource type="Script" path="res://scripts/components/hurt_flash.gd" id="5_flash"]
+[ext_resource type="Script" path="res://scripts/components/status_effect_controller.gd" id="99_status"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_body"]
 radius = 7.0
@@ -46,3 +47,8 @@ invulnerability_seconds = 0.0
 unique_name_in_owner = true
 script = ExtResource("5_flash")
 target_path = NodePath("../Sprite")
+
+[node name="Status" type="Node2D" parent="."]
+unique_name_in_owner = true
+script = ExtResource("99_status")
+indicator_radius = 10.0

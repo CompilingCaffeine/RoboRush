@@ -575,11 +575,17 @@ func _spawn(origin: Vector2, direction: Vector2) -> void:
 func _step_drift(delta: float) -> void:
 	if _player == null or not is_instance_valid(_part):
 		return
-	_sway_phase = fposmod(_sway_phase + config.sway_speed * delta, TAU)
+	# Chill and freeze slow the sway itself as well as the travel, so a frozen boss stops
+	# where it is rather than continuing to trace its sine and snapping across the arena the
+	# instant it thaws.
+	var status_scale := _part.get_status_speed_scale()
+	_sway_phase = fposmod(_sway_phase + config.sway_speed * status_scale * delta, TAU)
 	var target := _player.global_position + Vector2(
 		sin(_sway_phase) * config.sway_amplitude, -config.drift_height
 	)
-	_part.global_position = _part.global_position.move_toward(target, config.move_speed * delta)
+	_part.global_position = _part.global_position.move_toward(
+		target, config.move_speed * status_scale * delta
+	)
 	_part.global_position = _part.global_position.clamp(_body_bounds.position, _body_bounds.end)
 
 

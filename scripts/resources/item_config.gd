@@ -111,6 +111,37 @@ enum Category {
 ## Orbiting drones that fire when the player fires. Debug Drone adds one.
 @export var drone_count: int = 0
 
+## Radius of a status pulse emitted when the player dashes. Breakpoint. Zero disables it.
+##
+## A radius and an effect id rather than a `dash_pulse: bool` for the same reason the
+## projectile modifiers are dictionaries: a second dash item that burns instead of chilling
+## is then a `.tres`, and nothing here has to learn the word "Breakpoint".
+@export var dash_pulse_radius: float = 0.0
+
+## Status effect ids the pulse applies. Empty means the pulse does nothing, which is why
+## `dash_pulse_radius` alone is not enough to switch one on.
+@export var dash_pulse_effects: Array[StringName] = []
+
+@export_group("Corrupted firmware")
+
+## The weapon refuses to fire while the robot is moving. Blocking I/O.
+##
+## The first item in the pool with no upside whatsoever. Everything else that costs the
+## player something buys them something — Unsafe Overclock trades integrity for damage,
+## Stack Overflow trades speed for size. These three trade nothing, and are in the pool for
+## the reason a shop with only good stock is not a shop: an offer the player should refuse
+## is what makes the offers they accept a decision.
+@export var fire_requires_stillness: bool = false
+
+## Multiplies the dash cooldown. Legacy Runtime uses 3.0. Below 1.0 would be a *good* item
+## and nothing stops one being authored, which is deliberate — this is a knob, not a curse.
+@export var dash_cooldown_scale: float = 1.0
+
+## Added to a multiplier on every future enemy's maximum integrity, once per room cleared.
+## Tech Debt uses 0.12, so the eighth room's enemies carry nearly twice what the first
+## room's did. Zero for every item that does not accrue.
+@export var enemy_health_growth_per_room: float = 0.0
+
 @export_group("Presentation")
 
 @export var icon: Texture2D
@@ -149,4 +180,14 @@ func is_stat_only() -> bool:
 		and kill_explosion_radius <= 0.0
 		and pickup_magnet_radius <= 0.0
 		and drone_count <= 0
+		and not emits_dash_pulse()
+		and not fire_requires_stillness
+		and enemy_health_growth_per_room <= 0.0
 	)
+
+
+## Whether this item turns a dash into a status pulse. Both halves are required: a radius
+## with no effects would be an invisible circle, and effects with no radius would be a list
+## nothing reads.
+func emits_dash_pulse() -> bool:
+	return dash_pulse_radius > 0.0 and not dash_pulse_effects.is_empty()

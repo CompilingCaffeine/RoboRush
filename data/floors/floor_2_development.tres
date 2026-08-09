@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="FloorConfig" load_steps=31 format=3]
+[gd_resource type="Resource" script_class="FloorConfig" load_steps=41 format=3]
 
 [ext_resource type="Script" path="res://scripts/resources/floor_config.gd" id="1_floor"]
 [ext_resource type="Resource" path="res://data/rooms/start_bay.tres" id="2_start"]
@@ -30,11 +30,22 @@
 [ext_resource type="Resource" path="res://data/spawns/null_pointer.tres" id="28_null_pointer"]
 [ext_resource type="Resource" path="res://data/spawns/recursion.tres" id="29_recursion"]
 [ext_resource type="Resource" path="res://data/spawns/deadlock.tres" id="30_deadlock"]
+[ext_resource type="Resource" path="res://data/items/memory_spike.tres" id="31_memory_spike"]
+[ext_resource type="Resource" path="res://data/items/core_dump.tres" id="32_core_dump"]
+[ext_resource type="Resource" path="res://data/items/cold_cache.tres" id="33_cold_cache"]
+[ext_resource type="Resource" path="res://data/items/hot_reload.tres" id="34_hot_reload"]
+[ext_resource type="Resource" path="res://data/items/breakpoint.tres" id="35_breakpoint"]
+[ext_resource type="Resource" path="res://data/items/stack_overflow.tres" id="36_stack_overflow"]
+[ext_resource type="Resource" path="res://data/items/blocking_io.tres" id="37_blocking_io"]
+[ext_resource type="Resource" path="res://data/items/tech_debt.tres" id="38_tech_debt"]
+[ext_resource type="Resource" path="res://data/items/legacy_runtime.tres" id="39_legacy_runtime"]
+[ext_resource type="Resource" path="res://data/floors/development_theme.tres" id="40_theme"]
 
 [resource]
 script = ExtResource("1_floor")
 display_name = "Development"
 floor_number = 2
+theme = ExtResource("40_theme")
 floor_tags = Array[StringName]([&"development"])
 room_count = 10
 start_templates = Array[RoomTemplate]([ExtResource("2_start")])
@@ -45,7 +56,7 @@ boss_templates = Array[RoomTemplate]([ExtResource("9_boss_room")])
 enemy_spawns = Array[EnemySpawn]([ExtResource("11_ticket_bot"), ExtResource("12_pop_up_drone"), ExtResource("26_code_runner"), ExtResource("27_compiler"), ExtResource("28_null_pointer"), ExtResource("29_recursion"), ExtResource("30_deadlock")])
 clear_scrap_range = Vector2i(1, 3)
 enemy_scrap_range = Vector2i(0, 2)
-item_pool = Array[ItemConfig]([ExtResource("13_ricochet_driver"), ExtResource("14_fork_bomb"), ExtResource("15_magnetic_guidance"), ExtResource("16_return_protocol"), ExtResource("17_capacitor_leak"), ExtResource("18_volatile_kernel"), ExtResource("19_cooling_fan"), ExtResource("20_reinforced_chassis"), ExtResource("21_backup_battery"), ExtResource("22_unsafe_overclock"), ExtResource("23_scrap_magnet"), ExtResource("24_debug_drone")])
+item_pool = Array[ItemConfig]([ExtResource("37_blocking_io"), ExtResource("38_tech_debt"), ExtResource("39_legacy_runtime"), ExtResource("31_memory_spike"), ExtResource("32_core_dump"), ExtResource("33_cold_cache"), ExtResource("34_hot_reload"), ExtResource("35_breakpoint"), ExtResource("36_stack_overflow"), ExtResource("13_ricochet_driver"), ExtResource("14_fork_bomb"), ExtResource("15_magnetic_guidance"), ExtResource("16_return_protocol"), ExtResource("17_capacitor_leak"), ExtResource("18_volatile_kernel"), ExtResource("19_cooling_fan"), ExtResource("20_reinforced_chassis"), ExtResource("21_backup_battery"), ExtResource("22_unsafe_overclock"), ExtResource("23_scrap_magnet"), ExtResource("24_debug_drone")])
 item_clear_indices = Array[int]([2, 5])
 shop = ExtResource("10_shop_cfg")
 treasure_grants_item = true

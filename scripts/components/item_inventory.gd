@@ -84,6 +84,33 @@ func get_dash_charges_delta() -> int:
 	return total
 
 
+## Multiplicative, like the fire rate, so a second cooldown item compounds rather than
+## overwriting the first.
+func get_dash_cooldown_multiplier() -> float:
+	var total := 1.0
+	for item: ItemConfig in _items:
+		total *= item.dash_cooldown_scale
+	return total
+
+
+## Whether anything held forbids firing on the move. A single item is enough, and a second
+## one cannot make it worse — this is a rule, not a quantity.
+func requires_stillness_to_fire() -> bool:
+	for item: ItemConfig in _items:
+		if item.fire_requires_stillness:
+			return true
+	return false
+
+
+## Summed growth per room cleared, as a fraction. Read by ItemEffects, which is the only
+## thing here that knows what a room is.
+func get_enemy_health_growth_per_room() -> float:
+	var total := 0.0
+	for item: ItemConfig in _items:
+		total += item.enemy_health_growth_per_room
+	return total
+
+
 ## The furthest any held item reaches for pickups. The best magnet wins rather than the
 ## magnets summing: two of them should not reach across the room.
 func get_pickup_magnet_radius() -> float:
@@ -115,6 +142,17 @@ func get_kill_explosions() -> Array[ItemConfig]:
 	var found: Array[ItemConfig] = []
 	for item: ItemConfig in _items:
 		if item.kill_explosion_radius > 0.0:
+			found.append(item)
+	return found
+
+
+## Items that turn a dash into a status pulse. Same shape and same reason as
+## `get_kill_explosions`: the list is the question ItemEffects asks, so a second dash item
+## needs no code anywhere.
+func get_dash_pulses() -> Array[ItemConfig]:
+	var found: Array[ItemConfig] = []
+	for item: ItemConfig in _items:
+		if item.emits_dash_pulse():
 			found.append(item)
 	return found
 

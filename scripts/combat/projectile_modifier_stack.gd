@@ -90,13 +90,30 @@ func _assign(config: ProjectileConfig, values: Dictionary) -> void:
 
 ## Integer fields are rounded rather than truncated, so an item adding 1.0 to a bounce
 ## count can never land on 0 through float representation.
+##
+## Adding to an *array* field appends to it, which is the only reading of "add" that makes
+## sense for `status_effects` and the reason Cold Cache and Hot Reload compose. Assigning
+## through `projectile_set` would have been the obvious route and is wrong: a set is the one
+## operation two items can genuinely conflict over, so two status items would have silently
+## resolved to whichever the stack reached last, and the player would have had one of them
+## do nothing with no way to tell which.
 func _add(config: ProjectileConfig, values: Dictionary) -> void:
 	for key: Variant in values:
 		var name := StringName(key)
 		if not _known_properties.has(name):
 			continue
 		var current: Variant = config.get(name)
-		if current is int:
+		if current is Array:
+			var combined: Array = (current as Array).duplicate()
+			var addition: Variant = values[key]
+			# A bare value is treated as a one-element list, so an item adding a single
+			# status does not have to be written as an array in the inspector.
+			if addition is Array:
+				combined.append_array(addition as Array)
+			else:
+				combined.append(addition)
+			config.set(name, combined)
+		elif current is int:
 			config.set(name, roundi(float(current) + float(values[key])))
 		else:
 			config.set(name, float(current) + float(values[key]))

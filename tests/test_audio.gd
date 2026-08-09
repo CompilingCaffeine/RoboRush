@@ -27,8 +27,54 @@ func run() -> void:
 	await _test_stopping_music_fades_it_out()
 	await _test_stop_all_leaves_nothing_playing()
 	_test_the_mixer_drain_ends_on_the_mixer()
+	await _test_the_director_plays_the_floors_own_tracks()
 
 	_teardown()
+
+
+## `FeedbackDirector` decides *when* the music changes and the floor's theme decides *which*
+## tracks it changes between. Checked here rather than in the floor suite because the failure
+## it guards is an audio one: a director that kept its old hardcoded `&"boss"`/`&"explore"`
+## would pass every floor check — the theme would load, the textures would apply — and
+## Development would simply play the Help Desk's soundtrack.
+func _test_the_director_plays_the_floors_own_tracks() -> void:
+	var director := FeedbackDirector.new()
+	add_child(director)
+	await advance_physics(1)
+
+	var development := load("res://data/floors/floor_2_development.tres") as FloorConfig
+	if development == null or development.theme == null:
+		fail("Development's theme is needed to check the director")
+		director.queue_free()
+		return
+
+	director.set_floor_theme(development.theme)
+
+	AudioManager.stop_music()
+	director._on_room_entered(RoomTemplate.Type.COMBAT, 0)
+	check(
+		AudioManager._music_id == development.theme.explore_music,
+		"an ordinary room plays the floor's explore loop (got '%s')" % AudioManager._music_id,
+	)
+
+	director._on_room_entered(RoomTemplate.Type.BOSS, 1)
+	check(
+		AudioManager._music_id == development.theme.boss_music,
+		"the boss arena plays the floor's boss loop (got '%s')" % AudioManager._music_id,
+	)
+
+	# A floor with no theme falls back rather than keeping the last floor's tracks, which is
+	# the difference between "authored no music" and "inherited someone else's".
+	director.set_floor_theme(null)
+	AudioManager.stop_music()
+	director._on_room_entered(RoomTemplate.Type.COMBAT, 2)
+	check(
+		AudioManager._music_id == FeedbackDirector.DEFAULT_EXPLORE_MUSIC,
+		"an unthemed floor falls back to the default loop (got '%s')" % AudioManager._music_id,
+	)
+
+	director.queue_free()
+	await advance_physics(2)
 
 
 func _teardown() -> void:
