@@ -52,6 +52,13 @@ func stock(
 		_stands.append(stand)
 		_assign_kind(stand, index)
 
+	# A stand's `_ready` fires inside `add_child`, before `_assign_kind` has told it what it
+	# is, so every stand draws itself once as an empty item stand. Item stands then redraw
+	# when they are stocked, but the repair and reroll stands had nothing to redraw them and
+	# kept the "EMPTY" tag until the player's scrap next changed — which, in a shop entered
+	# before the run has paid out anything, is never.
+	_refresh_all()
+
 	# The HUD is not the only thing that needs to know the player's scrap changed: a stand
 	# the player can now afford should say so without them walking away and back.
 	RunManager.scrap_changed.connect(_on_scrap_changed)
