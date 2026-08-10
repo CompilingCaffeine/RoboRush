@@ -39,6 +39,7 @@ func run() -> void:
 	await _test_an_item_cannot_be_bought_twice()
 	await _test_no_scrap_no_purchase()
 	await _test_repairs()
+	await _test_service_stands_say_what_they_sell()
 	await _test_reroll_replaces_unsold_stock()
 	await _test_the_player_uses_the_nearest_stand()
 	await _test_a_floor_cannot_afford_the_whole_shop()
@@ -255,6 +256,53 @@ func _test_repairs() -> void:
 
 	check(stand.interact(_player), "repairs are repeatable while the damage lasts")
 	await _teardown()
+
+
+## Reported from play: walk into the first shop of a run and the repair and reroll stands are
+## both tagged "EMPTY". A stand's `_ready` runs inside `add_child`, before the shop has told it
+## which kind it is, so it draws itself once as an item stand holding nothing. Item stands are
+## redrawn when they are stocked; the two service stands were only ever redrawn by a scrap
+## change, so a shop entered before the run had paid out anything stayed wrong.
+##
+## The tags are checked rather than the kinds, because the kinds were already right — it was
+## only what the player could read that was wrong. Nothing here touches the shop after it is
+## stocked, which is the whole condition being pinned: no reroll, no purchase, no scrap.
+func _test_service_stands_say_what_they_sell() -> void:
+	await _make_shop(200)
+
+	var repair := _stand_of_kind(_shop, ShopStand.Kind.HEAL)
+	var reroll := _stand_of_kind(_shop, ShopStand.Kind.REROLL)
+	if repair == null or reroll == null:
+		fail("the shop is not stocked as expected")
+		await _teardown()
+		return
+
+	check(
+		_tag_of(repair) == "REPAIR  %d" % _shop_config.heal_price,
+		"the repair stand is tagged with its price, not 'EMPTY' (reads '%s')" % _tag_of(repair),
+	)
+	check(
+		_tag_of(reroll) == "REROLL  %d" % _shop_config.reroll_price(0),
+		"the reroll stand is tagged with its price, not 'EMPTY' (reads '%s')" % _tag_of(reroll),
+	)
+
+	for stand: ShopStand in _item_stands(_shop):
+		check(
+			_tag_of(stand).begins_with(stand.item.display_name.to_upper()),
+			"'%s' is tagged with its own name (reads '%s')" % [
+				stand.item.display_name, _tag_of(stand),
+			],
+		)
+
+	await _teardown()
+
+
+## What the player can actually read above a stand. Reached through the scene rather than
+## through ShopStand, which keeps its label private and has no reason to expose it outside
+## of this check.
+func _tag_of(stand: ShopStand) -> String:
+	var label := stand.find_child("Label") as Label
+	return label.text if label != null else ""
 
 
 func _test_reroll_replaces_unsold_stock() -> void:
