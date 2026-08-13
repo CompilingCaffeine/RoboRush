@@ -55,6 +55,7 @@ func _ready() -> void:
 	_health.configure(scaled_max_health(config.max_health), 0.0)
 	_health.damaged.connect(_on_damaged)
 	_health.died.connect(_on_died)
+	HostileRegistry.register(self, Teams.Id.ENEMY, _health)
 
 	if _weapon != null:
 		_weapon.setup(config.weapon, Teams.Id.ENEMY)
@@ -242,3 +243,10 @@ func _on_died() -> void:
 	# reacts to the signal.
 	EventBus.enemy_killed.emit(self, global_position)
 	queue_free()
+
+
+## Registered with `HostileRegistry` so homing, blasts and chains can find this body without walking
+## the whole enemy group to do it. The notification hook is what keeps the registry honest about
+## sleep: a room deactivating its enemies delivers `PAUSED` to each of them.
+func _notification(what: int) -> void:
+	HostileRegistry.note(what, self)

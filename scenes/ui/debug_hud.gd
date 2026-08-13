@@ -31,6 +31,9 @@ const ROWS: Array[String] = [
 	"WEAPON",
 	"SHOTS",
 	"ENEMIES",
+	"HOSTILES",
+	"LOAD",
+	"TARGETING",
 	"ROOM",
 	"FLOOR",
 	"SEED",
@@ -68,6 +71,8 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
+	# Targeting only counts itself while somebody is watching, and this is the only watcher.
+	Targeting.instrumented = visible
 	if not visible or _player == null:
 		return
 	_refresh()
@@ -131,6 +136,9 @@ func _refresh() -> void:
 		_last_dash_direction.x, _last_dash_direction.y,
 	])
 	_set_value("ENEMIES", _describe_enemies())
+	_set_value("HOSTILES", _describe_hostiles())
+	_set_value("LOAD", _describe_load())
+	_set_value("TARGETING", _describe_targeting())
 	_set_value("ROOM", _describe_room())
 	_set_value("FLOOR", "%s  %d  scrap %d" % [
 		RunManager.floor_name, RunManager.floor_number, RunManager.scrap,
@@ -138,6 +146,38 @@ func _refresh() -> void:
 	_set_value("SEED", _describe_seeds())
 	_set_value("CONTENT", _describe_content())
 	_set_value("ITEMS", _describe_items())
+
+
+## What the targeting registry is holding: the bodies a shot can currently find, against every body
+## that has registered. The gap between them is the floor asleep in the other nine rooms, and it is
+## the whole point of the registry — a large gap costs nothing, where it used to cost every query.
+func _describe_hostiles() -> String:
+	return "%d awake  %d known" % [
+		HostileRegistry.count(Teams.Id.ENEMY), HostileRegistry.known_count(),
+	]
+
+
+## Frame cost and what is standing in the world producing it. Process and physics are separated
+## because the scaling plan budgets them separately, and nodes and memory are here because the
+## failure they catch — a floor boundary leaking a room's worth of objects — is invisible in a frame
+## time until it is far too late.
+func _describe_load() -> String:
+	return "%.1f+%.1fms  %d nodes  %dMB" % [
+		Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0,
+		Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0,
+		get_tree().get_node_count(),
+		int(Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0),
+	]
+
+
+## Target selection, per frame: how many shots asked and what it cost them. The counters are only
+## collected while this overlay is up — see `Targeting.instrumented` — so reading them is free for
+## everybody who is not looking at them.
+func _describe_targeting() -> String:
+	var queries := Targeting.queries
+	var usec := Targeting.query_usec
+	Targeting.reset_instrumentation()
+	return "%d queries  %.2fms" % [queries, float(usec) / 1000.0]
 
 
 ## The two numbers a reproducible bug report needs, in the order they matter: the run's seed, which

@@ -24,12 +24,75 @@ extends Resource
 @export_file("*.tres") var config_path: String = ""
 
 
+## Whether a background load has been asked for and not yet collected. Instance state on a resource,
+## which is unusual and is fine here: it is never exported, never saved, and describes a request in
+## flight rather than anything about the floor.
+var _preload_requested := false
+
+
 ## The floor's content, or null if the path is unset, missing, or holds something else.
 ##
-## Godot's own resource cache makes the repeat call cheap, so this deliberately keeps no cache
-## of its own — a second cache would be a second thing to invalidate, and the one place that
-## would show is a floor edited between runs still serving its old content.
+## Collects a background load if one was asked for, and blocks until it finishes — which is the
+## whole design. A floor is *needed* at the moment the player claims a boss reward, and by then it
+## has usually had the entire previous floor to arrive; if it has not, waiting here is exactly what
+## the synchronous load did before, so preloading can only make a transition faster and never
+## slower.
+##
+## Godot's own resource cache makes the repeat call cheap, so this deliberately keeps no cache of
+## its own — a second cache would be a second thing to invalidate, and the one place that would
+## show is a floor edited between runs still serving its old content.
 func load_config() -> FloorConfig:
 	if config_path.is_empty() or not ResourceLoader.exists(config_path):
+		_preload_requested = false
 		return null
+
+	if _preload_requested:
+		_preload_requested = false
+		# A failed or unknown request falls through to the plain load rather than reporting nothing:
+		# the request is an optimisation, and losing it must not lose the floor.
+		if ResourceLoader.load_threaded_get_status(config_path) != ResourceLoader.THREAD_LOAD_FAILED:
+			var loaded := ResourceLoader.load_threaded_get(config_path) as FloorConfig
+			if loaded != null:
+				return loaded
+
 	return load(config_path) as FloorConfig
+
+
+## Starts loading this floor in the background, so the next one is in memory before the player asks
+## for it.
+##
+## The reason to do this at all is the transition budget: `load()` pulls in the floor's templates,
+## tile sheets, enemy scenes and boss scene, and doing that at the instant the reward is taken puts
+## all of it inside the one frame the player is watching. Doing it while they fight the previous
+## floor costs nothing they can see.
+##
+## Only ever *one* floor ahead. Requesting the whole campaign would put six floors of textures in
+## memory to save the same milliseconds, which is the thing `FloorEntry` exists to avoid.
+func request_preload() -> void:
+	if _preload_requested or config_path.is_empty() or not ResourceLoader.exists(config_path):
+		return
+	if ResourceLoader.load_threaded_request(config_path) == OK:
+		_preload_requested = true
+
+
+## Collects an outstanding background load and throws the result away.
+##
+## Godot has no way to *cancel* a threaded request — collecting it is the only way to close one — and
+## an uncollected request is a live object at exit. Measured, not assumed: quitting a run while the
+## next floor was still requested turned a clean shutdown into "1 ObjectDB instance was leaked at
+## exit", which is precisely the background noise that makes exit-leak output useless as a signal.
+##
+## Called when the floor controller leaves the tree, which covers quitting, restarting, and going
+## back to the menu. It blocks until the load finishes, and by then it almost always has.
+func discard_preload() -> void:
+	if not _preload_requested:
+		return
+	_preload_requested = false
+	if ResourceLoader.load_threaded_get_status(config_path) != ResourceLoader.THREAD_LOAD_FAILED:
+		ResourceLoader.load_threaded_get(config_path)
+
+
+## Whether a background load is outstanding. For the suite, and for a debug overlay that wants to
+## show whether the next floor is ready.
+func is_preloading() -> bool:
+	return _preload_requested

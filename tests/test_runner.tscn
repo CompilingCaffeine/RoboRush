@@ -1,4 +1,4 @@
-[gd_scene load_steps=22 format=3]
+[gd_scene load_steps=23 format=3]
 
 [ext_resource type="Script" path="res://tests/test_runner.gd" id="1_runner"]
 [ext_resource type="Script" path="res://tests/test_player_movement.gd" id="2_movement"]
@@ -7,6 +7,7 @@
 [ext_resource type="Script" path="res://tests/test_floor.gd" id="5_floor"]
 [ext_resource type="Script" path="res://tests/test_campaign.gd" id="18_campaign"]
 [ext_resource type="Script" path="res://tests/test_determinism.gd" id="21_determinism"]
+[ext_resource type="Script" path="res://tests/test_performance.gd" id="22_performance"]
 [ext_resource type="Script" path="res://tests/test_post_boss.gd" id="19_post_boss"]
 [ext_resource type="Script" path="res://tests/test_economy.gd" id="20_economy"]
 [ext_resource type="Script" path="res://tests/test_items.gd" id="6_items"]
@@ -78,6 +79,9 @@ script = ExtResource("12_audio")
 
 [node name="Gamepad" type="Node" parent="."]
 script = ExtResource("13_gamepad")
+
+[node name="Performance" type="Node" parent="."]
+script = ExtResource("22_performance")
 
 [node name="Balance" type="Node" parent="."]
 script = ExtResource("14_balance")

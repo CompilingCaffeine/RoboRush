@@ -81,6 +81,8 @@ func _ready() -> void:
 	# inventory every time it is consulted — an item picked up mid-fight is armed immediately, and
 	# there is no wiring to remember to undo.
 	_health.death_guard = _survive_lethal_hit
+	# The robot is a target too: an enemy's homing shot asks the same registry the player's does.
+	HostileRegistry.register(self, Teams.Id.PLAYER, _health)
 	# The shield is asked before every hit lands, so a charge collected mid-fight is live at once.
 	_health.damage_absorber = _absorb_with_shield
 	EventBus.room_entered.connect(_on_room_entered)
@@ -447,3 +449,10 @@ func _on_died() -> void:
 	_visuals.play_death()
 	_camera.clear_shake()
 	EventBus.player_died.emit()
+
+
+## Registered with `HostileRegistry` so homing, blasts and chains can find this body without walking
+## the whole enemy group to do it. The notification hook is what keeps the registry honest about
+## sleep: a room deactivating its enemies delivers `PAUSED` to each of them.
+func _notification(what: int) -> void:
+	HostileRegistry.note(what, self)

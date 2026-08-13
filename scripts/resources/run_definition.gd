@@ -9,11 +9,10 @@ extends Resource
 ## already looping. All three are answers this file gives by indexing an array.
 ##
 ## The floors are named by id and path (see `FloorEntry`), not held as references, so the
-## campaign describes six floors while only the current one is in memory. `load_floor` is a
-## synchronous `load()` today, which is honest for two floors and will not stay honest for six:
-## the transition budget is where a floor's textures and enemy scenes get paid for, and
-## preloading the *next* floor during play is the fix. That belongs with the rest of the
-## performance work rather than here, but this is the seam it will happen at.
+## campaign describes six floors while only the one being played — and the one after it — are ever
+## in memory. `preload_floor` is what makes the second half true: a floor's textures, templates and
+## enemy scenes are pulled in the background while the player fights the floor before it, rather
+## than inside the single frame a descent happens in.
 ##
 ## The last floor in the list is the run's last floor. That is the single rule deciding victory,
 ## replacing "the floor whose `next_floor` happens to be null" — which was the same fact stored
@@ -102,6 +101,26 @@ func load_floor(index: int) -> FloorConfig:
 
 func load_floor_by_id(floor_id: StringName) -> FloorConfig:
 	return load_floor(index_of(floor_id))
+
+
+## Starts loading the floor at `index` in the background. Does nothing for an index this campaign
+## does not contain, which is what makes "preload the next one" safe to call from the last floor.
+##
+## One floor ahead and no further — see `FloorEntry.request_preload`. This is the seam the class
+## comment above predicted: the campaign names six floors while only the one being played, and the
+## one after it, are ever in memory.
+func preload_floor(index: int) -> void:
+	var entry := entry_at(index)
+	if entry != null:
+		entry.request_preload()
+
+
+## Collects every outstanding background load and drops it. See `FloorEntry.discard_preload`: a
+## request nobody collects is an object still alive at exit, and a run can end at any moment.
+func discard_preloads() -> void:
+	for entry: FloorEntry in floors:
+		if entry != null:
+			entry.discard_preload()
 
 
 ## The seed the floor at `index` is generated from in a run that opened on `run_seed`.

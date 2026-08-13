@@ -194,6 +194,12 @@ func _open_session(generated: FloorLayout, seed_value: int) -> void:
 	_instantiate_doors()
 	_place_player_in_start_room()
 
+	# The next floor starts loading now, while the player has this one to fight through. By the time
+	# they claim the boss reward it is usually already in memory, which takes the whole cost of a
+	# floor's templates, tile sheets and enemy scenes out of the one frame the transition happens in.
+	if campaign != null and floor_index >= 0:
+		campaign.preload_floor(floor_index + 1)
+
 
 ## Points every subsystem's generator at its own stream of this floor's seed.
 ##
@@ -211,6 +217,14 @@ func _seed_streams(seed_value: int) -> void:
 ## not generate like that any more" can be answered with "the content changed" — see `RunManifest`.
 func get_content_fingerprint() -> String:
 	return _content_fingerprint
+
+
+## The run is over, or the scene is being reloaded, or the game is quitting — all of which reach
+## here, and any of which can happen while the next floor is still loading in the background. An
+## uncollected request outlives the process; see `FloorEntry.discard_preload`.
+func _exit_tree() -> void:
+	if campaign != null:
+		campaign.discard_preloads()
 
 
 ## This floor's session. Null before the first `build`; a different node after every boundary.

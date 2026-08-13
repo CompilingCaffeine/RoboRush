@@ -31,6 +31,7 @@ func _ready() -> void:
 	collision_mask = Teams.LAYER_WORLD
 	_health.configure(RECEIVER_POOL, 0.0)
 	_health.damaged.connect(_on_damaged)
+	HostileRegistry.register(self, Teams.Id.ENEMY, _health)
 
 
 func set_tint(tint: Color) -> void:
@@ -70,3 +71,10 @@ func _on_damaged(info: DamageInfo, _remaining: float) -> void:
 	# Refilled immediately: this pool exists to catch hits, not to run out.
 	_health.current = _health.max_health
 	took_damage.emit(info)
+
+
+## Registered with `HostileRegistry` so homing, blasts and chains can find this body without walking
+## the whole enemy group to do it. The notification hook is what keeps the registry honest about
+## sleep: a room deactivating its enemies delivers `PAUSED` to each of them.
+func _notification(what: int) -> void:
+	HostileRegistry.note(what, self)
