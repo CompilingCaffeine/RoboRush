@@ -44,6 +44,18 @@ var _knockback := Vector2.ZERO
 ## of the robot — it orbits and travels with it, and parenting is the whole mechanism.
 var _drones: Array[PlayerDrone] = []
 
+## Faraday Cage's charges, refilled on entering a room. Held here rather than on the run, unlike the
+## death save's debt, because it is *meant* to reset — a shield the player earns back by walking
+## through a door is a rhythm; one that has to be tracked across a run is a resource.
+var _shields_left := 0
+
+## Seconds the robot has been standing still, for Mutex Lock. Counted rather than sampled because
+## the item pays for having stopped, not for the frame it stopped on.
+var _still_seconds := 0.0
+
+## True until the first shot after entering a room, which is what Cache Warmer multiplies.
+var _room_opening_shot := true
+
 
 func _ready() -> void:
 	assert(config != null, "Player.config is unset: assign a PlayerConfig resource.")
@@ -63,6 +75,15 @@ func _ready() -> void:
 	# and the health component asks it, rather than being handed a copy — one window, so
 	# the flash the player sees and the damage they take cannot disagree.
 	_health.add_immunity_source(_dash.is_invulnerable)
+
+	# The one thing standing between a lethal hit and the summary screen, when the build has bought
+	# it. Set here rather than when a failover item is collected, because the guard reads the
+	# inventory every time it is consulted — an item picked up mid-fight is armed immediately, and
+	# there is no wiring to remember to undo.
+	_health.death_guard = _survive_lethal_hit
+	# The shield is asked before every hit lands, so a charge collected mid-fight is live at once.
+	_health.damage_absorber = _absorb_with_shield
+	EventBus.room_entered.connect(_on_room_entered)
 
 	_dash.dash_started.connect(_on_dash_started)
 	_dash.dash_ended.connect(_on_dash_ended)
@@ -93,9 +114,17 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	_apply_knockback(delta)
 
+	_step_conditional_fire_rate(delta)
 	_weapon.step(delta)
 	if _input.is_firing() and _can_fire_while_moving():
-		_weapon.try_fire(global_position, _input.aim_direction)
+		# Cache Warmer rides the weapon's existing damage multiplier rather than adding a field
+		# beside it: raised for the attempt and put back after, so a shot the cooldown refuses does
+		# not spend the room's opening bonus.
+		var restore := _weapon.damage_multiplier
+		_weapon.damage_multiplier = restore * opening_shot_damage_scale()
+		if _weapon.try_fire(global_position, _input.aim_direction):
+			_room_opening_shot = false
+		_weapon.damage_multiplier = restore
 
 	if _input.has_interact_request():
 		_input.consume_interact_request()
@@ -178,10 +207,79 @@ func is_dead() -> bool:
 func _apply_item_stats() -> void:
 	_weapon.modifiers = _items.build_modifier_stack()
 	_weapon.fire_rate_multiplier = _items.get_fire_rate_multiplier()
-	_health.set_max_health(config.max_integrity + _items.get_max_integrity_delta())
+	# The run's integrity penalty is subtracted last, after the base and the items, which is what
+	# makes a spent death save something the player can rebuild out of rather than a permanent cap:
+	# a +2 ceiling item found afterwards raises the maximum from one point to three. See
+	# `RunManager.max_integrity_penalty`. `set_max_health` floors the result at one point.
+	_health.set_max_health(
+		config.max_integrity + _items.get_max_integrity_delta() - RunManager.max_integrity_penalty
+	)
 	_dash.set_bonus_charges(_items.get_dash_charges_delta())
 	_dash.set_cooldown_scale(_items.get_dash_cooldown_multiplier())
 	_sync_drones()
+
+
+## Faraday Cage. Spends a charge to swallow a hit whole, and reports that it did — see
+## `HealthComponent.damage_absorber`, which asks before anything is taken off.
+##
+## The blow is not reduced, it is refused: a shield that turned a three-point hit into a one-point
+## hit would be a worse `max_integrity_delta`, and the reason to hold one is knowing the next hit
+## costs nothing whatever it was.
+func _absorb_with_shield(_info: DamageInfo) -> bool:
+	if _shields_left <= 0:
+		return false
+	_shields_left -= 1
+	EventBus.player_shield_absorbed.emit(global_position, _shields_left)
+	return true
+
+
+## A new room refills the shield and re-arms the opening shot. Both are floor-local rhythms rather
+## than run state, which is the whole difference between Faraday Cage and Failover.
+func _on_room_entered(_type: int, _room_id: int) -> void:
+	_shields_left = _items.get_shield_charges_per_room()
+	_room_opening_shot = true
+
+
+## Mutex Lock and Adrenal Loop: fire rate that depends on what the robot is *doing* rather than on
+## what it is carrying. Recomputed every frame from the inventory's base, so the moment a condition
+## ends the bonus does too — and so neither item can leave a multiplier behind on a build that later
+## drops out of the condition.
+##
+## Early-out first, because a build holding neither must not pay for two aggregate walks a frame.
+func _step_conditional_fire_rate(delta: float) -> void:
+	var still_bonus := _items.get_stillness_fire_rate_scale()
+	var hurt_bonus := _items.get_low_integrity_fire_rate_scale()
+	if is_equal_approx(still_bonus, 1.0) and is_equal_approx(hurt_bonus, 1.0):
+		_still_seconds = 0.0
+		return
+
+	# The same threshold Blocking I/O reads. Two numbers for "is the robot standing still" is
+	# two answers to one question, and the day they disagree an item fires while another refuses.
+	if velocity.length() <= STILLNESS_SPEED:
+		_still_seconds += delta
+	else:
+		_still_seconds = 0.0
+
+	var scale := _items.get_fire_rate_multiplier()
+	if still_bonus > 1.0 and _still_seconds >= _items.get_stillness_seconds():
+		scale *= still_bonus
+	if hurt_bonus > 1.0 and _health.current <= _items.get_low_integrity_points():
+		scale *= hurt_bonus
+	_weapon.fire_rate_multiplier = scale
+
+
+## What the next shot is multiplied by, which is Cache Warmer's bonus until the room's first shot
+## has actually left the barrel and 1.0 forever after.
+##
+## A function rather than an expression inlined above, so the rule can be read — and checked —
+## without driving a whole frame of input to observe it.
+func opening_shot_damage_scale() -> float:
+	return _items.get_first_shot_damage_scale() if _room_opening_shot else 1.0
+
+
+## How many hits the shield can still take this room. For the HUD and for the suite.
+func get_shield_charges() -> int:
+	return _shields_left
 
 
 ## Rebuilds the drone escort to match the inventory, and re-hands every drone the things
@@ -304,6 +402,40 @@ func _apply_knockback(delta: float) -> void:
 		return
 	move_and_collide(_knockback * delta)
 	_knockback = _knockback.move_toward(Vector2.ZERO, config.knockback_decay * delta)
+
+
+## Spends a failover charge to survive a blow that would have ended the run, and charges what
+## surviving costs: maximum integrity collapses to a single point for the rest of the run.
+##
+## Consulted by the health component the instant a hit takes integrity to zero, before anything has
+## been told the player died — see `HealthComponent.death_guard`. Changing nothing is how the guard
+## declines, which is what every build without a failover item does.
+##
+## The order below *is* the mechanic:
+##
+## 1. **Charge the debt** against the ceiling as it stands right now, so a second save later costs
+##    only what the player had rebuilt since the first.
+## 2. **Recompute the stats**, which is what actually lowers the maximum. The penalty is subtracted
+##    inside `_apply_item_stats`, which is the one place the ceiling is ever decided — writing it
+##    onto the component here would be undone by the next item collected.
+## 3. **Refill**, into a pool that is now one point deep. The robot survives at full integrity, and
+##    full is one.
+## 4. **Grant grace**, because the shot that nearly killed the player is rarely travelling alone.
+##
+## What this deliberately does not do is make the rest of the run safe. A one-point ceiling means
+## every subsequent hit is lethal, repair cells and pickup heals top up a pool that is already full,
+## and the only way back is the handful of items that raise maximum integrity. That is the trade the
+## item is offered on.
+func _survive_lethal_hit() -> void:
+	if RunManager.death_saves_spent >= _items.get_death_save_charges():
+		return
+
+	var grace := _items.get_death_save_grace_seconds()
+	RunManager.spend_death_save(_health.max_health, HealthComponent.MINIMUM_MAX_HEALTH)
+	_apply_item_stats()
+	_health.heal(_health.max_health)
+	_health.grant_invulnerability(grace)
+	EventBus.player_death_averted.emit(global_position)
 
 
 func _on_died() -> void:

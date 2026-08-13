@@ -17,9 +17,16 @@ var _inventory: ItemInventory
 var _owner_body: Node2D
 
 
+## Damage the player has taken since entering the current room, for Swap Space. Reset on entry
+## rather than on the clear, so a room walked back into does not repay a debt already settled.
+var _damage_this_room := 0.0
+
+
 func _ready() -> void:
 	EventBus.enemy_killed.connect(_on_enemy_killed)
 	EventBus.player_dash_started.connect(_on_player_dash_started)
+	EventBus.player_damaged.connect(_on_player_damaged)
+	EventBus.room_entered.connect(_on_room_entered)
 	EventBus.room_cleared.connect(_on_room_cleared)
 
 
@@ -71,6 +78,22 @@ func _on_enemy_killed(_enemy: Node, position: Vector2) -> void:
 			_owner_body,
 		)
 
+	# Garbage Collector. The same shape as the dash pulse and deliberately so — a status applied to
+	# whatever is standing near a point — but triggered by a kill, which makes it a reward for
+	# fighting into a pack rather than for leaving one. Enemies are found by group for the reason
+	# the dash pulse finds them that way: this runs inside a death callback, where a shape query is
+	# refused.
+	for item: ItemConfig in _inventory.get_kill_pulses():
+		for node: Node in get_tree().get_nodes_in_group(Teams.GROUP_ENEMY):
+			var enemy := node as Node2D
+			if enemy == null or position.distance_to(enemy.global_position) > item.kill_pulse_radius:
+				continue
+			var status := StatusEffectController.find_on(enemy)
+			if status == null:
+				continue
+			for id: StringName in item.kill_pulse_effects:
+				status.apply(id)
+
 
 ## Breakpoint. A dash leaves a status pulse behind it, which turns the dodge the player
 ## already had into a repositioning tool: you get out, and what you got out of is slower.
@@ -117,10 +140,74 @@ func _on_player_dash_started(_direction: Vector2) -> void:
 ## the inventory at spawn time, because it has to outlive the room: an enemy in room nine is
 ## carrying interest from room two, and the alternative — recomputing from "rooms cleared so
 ## far" — would silently backdate the whole debt onto a player who picked the item up late.
+## Interrupt Handler, and Swap Space's ledger.
+##
+## The blast is centred on the robot rather than on whatever hit it, because what the item answers
+## is *being hit*, and the thing that hit the player is frequently a projectile that no longer
+## exists. Reusing `Explosion.detonate` means it composes with everything a blast already does,
+## including setting off a Volatile Kernel chain.
+func _on_player_damaged(info: DamageInfo, _remaining: float) -> void:
+	if _inventory == null or _owner_body == null:
+		return
+
+	_damage_this_room += info.amount
+
+	for item: ItemConfig in _inventory.get_retaliations():
+		Explosion.detonate(
+			self,
+			_owner_body.global_position,
+			item.retaliation_radius,
+			item.retaliation_damage,
+			Teams.Id.PLAYER,
+			_owner_body,
+		)
+
+
+func _on_room_entered(_type: int, _room_id: int) -> void:
+	_damage_this_room = 0.0
+
+
 func _on_room_cleared() -> void:
 	if _inventory == null:
 		return
+
+	_pay_scrap_interest()
+	_repay_room_damage()
+
 	var growth := _inventory.get_enemy_health_growth_per_room()
 	if growth <= 0.0:
 		return
-	RunManager.enemy_health_scale += growth
+	# Bounded by RunManager rather than here: the ceiling is a property of the run, and a second
+	# thing that accrues against enemies later must not be able to route around it.
+	RunManager.add_enemy_health_growth(growth)
+
+
+## Compound Interest. Paid on the scrap the player is *holding*, so it rewards walking past a shelf
+## and compounds only for as long as they keep doing it.
+##
+## Floored rather than rounded, and paid before the damage refund below for no reason other than
+## determinism: two payouts in one event should happen in a fixed order, or a run's scrap total
+## depends on dictionary iteration.
+func _pay_scrap_interest() -> void:
+	var fraction := _inventory.get_scrap_interest_fraction()
+	if fraction <= 0.0:
+		return
+	var interest := floori(float(RunManager.scrap) * fraction)
+	if interest > 0:
+		RunManager.add_scrap(interest)
+
+
+## Swap Space. Half of what a room cost the player comes back once the room is theirs.
+##
+## Healed through the health component rather than by raising the maximum, so it is recovery and not
+## a bigger pool — and so it does nothing for a run that has spent a Failover and sits at a
+## one-point ceiling, which is correct: the refund fills a pool, and that pool is full.
+func _repay_room_damage() -> void:
+	var fraction := _inventory.get_room_damage_refund()
+	if fraction <= 0.0 or _damage_this_room <= 0.0 or _owner_body == null:
+		return
+
+	var health := HealthComponent.find_on(_owner_body)
+	if health != null:
+		health.heal(_damage_this_room * fraction)
+	_damage_this_room = 0.0

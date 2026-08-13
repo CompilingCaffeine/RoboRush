@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="ItemConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/item_config.gd" id="1_item"]
+[ext_resource type="Texture2D" path="res://art/items/chip_damage.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"chip_damage"
+display_name = "Damage Chip"
+description = "Projectiles hit fifteen percent harder. Stacks."
+rarity = 0
+category = 1
+tags = Array[StringName]([&"chip", &"repeatable", &"damage"])
+max_stacks = 5
+projectile_scale = {
+&"damage": 1.15
+}
+icon = ExtResource("2_icon")
+accent_color = Color(0.949, 0.631, 0.235, 1)
+pickup_sound = &"item_pickup"

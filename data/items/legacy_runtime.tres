@@ -7,12 +7,13 @@
 script = ExtResource("1_item")
 id = &"legacy_runtime"
 display_name = "Legacy Runtime"
-description = "The dash takes three times as long to recharge, and one charge is gone. No upside."
+description = "The dash takes three times as long to recharge, one charge is gone, and the chassis loses one maximum integrity. No upside."
 rarity = 4
 category = 6
 tags = Array[StringName]([&"corrupted", &"mobility", &"hindrance"])
 dash_charges_delta = -1
 dash_cooldown_scale = 3.0
+max_integrity_delta = -1.0
 icon = ExtResource("2_icon")
 accent_color = Color(0.878, 0.290, 0.290, 1)
 pickup_sound = &"item_pickup"

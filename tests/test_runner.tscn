@@ -1,10 +1,14 @@
-[gd_scene load_steps=18 format=3]
+[gd_scene load_steps=22 format=3]
 
 [ext_resource type="Script" path="res://tests/test_runner.gd" id="1_runner"]
 [ext_resource type="Script" path="res://tests/test_player_movement.gd" id="2_movement"]
 [ext_resource type="Script" path="res://tests/test_combat.gd" id="3_combat"]
 [ext_resource type="Script" path="res://tests/test_player_input.gd" id="4_input"]
 [ext_resource type="Script" path="res://tests/test_floor.gd" id="5_floor"]
+[ext_resource type="Script" path="res://tests/test_campaign.gd" id="18_campaign"]
+[ext_resource type="Script" path="res://tests/test_determinism.gd" id="21_determinism"]
+[ext_resource type="Script" path="res://tests/test_post_boss.gd" id="19_post_boss"]
+[ext_resource type="Script" path="res://tests/test_economy.gd" id="20_economy"]
 [ext_resource type="Script" path="res://tests/test_items.gd" id="6_items"]
 [ext_resource type="Script" path="res://tests/test_enemies.gd" id="7_enemies"]
 [ext_resource type="Script" path="res://tests/test_run.gd" id="8_run"]
@@ -30,8 +34,17 @@ script = ExtResource("3_combat")
 [node name="PlayerInput" type="Node" parent="."]
 script = ExtResource("4_input")
 
+[node name="Campaign" type="Node" parent="."]
+script = ExtResource("18_campaign")
+
+[node name="Determinism" type="Node" parent="."]
+script = ExtResource("21_determinism")
+
 [node name="Floor" type="Node" parent="."]
 script = ExtResource("5_floor")
+
+[node name="Economy" type="Node" parent="."]
+script = ExtResource("20_economy")
 
 [node name="Items" type="Node" parent="."]
 script = ExtResource("6_items")
@@ -50,6 +63,9 @@ script = ExtResource("10_boss")
 
 [node name="RuntimeError" type="Node" parent="."]
 script = ExtResource("16_runtime_error")
+
+[node name="PostBoss" type="Node" parent="."]
+script = ExtResource("19_post_boss")
 
 [node name="HUD" type="Node" parent="."]
 script = ExtResource("17_hud")

@@ -24,6 +24,7 @@
 
 [resource]
 script = ExtResource("1_floor")
+id = &"development"
 display_name = "Development"
 floor_number = 2
 theme = ExtResource("40_theme")

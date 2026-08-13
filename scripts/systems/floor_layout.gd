@@ -12,7 +12,10 @@ var rooms: Array[RoomPlan] = []
 ## Grid cell -> room id, so occupancy is a lookup rather than a scan.
 var by_cell: Dictionary[Vector2i, int] = {}
 
-## The seed this layout was generated from. Kept so a run can be reproduced exactly.
+## The seed this layout was generated from, which is the floor's *layout stream* rather than the
+## floor's own seed — `RunRng.stream_seed(floor_seed, RunRng.LAYOUT)`. Worth the distinction: this
+## number reproduces the layout when handed back to `FloorGenerator.generate`, and it is not the
+## number `--seed=` takes.
 var seed_value: int = 0
 
 

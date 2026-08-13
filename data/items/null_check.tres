@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ItemConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/item_config.gd" id="1_item"]
+[ext_resource type="Texture2D" path="res://art/items/null_check.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"null_check"
+display_name = "Null Check"
+description = "A hit that leaves a target under a fifth of its integrity finishes it instead."
+rarity = 2
+category = 1
+tags = Array[StringName]([&"projectile", &"execute"])
+projectile_set = {
+&"execute_threshold": 0.2
+}
+icon = ExtResource("2_icon")
+accent_color = Color(0.878, 0.29, 0.29, 1)
+pickup_sound = &"item_pickup"

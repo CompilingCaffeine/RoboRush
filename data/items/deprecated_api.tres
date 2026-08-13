@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="ItemConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/item_config.gd" id="1_item"]
+[ext_resource type="Texture2D" path="res://art/items/deprecated_api.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"deprecated_api"
+display_name = "Deprecated API"
+description = "Projectiles pierce almost anything, but the weapon is slow and the chassis loses one maximum integrity."
+rarity = 4
+category = 6
+tags = Array[StringName]([&"corrupted", &"projectile", &"pierce"])
+projectile_add = {
+&"pierce_count": 4.0
+}
+fire_rate_scale = 0.6
+max_integrity_delta = -1.0
+icon = ExtResource("2_icon")
+accent_color = Color(0.878, 0.29, 0.29, 1)
+pickup_sound = &"item_pickup"

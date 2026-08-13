@@ -19,6 +19,12 @@ signal healed(amount: float, remaining: float)
 ## Emitted once, on the transition to zero. Never fires twice.
 signal died()
 
+## The lowest a maximum may be driven to. One point rather than zero, so nothing that lowers the
+## ceiling — an item on pickup, a spent death save — can be lethal by arithmetic. It is also the
+## value a death save leaves the pool at, and those are deliberately the same number: "as small as
+## integrity is allowed to get" is one fact, and stating it twice is how the two come to disagree.
+const MINIMUM_MAX_HEALTH := 1.0
+
 @export var max_health: float = 3.0
 
 ## Seconds of immunity granted after a hit lands. Zero for enemies, so rapid fire
@@ -26,6 +32,31 @@ signal died()
 @export var invulnerability_seconds: float = 0.0
 
 var current: float
+
+## Called when a hit would leave nothing. It may put integrity back, and whether it did is the whole
+## of how a death is averted — there is no boolean to disagree with the number. A guard that changes
+## nothing lets the blow stand, which is the right default: better a death the player can see than an
+## invulnerable robot sitting at zero.
+##
+## A callable the owner sets, for the same reason `add_immunity_source` is one: the player's death
+## save is an item effect, and this component runs on every enemy in the game. It must not learn the
+## word "item" to support one. Unset on everything except the player, where `Player` supplies it.
+var death_guard := Callable()
+
+## Consulted before a hit lands. Returning true swallows it whole: no integrity is lost, no
+## `damaged` is emitted, and `apply_damage` reports that nothing landed.
+##
+## Distinct from an immunity source, and the distinction is the mechanic. Immunity is a *window* —
+## everything during a dash misses. An absorber is a *charge*: it is spent on one hit, whatever the
+## hit was, which is what makes Faraday Cage's shield readable as one blocked blow rather than as a
+## second of safety.
+var damage_absorber := Callable()
+
+## Multipliers on incoming damage, asked rather than stored — the same shape as `_immunity_sources`
+## and for the same reason. A shocked enemy takes more from everything, and the thing that knows it
+## is shocked is its `StatusEffectController`, which registers itself here rather than this component
+## learning what a status is.
+var _damage_scale_sources: Array[Callable] = []
 
 var _invulnerable_left := 0.0
 var _is_dead := false
@@ -66,7 +97,27 @@ func apply_damage(info: DamageInfo) -> bool:
 	if _is_dead or is_invulnerable() or info.amount <= 0.0:
 		return false
 
+	# Before the amount is even scaled: an absorbed hit did not happen, and a shield that swallowed
+	# a shot the target was weak to should not report a bigger blocked number.
+	if damage_absorber.is_valid() and damage_absorber.call(info):
+		return false
+
+	# The scaled amount is written back onto the event rather than kept local, because everything
+	# downstream reads `info.amount` as "what this hit did" — the run's damage statistics, the
+	# damage numbers that float off the target, the feedback director. A shocked enemy that visibly
+	# takes 35% more while the HUD reports the unscaled figure is a bug report about the item.
+	info.amount *= get_damage_scale()
+
 	current = maxf(current - info.amount, 0.0)
+
+	# Before `damaged` is emitted, not after, and this ordering is load-bearing. Everything
+	# listening to that signal reads `remaining <= 0.0` as "this was the killing blow":
+	# `RunManager` writes the cause of death from it and the feedback director plays the
+	# low-integrity warning off it. Averting the death afterwards would leave the run filed with a
+	# cause of death it survived.
+	if current <= 0.0 and death_guard.is_valid():
+		death_guard.call()
+
 	if invulnerability_seconds > 0.0:
 		_invulnerable_left = invulnerability_seconds
 	damaged.emit(info, current)
@@ -86,8 +137,17 @@ func apply_damage(info: DamageInfo) -> bool:
 ## `heal()` as a separate, declared effect, so gaining maximum integrity is never a
 ## silent full repair. The floor of one point means no item can be lethal on pickup.
 func set_max_health(new_max: float) -> void:
-	max_health = maxf(new_max, 1.0)
+	max_health = maxf(new_max, MINIMUM_MAX_HEALTH)
 	current = minf(current, max_health)
+
+
+## Grants immunity for `seconds` from something other than a hit landing. The death save's grace
+## window is the only caller: surviving a lethal blow and then being killed by the next shot in the
+## same volley is not a save, it is a delay.
+##
+## Extends rather than replaces, so a grace window cannot shorten the ordinary post-hit immunity.
+func grant_invulnerability(seconds: float) -> void:
+	_invulnerable_left = maxf(_invulnerable_left, seconds)
 
 
 func heal(amount: float) -> void:
@@ -103,6 +163,24 @@ func heal(amount: float) -> void:
 func add_immunity_source(source: Callable) -> void:
 	if source.is_valid() and source not in _immunity_sources:
 		_immunity_sources.append(source)
+
+
+## Registers something that multiplies incoming damage — a status effect, and later armour or a
+## weakness. A list rather than one slot so a second source never has to argue with the first.
+func add_damage_scale_source(source: Callable) -> void:
+	if source.is_valid() and source not in _damage_scale_sources:
+		_damage_scale_sources.append(source)
+
+
+## The product of every registered multiplier. A product rather than the largest, for the reason
+## `StatusEffectController.get_speed_scale` is one: two independent effects should compound, and
+## taking the maximum would make the second one the player applied do nothing.
+func get_damage_scale() -> float:
+	var scale := 1.0
+	for source: Callable in _damage_scale_sources:
+		if source.is_valid():
+			scale *= float(source.call())
+	return scale
 
 
 func is_invulnerable() -> bool:

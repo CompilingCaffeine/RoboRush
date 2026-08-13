@@ -4,18 +4,30 @@ extends Resource
 ##
 ## Holds what the floor is made of, not how it is assembled — FloorGenerator owns the
 ## graph, this owns the parts list. Adding Floor 2 should be a new .tres, not new code.
+##
+## What it deliberately does not hold is where it sits in the run. A floor used to name the floor
+## after it, which made the run's order a chain that could only be read by walking it; that order
+## is now `RunDefinition`, and a floor knows only its own id and number. Nothing here should ever
+## answer "what comes next" again — a floor that knew would be a second campaign order, and the
+## way two orders fail is one of them being edited.
+
+## Stable identifier, and the name every other piece of data refers to this floor by: the
+## campaign lists it (`FloorEntry.id`), `--floor=` accepts it, and a checkpoint or a run result
+## records it. Must never change once it ships, for the reason `ItemConfig.id` must not — unlike
+## `display_name`, which is free to be reworded, and unlike `floor_number`, which is a position
+## and moves when a floor is inserted before this one.
+@export var id: StringName = &"unnamed_floor"
 
 @export var display_name: String = "Help Desk"
 
+## Where this floor sits in the run, counted from one. A statement of position that
+## `CampaignValidator` holds to the campaign's own order — it is read by content eligibility
+## (`RoomTemplate.min_floor`/`max_floor`) and shown to the player, and a floor whose number
+## disagreed with where it actually is would draw the wrong rooms under the right banner.
 @export var floor_number: int = 1
 
 ## Tags used to filter which room templates may appear here.
 @export var floor_tags: Array[StringName] = [&"help_desk"]
-
-## The floor to load when this floor's boss is defeated. Null means this is the run's last
-## floor — defeating its boss wins the run. A chain of these is the run's floor order, so
-## adding a floor is a new .tres with this field pointed at it, not new code.
-@export var next_floor: FloorConfig
 
 ## How this floor looks and sounds. Null falls back to the textures authored into
 ## `room.tscn` and `wall_block.tscn` and to the shared `explore`/`boss` tracks, so a floor

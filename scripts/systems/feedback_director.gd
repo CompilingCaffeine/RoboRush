@@ -24,6 +24,16 @@ const SHAKE_ENEMY_KILLED := 0.34
 const SHAKE_PLAYER_DAMAGED := 0.55
 const SHAKE_PLAYER_DIED := 0.85
 
+## A failover spending its charge. As hard as dying, because from the player's side it very nearly
+## was, and the hit's own `SHAKE_PLAYER_DAMAGED` is already playing underneath it — the two together
+## are what separate "I got hurt" from "I should not still be here".
+const SHAKE_DEATH_AVERTED := 0.85
+
+## A shield eating a hit. Small — smaller than taking one — because the point of the feedback is
+## that the blow did *not* land: a shake as hard as damage would teach the player to read a blocked
+## hit as a hit taken.
+const SHAKE_SHIELD_ABSORBED := 0.18
+
 ## Explosions shake less than a kill even though they look bigger, because Volatile Kernel
 ## fires one on *every* death — the kill's own shake is already playing, and adding a second
 ## one would make the item feel like a screen fault rather than a payoff.
@@ -69,6 +79,8 @@ func _ready() -> void:
 	EventBus.enemy_damaged.connect(_on_enemy_damaged)
 	EventBus.enemy_killed.connect(_on_enemy_killed)
 	EventBus.player_damaged.connect(_on_player_damaged)
+	EventBus.player_shield_absorbed.connect(_on_player_shield_absorbed)
+	EventBus.player_death_averted.connect(_on_player_death_averted)
 	EventBus.player_died.connect(_on_player_died)
 	EventBus.player_dash_started.connect(_on_player_dash_started)
 	EventBus.room_cleared.connect(_on_room_cleared)
@@ -142,6 +154,23 @@ func _on_player_damaged(_info: DamageInfo, remaining: float) -> void:
 	GameManager.hit_pause()
 	if remaining <= 1.0 and remaining > 0.0:
 		AudioManager.play_sfx(&"low_integrity")
+
+
+## `zap` rather than a sound of its own: the library has no shield cue, and an electrical discharge
+## is both the closest thing in it and exactly what a cage doing its job sounds like. No hit pause —
+## the game should not stop for something that did not happen.
+func _on_player_shield_absorbed(_at: Vector2, _left: int) -> void:
+	AudioManager.play_sfx(&"zap")
+	_add_trauma(SHAKE_SHIELD_ABSORBED)
+
+
+## No sound of its own, deliberately. `player_damaged` fires for the same blow and leaves the player
+## on one point of integrity, which is exactly the condition its own handler already answers with the
+## low-integrity alarm — the most fitting sound in the library for "you are one hit from over", and
+## inventing a second cue to play across it would fight the one that is already right.
+func _on_player_death_averted(_at: Vector2) -> void:
+	_add_trauma(SHAKE_DEATH_AVERTED)
+	GameManager.hit_pause()
 
 
 func _on_player_died() -> void:

@@ -55,10 +55,27 @@ To skip the menu and drop straight into a run — which is what the tests do, an
 godot --path . res://main.tscn
 ```
 
-To replay one specific floor layout — the seed is shown in the debug overlay (`F1`):
+To replay one specific run — the seed is printed at startup and shown in the debug overlay
+(`F1`), which also shows the floor seed derived from it:
 
 ```bash
 godot --path . res://main.tscn -- --seed=918273
+```
+
+Every floor's seed comes from the run seed and that floor's stable id, so a single floor can be
+replayed on its own without clearing the ones before it:
+
+```bash
+godot --path . res://main.tscn -- --seed=918273 --floor=2
+```
+
+A seed only means something against the content it was drawn on. `--manifest` prints what the
+seed actually resolves to — every floor's derived seed and a fingerprint of the content that seed
+will be spent on — so "this floor stopped generating the way it did in that report" can be
+answered with "the content changed, on this floor" rather than a guess:
+
+```bash
+godot --path . res://main.tscn -- --seed=918273 --manifest
 ```
 
 ### Building it
@@ -421,7 +438,8 @@ scenes/ui/main_menu.tscn / .gd          + The title screen, and the game's entry
 autoload/event_bus.gd                     21 cross-system signals
 autoload/game_manager.gd                  Feedback config, hit pause, game state
 autoload/audio_manager.gd                 Pooled one-shot SFX, and crossfaded music
-autoload/run_manager.gd                   Run state: scrap, floor, seed, items, statistics
+autoload/run_manager.gd                   Run state: scrap, floor, one immutable seed, items,
+                                            per-floor records, statistics
 autoload/save_manager.gd                + Settings, unlocks, bosses beaten, best runs; and
                                             the one place a setting becomes behaviour
 autoload/scene_router.gd                + The only thing that changes scenes
@@ -440,6 +458,8 @@ scripts/resources/shop_config.gd        + Spec section 17's prices
 scripts/resources/feedback_config.gd      Shake, flash, damage numbers, hit pause
 scripts/resources/room_template.gd        One handcrafted room layout, in tiles
 scripts/resources/floor_config.gd         A floor's parts list, rosters, rewards, shop
+scripts/resources/floor_entry.gd        + One floor's place in a campaign: id and path
+scripts/resources/run_definition.gd     + The campaign: which floors a run is made of
 scripts/resources/pickup_config.gd        What a pickup is and what collecting it does
 scripts/resources/item_config.gd          One item, entirely as data
 
@@ -469,6 +489,10 @@ scripts/systems/run_stats.gd            + Spec section 25's tracked statistics
 scripts/systems/room_plan.gd              One room's place in a floor, pre-instantiation
 scripts/systems/floor_layout.gd           The graph: cells, links, connectivity, bounds
 scripts/systems/floor_generator.gd        Builds the graph; invariants by construction
+scripts/systems/campaign_validator.gd   + Refuses a broken campaign before a run starts
+scripts/systems/run_rng.gd              + One run seed, derived into named per-floor streams
+scripts/systems/run_manifest.gd         + What a seed will build: derived seeds and content
+scripts/systems/floor_record.gd         + One floor's duration, boss, and how it ended
 scripts/systems/loot_spawner.gd           Enemy drops, room rewards, and item drops
 scripts/systems/game_settings.gd        + Spec section 21's eight settings, as plain data
 scripts/systems/best_run_stats.gd       + What survives a run, and what counts as a record
@@ -511,7 +535,8 @@ data/spawns/*.tres                       + The floor's weighted enemy roster
 data/bosses/merge_conflict.tres          + The boss's phases and attacks
 data/rooms/*.tres                          Eight templates (start, combat, treasure, shop, boss)
 data/floors/floor_1_help_desk.tres         Floor 1: parts, rosters, rewards, item pool
-data/items/*.tres                          Twelve items from spec section 12
+data/runs/main_campaign.tres             + The run's floor order, by stable id and path
+data/items/*.tres                          54 items: 48 one-time, 6 stackable chips
 data/settings/feedback_config.tres         Feedback intensity
 data/settings/shop_config.tres             Spec section 17's prices
 data/ui/theme.tres                      + One font and palette for every Control
@@ -523,6 +548,10 @@ tests/test_case.gd                         Suite base class
 tests/test_player_movement.gd              32 movement and dash checks
 tests/test_combat.gd                       126 data, component, and integration checks
 tests/test_player_input.gd                 38 arrow-key shooting checks
+tests/test_campaign.gd                  + 62 campaign, lookup, seed, and injected-fault checks
+tests/test_determinism.gd               + 127 seed-derivation, stream, manifest, and record checks
+tests/test_economy.gd                   + 36 reward, boss-choice, stacking, and 10k-run checks
+tests/test_post_boss.gd                 + 25 checks that a dead boss's hazards still resolve
 tests/test_floor.gd                        161 generation, invariant, template, and floor-advance checks
 tests/test_items.gd                        174 item, stack, inventory, and synergy checks
 tests/test_enemies.gd                      84 checks that each enemy poses its problem
@@ -565,6 +594,15 @@ Executed on this machine, not assumed.
   on every seed.
 - **Generation is deterministic**: the same seed reproduces the same floor, different seeds
   produce different floors, and floors branch rather than degenerating into one corridor.
+- **A run is reproducible from one seed, and stays reproducible.** Each floor's seed comes from
+  the run seed, the campaign's content version, and the floor's stable id — not from the floor
+  before it — so renaming, reordering, or inserting a floor leaves every other floor's seed
+  alone, and a single floor can be replayed with `--floor=`. Within a floor, layout, boss,
+  encounters, shop, loot, and the boss reward each draw from their **own named stream**
+  ([run_rng.gd](scripts/systems/run_rng.gd)), so one subsystem taking more numbers than it used
+  to cannot move another's results. What is deliberately *not* reproducible is per-frame combat:
+  enemies and bosses draw from the engine's global generator, and nothing here promises a replay
+  of a fight.
 - **Room templates are checked against the door geometry** — no obstacle may straddle a
   doorway corridor, no enemy may spawn inside an obstacle, and the reward point must be
   reachable.

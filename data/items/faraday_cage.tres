@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="ItemConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/item_config.gd" id="1_item"]
+[ext_resource type="Texture2D" path="res://art/items/faraday_cage.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"faraday_cage"
+display_name = "Faraday Cage"
+description = "Absorbs one hit outright, and recharges when the robot walks into a new room."
+rarity = 2
+category = 4
+tags = Array[StringName]([&"defense", &"shield"])
+shield_charges_per_room = 1
+icon = ExtResource("2_icon")
+accent_color = Color(0.345, 0.941, 0.784, 1)
+pickup_sound = &"item_pickup"

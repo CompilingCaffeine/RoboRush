@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ItemConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/item_config.gd" id="1_item"]
+[ext_resource type="Texture2D" path="res://art/items/fragmentation.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"fragmentation"
+display_name = "Fragmentation"
+description = "Splits spray sideways and backwards instead of forward, so an impact covers the ground the shot already crossed. Does nothing without something that splits."
+rarity = 1
+category = 1
+tags = Array[StringName]([&"projectile", &"split"])
+projectile_scale = {
+&"split_spread_degrees": 3.4
+}
+icon = ExtResource("2_icon")
+accent_color = Color(0.345, 0.941, 0.784, 1)
+pickup_sound = &"item_pickup"

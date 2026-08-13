@@ -196,9 +196,30 @@ func _on_body_entered(body: Node2D) -> void:
 		health.apply_damage(
 			DamageInfo.new(config.damage, get_shooter(), _direction, config.knockback)
 		)
+		_execute_if_broken(health)
 
 	_apply_status_effects(body)
 	_impact(body, global_position, -_direction)
+
+
+## Finishes a target the hit left under this shot's execute threshold.
+##
+## A second `apply_damage` rather than a `kill()` on the component, so the death travels the ordinary
+## path: the same `damaged` and `died` signals fire, the run's statistics count the damage, the kill
+## is attributed to whoever fired, and anything hanging off an enemy's death — Volatile Kernel, the
+## room's clear check — sees exactly what it sees for any other kill. A private killing path would be
+## a second way to die for every one of those to get wrong.
+##
+## Ratio rather than remaining points, because the threshold has to mean the same thing on floor one
+## and on a floor where every enemy carries four times the integrity it was tuned with.
+func _execute_if_broken(health: HealthComponent) -> void:
+	if config.execute_threshold <= 0.0 or not health.is_alive():
+		return
+	if health.get_ratio() > config.execute_threshold:
+		return
+	health.apply_damage(
+		DamageInfo.new(health.current, get_shooter(), _direction, 0.0)
+	)
 
 
 ## Applies whatever statuses this shot is carrying to the body it hit.

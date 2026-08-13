@@ -7,7 +7,7 @@
 script = ExtResource("1_item")
 id = &"stack_overflow"
 display_name = "Stack Overflow"
-description = "Projectiles are far larger and hit much harder, but travel slowly."
+description = "Projectiles are far larger and hit much harder, but travel slowly and the chassis loses one maximum integrity."
 rarity = 4
 category = 6
 tags = Array[StringName]([&"corrupted", &"projectile", &"damage"])
@@ -16,6 +16,7 @@ projectile_scale = {
 &"radius": 2.2,
 &"speed": 0.55
 }
+max_integrity_delta = -1.0
 icon = ExtResource("2_icon")
 accent_color = Color(0.659, 0.424, 0.941, 1)
 pickup_sound = &"item_pickup"

@@ -35,6 +35,7 @@ signal effect_expired(id: StringName)
 const CHILL := &"chill"
 const FREEZE := &"freeze"
 const BURN := &"burn"
+const SHOCK := &"shock"
 
 ## What each effect is. A dictionary rather than a resource per effect because there are
 ## three of them and they are rules, not content — nothing about the game gets better if a
@@ -50,6 +51,11 @@ const BURN := &"burn"
 ## - `escalates_to`: on reaching `max_stacks`, the stacks are spent and this is applied
 ##   instead. Chill into freeze is the only user, and it is what makes Cold Cache's
 ##   "repeated hits chill, then briefly freeze" one effect the player can see building.
+## - `damage_taken_per_stack`: fraction added to everything the target takes. Shock is the only
+##   user and the only *amplifier* in the set — chill takes movement away and burn deals damage
+##   itself, while this one makes somebody else's damage worth more. That is why it is worth being
+##   a status at all rather than another projectile field: it pays out for every source in the room
+##   at once, so it rewards a build that already has several.
 const DEFINITIONS := {
 	CHILL: {
 		"seconds": 2.0,
@@ -58,6 +64,7 @@ const DEFINITIONS := {
 		"damage_per_tick": 0.0,
 		"tick_seconds": 0.0,
 		"escalates_to": FREEZE,
+		"damage_taken_per_stack": 0.0,
 		"color": Color(0.42, 0.78, 0.98),
 	},
 	FREEZE: {
@@ -67,6 +74,7 @@ const DEFINITIONS := {
 		"damage_per_tick": 0.0,
 		"tick_seconds": 0.0,
 		"escalates_to": &"",
+		"damage_taken_per_stack": 0.0,
 		"color": Color(0.72, 0.94, 1.0),
 	},
 	BURN: {
@@ -76,7 +84,18 @@ const DEFINITIONS := {
 		"damage_per_tick": 0.15,
 		"tick_seconds": 0.5,
 		"escalates_to": &"",
+		"damage_taken_per_stack": 0.0,
 		"color": Color(1.0, 0.55, 0.22),
+	},
+	SHOCK: {
+		"seconds": 3.0,
+		"max_stacks": 3,
+		"slow_per_stack": 0.0,
+		"damage_per_tick": 0.0,
+		"tick_seconds": 0.0,
+		"escalates_to": &"",
+		"damage_taken_per_stack": 0.35,
+		"color": Color(0.98, 0.86, 0.35),
 	},
 }
 
@@ -109,6 +128,10 @@ var _health: HealthComponent
 
 func _ready() -> void:
 	_health = HealthComponent.find_on(get_parent())
+	# Registered rather than read: the health component asks its sources what damage is worth and
+	# never learns what a status is. See `HealthComponent.add_damage_scale_source`.
+	if _health != null:
+		_health.add_damage_scale_source(get_damage_taken_scale)
 
 
 func _physics_process(delta: float) -> void:
@@ -186,6 +209,21 @@ func get_speed_scale() -> float:
 			continue
 		var stacks := int(_active[id]["stacks"])
 		scale *= clampf(1.0 - per_stack * float(stacks), 0.0, 1.0)
+	return scale
+
+
+## The factor damage against this actor is multiplied by. 1.0 unless something is amplifying it.
+##
+## Summed across stacks and then across effects, the same shape `get_speed_scale` uses, so three
+## stacks of shock is three times the amplification rather than a flat bonus for being shocked at
+## all — an item that keeps applying it should keep being worth applying.
+func get_damage_taken_scale() -> float:
+	var scale := 1.0
+	for id: StringName in _active:
+		var per_stack := float(DEFINITIONS[id].get("damage_taken_per_stack", 0.0))
+		if per_stack <= 0.0:
+			continue
+		scale += per_stack * float(_active[id]["stacks"])
 	return scale
 
 

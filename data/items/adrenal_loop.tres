@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="ItemConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/item_config.gd" id="1_item"]
+[ext_resource type="Texture2D" path="res://art/items/adrenal_loop.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"adrenal_loop"
+display_name = "Adrenal Loop"
+description = "Down to a single point of integrity, the weapon cycles sixty percent faster."
+rarity = 3
+category = 2
+tags = Array[StringName]([&"processor", &"fire_rate", &"risk"])
+low_integrity_fire_rate_scale = 1.6
+low_integrity_points = 1.0
+icon = ExtResource("2_icon")
+accent_color = Color(0.878, 0.29, 0.29, 1)
+pickup_sound = &"item_pickup"

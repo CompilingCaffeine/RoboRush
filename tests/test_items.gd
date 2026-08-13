@@ -29,6 +29,7 @@ func run() -> void:
 	_load_items()
 
 	_test_items_load()
+	_test_no_two_items_share_one_effect()
 	_test_ids_are_unique()
 	_test_every_modifier_key_exists()
 	_test_spec_section_12_numbers()
@@ -46,7 +47,7 @@ func run() -> void:
 	_test_inventory_aggregates()
 	_test_inventory_find_on()
 	_test_run_manager_draws_without_repeats()
-	_test_the_pool_fills_every_offer_of_a_two_floor_run()
+	_test_the_pool_fills_every_offer_of_the_campaign()
 	_test_pickup_config_for_item()
 
 	_test_add_appends_to_array_fields()
@@ -82,6 +83,19 @@ func run() -> void:
 	await _test_hot_reload_burns_on_the_fifth_shot()
 	await _test_breakpoint_chills_on_a_dash()
 
+	await _test_failover_survives_one_hit_and_shrinks_the_pool_for_good()
+	await _test_tractor_beam_drags_what_it_hits()
+	await _test_faraday_cage_absorbs_one_hit_a_room()
+	await _test_static_charge_makes_every_source_hurt_more()
+	await _test_cache_warmer_pays_for_the_opening_shot_only()
+	await _test_garbage_collector_vents_over_a_kill()
+	await _test_null_check_finishes_what_it_breaks()
+	await _test_mutex_lock_and_adrenal_loop_pay_for_a_state()
+	await _test_interrupt_handler_answers_a_hit()
+	await _test_compound_interest_and_swap_space_pay_on_a_clear()
+	_test_fragmentation_throws_children_wide()
+	_test_wide_bus_stops_children_losing_damage()
+
 	_test_the_harmful_three_are_labelled_as_such()
 	await _test_blocking_io_forbids_firing_on_the_move()
 	await _test_tech_debt_compounds_across_rooms()
@@ -115,6 +129,89 @@ func _test_items_load() -> void:
 		check(not item.description.is_empty(), "%s has a description on record" % id)
 		check(item.icon != null, "%s has an icon" % id)
 		check(not item.tags.is_empty(), "%s is tagged" % id)
+
+
+## No two items may *do* the same thing.
+##
+## Unique ids were already checked, and that turned out to be the weaker half of the question: the
+## pool reached fifty-four items containing three pairs that were identical in every mechanical field
+## — one pair identical in all twenty, including rarity — and nothing anywhere noticed. A player who
+## is offered Debug Drone on floor 2 and its twin on floor 4 has been handed the same reward twice
+## under two names, and the run's variety is a count rather than a fact.
+##
+## The signature is derived from the resource's own script properties rather than from a list typed
+## here, so a mechanical field added later is compared automatically. That is the safe direction to
+## fail in: a new *cosmetic* field has to be named in `COSMETIC_PROPERTIES` below or this check gets
+## slightly stricter, whereas a hand-maintained list of mechanical fields would get quietly weaker
+## every time somebody forgot to extend it.
+func _test_no_two_items_share_one_effect() -> void:
+	var by_signature: Dictionary[String, StringName] = {}
+	for id: StringName in _items:
+		var signature := _mechanical_signature(_items[id])
+		if by_signature.has(signature):
+			var twin: StringName = by_signature[signature]
+			if [twin, id] in INTERCHANGEABLE_BY_DESIGN or [id, twin] in INTERCHANGEABLE_BY_DESIGN:
+				continue
+			fail("'%s' and '%s' are the same item under two names: %s" % [twin, id, signature])
+			continue
+		by_signature[signature] = id
+
+	check(
+		by_signature.size() == _items.size() - _allowed_twin_count(),
+		"every item in the pool does something no other item does (%d effects across %d items)" % [
+			by_signature.size(), _items.size(),
+		],
+	)
+
+
+## Everything about an item that does not change what it does. A difference confined to these is two
+## names for one item, which is what the check above refuses.
+const COSMETIC_PROPERTIES: Array[String] = [
+	"id", "display_name", "description", "icon", "accent_color", "pickup_sound",
+]
+
+## Pairs of ids allowed to share an effect, as `[a, b]`. Empty, and it should stay that way — an
+## entry here is a decision that two rewards may be indistinguishable, and it belongs in review
+## rather than in a resource somebody edits at midnight.
+const INTERCHANGEABLE_BY_DESIGN: Array[Array] = []
+
+
+func _allowed_twin_count() -> int:
+	var counted := 0
+	for pair: Array in INTERCHANGEABLE_BY_DESIGN:
+		if _items.has(pair[0]) and _items.has(pair[1]):
+			counted += 1
+	return counted
+
+
+## Every script-declared property except the cosmetic ones, as one comparable string. Dictionary keys
+## are sorted, so two items authored in a different key order still compare equal — the failure this
+## check exists for would otherwise hide behind a `.tres` diff.
+func _mechanical_signature(item: ItemConfig) -> String:
+	var parts := PackedStringArray()
+	for property: Dictionary in item.get_property_list():
+		if int(property["usage"]) & PROPERTY_USAGE_SCRIPT_VARIABLE == 0:
+			continue
+		var property_name: String = property["name"]
+		if property_name in COSMETIC_PROPERTIES:
+			continue
+		parts.append("%s=%s" % [property_name, _stable_value(item.get(property_name))])
+	return " ".join(parts)
+
+
+func _stable_value(value: Variant) -> String:
+	if value is Dictionary:
+		var keys: Array = (value as Dictionary).keys()
+		keys.sort()
+		var pairs := PackedStringArray()
+		for key: Variant in keys:
+			pairs.append("%s:%s" % [key, (value as Dictionary)[key]])
+		return "{%s}" % ",".join(pairs)
+	if value is Array:
+		var sorted: Array = (value as Array).duplicate()
+		sorted.sort()
+		return str(sorted)
+	return str(value)
 
 
 func _test_ids_are_unique() -> void:
@@ -414,23 +511,43 @@ func _test_run_manager_draws_without_repeats() -> void:
 	var previous := RunManager.offered_item_ids.duplicate()
 	RunManager.offered_item_ids.clear()
 
+	var uniques := 0
+	for id: StringName in _items:
+		if not _items[id].is_repeatable():
+			uniques += 1
+
+	# Drawn as many times as there are uniques: the declared policy spends every one of those
+	# before a repeatable is ever offered.
 	var drawn: Array[StringName] = []
-	for _index: int in pool.size():
+	for _index: int in uniques:
 		var item := RunManager.draw_item(pool, rng)
 		if item != null:
 			drawn.append(item.id)
 
-	check(drawn.size() == pool.size(), "the pool can be drawn down completely")
-	var unique: Dictionary[StringName, bool] = {}
+	check(drawn.size() == uniques, "every unique in the pool can be drawn (%d of %d)" % [
+		drawn.size(), uniques,
+	])
+	var seen: Dictionary[StringName, bool] = {}
 	for id: StringName in drawn:
-		unique[id] = true
-	check(unique.size() == drawn.size(), "no item is offered twice in one run")
-	check(RunManager.draw_item(pool, rng) == null, "an exhausted pool draws nothing")
+		seen[id] = true
+	check(seen.size() == drawn.size(), "and none of them is offered twice in one run")
+
+	# Where the old contract ended in null, the new one ends in a chip. The pool no longer runs
+	# dry, and that is the whole reason the repeatable class exists: a six-floor campaign asks for
+	# more offers than any finite set of one-time items can fill, and an offer that comes up empty
+	# is a treasure room containing a repair cell.
+	var overflow := RunManager.draw_item(pool, rng)
+	if require(overflow, "a pool with its uniques spent still fills an offer"):
+		check(overflow.is_repeatable(), "with a repeatable item (%s)" % overflow.id)
+		check(
+			RunManager.draw_item(pool, rng) != null,
+			"and goes on filling them indefinitely",
+		)
 
 	RunManager.begin_run(1)
-	check(
-		RunManager.draw_item(pool, rng) != null, "a new run makes the whole pool available again"
-	)
+	var after_restart := RunManager.draw_item(pool, rng)
+	if require(after_restart, "a new run draws again"):
+		check(not after_restart.is_repeatable(), "and the whole unique pool is available again")
 
 	# Autoload state is process-wide; leave it as it was found.
 	RunManager.offered_item_ids = previous
@@ -444,11 +561,15 @@ func _test_run_manager_draws_without_repeats() -> void:
 ##
 ## Counted the way a run actually spends the pool: clear rewards, then two shop stands, then
 ## the treasure, then three boss choices, per floor, against one shared reservation list.
-func _test_the_pool_fills_every_offer_of_a_two_floor_run() -> void:
-	var first := load("res://data/floors/floor_1_help_desk.tres") as FloorConfig
-	if not require(first, "floor 1 loads"):
-		return
-	if not require(first.next_floor, "floor 1 chains to a second floor"):
+##
+## Every floor the campaign declares, rather than the two that exist — the pool is spent
+## cumulatively, so the floor that runs it dry is the one after the last one that fits, and a
+## check that stopped at floor 2 would keep passing all the way to the floor it was written to
+## catch. `CampaignValidator` makes the same count from the data alone; this one spends the pool
+## through `RunManager.draw_item`, which is the code that actually has to come up with an item.
+func _test_the_pool_fills_every_offer_of_the_campaign() -> void:
+	var campaign := load("res://data/runs/main_campaign.tres") as RunDefinition
+	if not require(campaign, "the campaign loads"):
 		return
 
 	var rng := RandomNumberGenerator.new()
@@ -458,11 +579,11 @@ func _test_the_pool_fills_every_offer_of_a_two_floor_run() -> void:
 
 	var empty_offers := 0
 	var filled := 0
-	for config: FloorConfig in [first, first.next_floor]:
-		var offers := config.item_clear_indices.size() + config.shop.item_stand_count + 3
-		if config.treasure_grants_item:
-			offers += 1
-		for _offer: int in offers:
+	for index: int in campaign.size():
+		var config := campaign.load_floor(index)
+		if config == null:
+			continue
+		for _offer: int in CampaignValidator.offers_required(config):
 			if RunManager.draw_item(config.get_items(), rng) == null:
 				empty_offers += 1
 			else:
@@ -471,8 +592,8 @@ func _test_the_pool_fills_every_offer_of_a_two_floor_run() -> void:
 	RunManager.offered_item_ids = restore
 	check(
 		empty_offers == 0,
-		"a two-floor run fills all %d item offers (%d came up empty)" % [
-			filled + empty_offers, empty_offers,
+		"a %d-floor run fills all %d item offers (%d came up empty)" % [
+			campaign.size(), filled + empty_offers, empty_offers,
 		],
 	)
 
@@ -1532,6 +1653,558 @@ func _add_pickup(arena: Node2D, at: Vector2) -> Pickup:
 	pickup.position = at
 	arena.add_child(pickup)
 	return pickup
+
+
+## Tractor Beam: the pool's first *pull*. Nothing new had to be built for it — knockback is applied
+## as `direction × amount`, so a negative amount reverses the shove — and that is exactly why it is
+## worth a check: the behaviour is emergent from a sign, and a well-meaning `absf()` anywhere on the
+## knockback path would silently turn the item back into a shove.
+##
+## Also checks the classifier. An item whose whole effect is a negative number on a projectile field
+## reads as a pure cost to the sign test, which is what `ItemConfig.BENEFIT_KEYS` exists to correct.
+func _test_tractor_beam_drags_what_it_hits() -> void:
+	var beam := _require_item(&"tractor_beam")
+	if beam == null:
+		return
+
+	check(beam.has_upside(), "Tractor Beam reads as a benefit despite being a negative number")
+	check(not beam.is_hindrance(), "and is not tagged as a hindrance")
+
+	var shot := _rivet_variant()
+	var base_knockback := shot.knockback
+	ProjectileModifierStack.from_items([beam]).apply(shot, 1)
+	check(
+		shot.knockback < 0.0,
+		"a rivet carrying it pulls rather than shoves (%.0f from %.0f)" % [
+			shot.knockback, base_knockback,
+		],
+	)
+
+	# And the engine really does read that sign as a direction, on a real body.
+	var arena := _make_arena()
+	var bot: Enemy = TICKET_BOT_SCENE.instantiate()
+	bot.position = Vector2.ZERO
+	arena.add_child(bot)
+	await advance_physics(2)
+
+	var health := HealthComponent.find_on(bot)
+	if require(health, "the bot has a health component"):
+		# Fired rightwards: a shove would push it further right, a pull drags it back left.
+		health.apply_damage(DamageInfo.new(0.5, null, Vector2.RIGHT, shot.knockback))
+		check(bot._knockback.x < 0.0, "and the bot is dragged back along the shot (%.0f)" % bot._knockback.x)
+
+	await _teardown(arena)
+
+
+## Fragmentation: the same splits, thrown wide instead of forward. An enabler — it adds no children
+## of its own, so it is worthless alone and reshapes whatever the build already had.
+##
+## The arc lands short of a full circle on purpose, and this check is where that is held.
+## `Projectile._spawn_splits` fans children across `-arc/2 … +arc/2`, so at 360 the first and last
+## child leave in the *same* direction — a "burst" that stacks two shots on one heading. Every split
+## total the pool can reach has to produce distinct headings.
+##
+## Written as a *scale* rather than as a `projectile_set` for the reason Wide Bus is: Race Condition
+## already assigns this exact field to pull its splits into a 28 degree cone, and two items assigning
+## one field is a result that depends on pickup order. Multiplying instead composes — a cone that
+## tight, thrown wide, is a wide cone — and the order-independence check below is the one that would
+## have caught the collision.
+func _test_fragmentation_throws_children_wide() -> void:
+	var burst := _require_item(&"fragmentation")
+	var fork := _require_item(&"fork_bomb")
+	if burst == null or fork == null:
+		return
+
+	# A synthetic item rather than a shipped one, because the invariant is about *any* item that
+	# assigns this field, and the shipped item that used to do it has since been replaced. A check
+	# that could only be written while one particular `.tres` existed is a check that quietly stops
+	# testing anything the day that resource is retired.
+	var cone := ItemConfig.new()
+	cone.id = &"test_cone"
+	cone.projectile_set = {&"split_spread_degrees": 28.0}
+
+	check(burst.projectile_add.is_empty(), "Fragmentation adds no children of its own")
+
+	var forwards := _rivet_variant()
+	ProjectileModifierStack.from_items([cone, burst]).apply(forwards, 1)
+	var backwards := _rivet_variant()
+	ProjectileModifierStack.from_items([burst, cone]).apply(backwards, 1)
+	check_near(
+		forwards.split_spread_degrees, backwards.split_spread_degrees,
+		"it composes with Race Condition's cone whichever arrived first", 0.001,
+	)
+	check(
+		forwards.split_spread_degrees > cone.projectile_set[&"split_spread_degrees"],
+		"widening a tight cone leaves it wider than it was (%.0f from %.0f)" % [
+			forwards.split_spread_degrees, cone.projectile_set[&"split_spread_degrees"],
+		],
+	)
+
+	var shot := _rivet_variant()
+	ProjectileModifierStack.from_items([fork, burst]).apply(shot, 1)
+	check(
+		shot.split_count == fork.projectile_add[&"split_count"],
+		"it leaves the split count to whatever made the splits (%d)" % shot.split_count,
+	)
+	check(
+		shot.split_spread_degrees > 180.0 and shot.split_spread_degrees < 360.0,
+		"and throws them wide without closing the circle (%.0f degrees)" % shot.split_spread_degrees,
+	)
+
+	# The headings the game will actually produce, computed the way the projectile does.
+	for count: int in range(2, 8):
+		var headings: Dictionary[int, bool] = {}
+		var arc := shot.split_spread_degrees
+		for index: int in count:
+			var offset := -arc * 0.5 + arc * (float(index) / float(count - 1))
+			headings[roundi(fposmod(offset, 360.0))] = true
+		check(
+			headings.size() == count,
+			"%d children leave on %d distinct headings" % [count, headings.size()],
+		)
+
+
+## Wide Bus: the pool's first item that does nothing at all by itself. Split children keep 60% of
+## their parent's damage and chain jumps 70%; this cancels both, and only matters to a build that
+## already splits or chains.
+##
+## Written as a *scale* rather than as a `projectile_set`, which is the whole reason it is safe: Fork
+## Bomb and Capacitor Leak both *assign* those same two fields, and two items assigning one field
+## would make the result depend on pickup order. Sets are applied before scales, so this multiplies
+## whatever they set and the answer is the same either way round — which is what the check below
+## pins.
+func _test_wide_bus_stops_children_losing_damage() -> void:
+	var bus := _require_item(&"wide_bus")
+	var fork := _require_item(&"fork_bomb")
+	var leak := _require_item(&"capacitor_leak")
+	if bus == null or fork == null or leak == null:
+		return
+
+	check(bus.is_stat_only(), "Wide Bus changes numbers rather than turning anything on")
+
+	var forwards := _rivet_variant()
+	ProjectileModifierStack.from_items([fork, leak, bus]).apply(forwards, 1)
+	check_near(
+		forwards.split_damage_scale, 1.0,
+		"split children hit as hard as their parent", 0.02,
+	)
+	check_near(
+		forwards.chain_damage_scale, 1.0,
+		"and so does every chain jump", 0.02,
+	)
+
+	var backwards := _rivet_variant()
+	ProjectileModifierStack.from_items([bus, leak, fork]).apply(backwards, 1)
+	check_near(
+		backwards.split_damage_scale, forwards.split_damage_scale,
+		"and pickup order does not change either", 0.001,
+	)
+	check_near(
+		backwards.chain_damage_scale, forwards.chain_damage_scale,
+		"whichever item arrived first", 0.001,
+	)
+
+	# Worthless alone is a claim about the item, so it is checked rather than asserted in prose.
+	var lonely := _rivet_variant()
+	ProjectileModifierStack.from_items([bus]).apply(lonely, 1)
+	check(lonely.split_count == 0 and lonely.chain_count == 0, "on its own it splits and chains nothing")
+
+
+## Faraday Cage. A charge, not a window: one hit is refused whatever it was, and the next one lands.
+func _test_faraday_cage_absorbs_one_hit_a_room() -> void:
+	var cage := _require_item(&"faraday_cage")
+	if cage == null:
+		return
+
+	var arena := _make_arena()
+	var player := _add_player(arena)
+	await advance_physics(2)
+
+	var health := player.get_health_component()
+	player.get_item_inventory().add(cage)
+	EventBus.room_entered.emit(RoomTemplate.Type.COMBAT, 0)
+	check(player.get_shield_charges() == 1, "entering a room banks a shield charge")
+
+	var absorbed: Array[int] = []
+	var on_absorbed := func(_at: Vector2, left: int) -> void: absorbed.append(left)
+	EventBus.player_shield_absorbed.connect(on_absorbed)
+
+	var full := health.current
+	# Large, to prove the shield refuses the hit rather than trimming it.
+	check(not health.apply_damage(DamageInfo.new(4.0)), "an absorbed hit reports that nothing landed")
+	check_near(health.current, full, "and costs no integrity")
+	check(absorbed.size() == 1 and absorbed[0] == 0, "the charge is spent and announced")
+
+	# The post-hit invulnerability window never opened, because no hit landed — so the next one is
+	# live immediately, which is what makes a shield a charge rather than a second of safety.
+	check(health.apply_damage(DamageInfo.new(1.0)), "the next hit lands")
+	check_near(health.current, full - 1.0, "and costs its integrity")
+
+	EventBus.room_entered.emit(RoomTemplate.Type.COMBAT, 1)
+	check(player.get_shield_charges() == 1, "the next room refills it")
+
+	EventBus.player_shield_absorbed.disconnect(on_absorbed)
+	await _teardown(arena)
+
+
+## Static Charge. The pool's first amplifier: it makes damage the player has not dealt yet worth
+## more, so it pays out for every other source in the room rather than only for the shot carrying it.
+func _test_static_charge_makes_every_source_hurt_more() -> void:
+	var charge := _require_item(&"static_charge")
+	if charge == null:
+		return
+	var expected: Array[StringName] = [StatusEffectController.SHOCK]
+	check(
+		charge.projectile_add.get(&"status_effects") == expected,
+		"Static Charge applies shock and nothing else",
+	)
+
+	var arena := _make_arena()
+	var bot := _add_bot(arena, Vector2(200.0, 0.0))
+	await advance_physics(2)
+
+	var health := bot.get_health_component()
+	var status := StatusEffectController.find_on(bot)
+	if not require(status, "the bot can carry a status"):
+		await _teardown(arena)
+		return
+
+	check_near(status.get_damage_taken_scale(), 1.0, "an unshocked target takes damage as written")
+	status.apply(StatusEffectController.SHOCK)
+
+	var per_stack := float(StatusEffectController.DEFINITIONS[StatusEffectController.SHOCK]["damage_taken_per_stack"])
+	check_near(status.get_damage_taken_scale(), 1.0 + per_stack, "one stack amplifies by its share")
+
+	# Through the ordinary damage path, because the point is that *everything* hurts more — a burn
+	# tick and a compile lane are amplified as surely as the shot that applied the shock.
+	var before := health.current
+	var info := DamageInfo.new(1.0)
+	health.apply_damage(info)
+	check_near(before - health.current, 1.0 + per_stack, "and a plain one-point hit lands amplified")
+	check_near(info.amount, 1.0 + per_stack, "with the event reporting what actually landed")
+
+	status.apply(StatusEffectController.SHOCK)
+	check_near(
+		status.get_damage_taken_scale(), 1.0 + per_stack * 2.0,
+		"and a second stack is worth as much as the first",
+	)
+
+	await _teardown(arena)
+
+
+## Cache Warmer. Worth exactly one shot per room, which is the whole of what makes it a decision
+## about how the player walks through a door.
+func _test_cache_warmer_pays_for_the_opening_shot_only() -> void:
+	var warmer := _require_item(&"cache_warmer")
+	if warmer == null:
+		return
+
+	var arena := _make_arena()
+	var player := _add_player(arena)
+	await advance_physics(2)
+
+	check_near(player.opening_shot_damage_scale(), 1.0, "an empty build multiplies nothing")
+	player.get_item_inventory().add(warmer)
+	EventBus.room_entered.emit(RoomTemplate.Type.COMBAT, 0)
+	check_near(
+		player.opening_shot_damage_scale(), warmer.first_shot_damage_scale,
+		"the first shot of a room carries the bonus",
+	)
+
+	# Firing is what spends it — the flag the game clears is the one this reads.
+	player._room_opening_shot = false
+	check_near(player.opening_shot_damage_scale(), 1.0, "and every shot after it is ordinary")
+
+	EventBus.room_entered.emit(RoomTemplate.Type.COMBAT, 1)
+	check_near(
+		player.opening_shot_damage_scale(), warmer.first_shot_damage_scale,
+		"walking into the next room re-arms it",
+	)
+	await _teardown(arena)
+
+
+## Garbage Collector. On-kill control rather than on-kill damage: the same trigger Volatile Kernel
+## uses, answering with a status, which is what makes it a different item rather than a smaller one.
+func _test_garbage_collector_vents_over_a_kill() -> void:
+	var collector := _require_item(&"garbage_collector")
+	if collector == null:
+		return
+
+	var arena := _make_arena()
+	var player := _add_player(arena)
+	var effects := ItemEffects.new()
+	arena.add_child(effects)
+	effects.bind_player(player)
+
+	var neighbour := _add_bot(arena, Vector2(200.0, 0.0))
+	var distant := _add_bot(arena, Vector2(400.0, 0.0))
+	await advance_physics(2)
+	player.get_item_inventory().add(collector)
+
+	# The kill itself is not simulated: what is being checked is what the *death* does to the
+	# bystanders, and `enemy_killed` is the event the item hangs off.
+	EventBus.enemy_killed.emit(null, Vector2(210.0, 0.0))
+	await advance_physics(1)
+
+	var near_status := StatusEffectController.find_on(neighbour)
+	var far_status := StatusEffectController.find_on(distant)
+	if require(near_status, "the neighbour can carry a status") and require(far_status, "so can the distant one"):
+		check(near_status.has_effect(StatusEffectController.CHILL), "what stood beside the kill is chilled")
+		check(not far_status.has_effect(StatusEffectController.CHILL), "and what stood across the room is not")
+
+	await _teardown(arena)
+
+
+## Null Check. A threshold rather than a damage number, so it keeps meaning the same thing on a floor
+## where Tech Debt has multiplied every pool.
+func _test_null_check_finishes_what_it_breaks() -> void:
+	var executioner := _require_item(&"null_check")
+	if executioner == null:
+		return
+
+	var arena := _make_arena()
+	var bot := _add_bot(arena, Vector2(200.0, 0.0))
+	await advance_physics(2)
+
+	var health := bot.get_health_component()
+	var threshold: float = executioner.projectile_set[&"execute_threshold"]
+
+	# Left just above the line: an ordinary graze must not kill, or the item is "shots kill things".
+	health.apply_damage(DamageInfo.new(health.max_health * (1.0 - threshold) - 0.2))
+	check(health.is_alive(), "a target above the threshold survives the graze")
+
+	# Enough to cross the line and nowhere near enough to kill: 0.25 off a pool of 3 leaves 0.55,
+	# which is under a fifth. What finishes the bot is the threshold, not the damage.
+	var shot := (load(RIVET_PATH) as ProjectileConfig).spawn_copy()
+	shot.damage = 0.25
+	shot.execute_threshold = threshold
+	shot.speed = 600.0
+	ProjectileFactory.spawn_configured(
+		arena.get_node("Projectiles"), shot, Vector2.RIGHT, Vector2(150.0, 0.0), Teams.Id.PLAYER
+	)
+	await advance_physics(12)
+
+	check(
+		not is_instance_valid(bot) or not bot.get_health_component().is_alive(),
+		"and a scratch that takes it under the threshold finishes it outright",
+	)
+	await _teardown(arena)
+
+
+## Mutex Lock and Adrenal Loop. Both pay for a *state* rather than for being held, so both are
+## checked the same way: the bonus arrives when the condition does and leaves when it goes.
+func _test_mutex_lock_and_adrenal_loop_pay_for_a_state() -> void:
+	var lock := _require_item(&"mutex_lock")
+	var loop := _require_item(&"adrenal_loop")
+	if lock == null or loop == null:
+		return
+
+	var arena := _make_arena()
+	var player := _add_player(arena)
+	await advance_physics(2)
+
+	var weapon := player.get_weapon_controller()
+	var base := weapon.fire_rate_multiplier
+
+	player.get_item_inventory().add(lock)
+	player.velocity = Vector2.ZERO
+	await advance_physics(1)
+	check_near(weapon.fire_rate_multiplier, base, "the bonus is not paid the instant the robot stops")
+
+	# Long enough to have earned it. The player is parked, so nothing moves it.
+	await advance_physics(int(lock.stillness_seconds * 60.0) + 4)
+	check_near(
+		weapon.fire_rate_multiplier, base * lock.stillness_fire_rate_scale,
+		"standing still for long enough locks in the faster cycle",
+	)
+
+	player.velocity = Vector2(200.0, 0.0)
+	await advance_physics(2)
+	check_near(weapon.fire_rate_multiplier, base, "and moving gives it straight back")
+
+	# Adrenal Loop, on the same weapon: a state the player would rather not be in.
+	player.get_item_inventory().add(loop)
+	var health := player.get_health_component()
+	health.apply_damage(DamageInfo.new(health.current - loop.low_integrity_points))
+	await advance_physics(2)
+	check_near(
+		weapon.fire_rate_multiplier, base * loop.low_integrity_fire_rate_scale,
+		"down to its last point the weapon speeds up",
+	)
+
+	health.heal(health.max_health)
+	await advance_physics(2)
+	check_near(weapon.fire_rate_multiplier, base, "and repairing it hands the bonus back")
+
+	await _teardown(arena)
+
+
+## Interrupt Handler. The pool's first reactive payoff: everything else defensive reduces what a hit
+## costs, this one makes the hit cost the room something.
+func _test_interrupt_handler_answers_a_hit() -> void:
+	var handler := _require_item(&"interrupt_handler")
+	if handler == null:
+		return
+
+	var arena := _make_arena()
+	var player := _add_player(arena)
+	var effects := ItemEffects.new()
+	arena.add_child(effects)
+	effects.bind_player(player)
+
+	var close := _add_bot(arena, player.global_position + Vector2(30.0, 0.0))
+	var far := _add_bot(arena, player.global_position + Vector2(300.0, 0.0))
+	await advance_physics(2)
+	player.get_item_inventory().add(handler)
+
+	var close_before := close.get_health_component().current
+	var far_before := far.get_health_component().current
+
+	player.get_health_component().apply_damage(DamageInfo.new(1.0))
+	await advance_physics(2)
+
+	check(
+		close.get_health_component().current < close_before,
+		"being hit blasts what is standing over the robot",
+	)
+	check_near(far.get_health_component().current, far_before, "and reaches nothing across the room")
+	await _teardown(arena)
+
+
+## Compound Interest and Swap Space. Both pay out on a cleared room, which is the event this project
+## already treats as the unit of progress.
+func _test_compound_interest_and_swap_space_pay_on_a_clear() -> void:
+	var interest := _require_item(&"compound_interest")
+	var swap := _require_item(&"swap_space")
+	if interest == null or swap == null:
+		return
+
+	var arena := _make_arena()
+	var player := _add_player(arena)
+	var effects := ItemEffects.new()
+	arena.add_child(effects)
+	effects.bind_player(player)
+	await advance_physics(2)
+
+	GameManager.start_run()
+	RunManager.begin_run(4242)
+	RunManager.add_scrap(100)
+	player.get_item_inventory().add(interest)
+	player.get_item_inventory().add(swap)
+
+	var health := player.get_health_component()
+	EventBus.room_entered.emit(RoomTemplate.Type.COMBAT, 0)
+	health.apply_damage(DamageInfo.new(2.0))
+	var hurt := health.current
+
+	EventBus.room_cleared.emit()
+	await advance_physics(1)
+
+	check(
+		RunManager.scrap == 100 + int(100.0 * interest.scrap_interest_fraction),
+		"clearing a room pays interest on what is held (%d)" % RunManager.scrap,
+	)
+	check_near(
+		health.current, hurt + 2.0 * swap.room_damage_refund,
+		"and returns its share of what the room cost",
+	)
+
+	# The ledger is per room, not per run: a second clear with no damage behind it pays nothing.
+	var settled := health.current
+	EventBus.room_entered.emit(RoomTemplate.Type.COMBAT, 1)
+	EventBus.room_cleared.emit()
+	await advance_physics(1)
+	check_near(health.current, settled, "a room that cost nothing refunds nothing")
+
+	RunManager.begin_run(1)
+	await _teardown(arena)
+
+
+## Failover: one lethal hit survived per run, paid for with the integrity pool itself.
+##
+## Four claims, and the middle two are the ones the design exists for:
+##
+## - The hit is survived once, at one point of integrity, with a grace window.
+## - The collapsed ceiling **survives collecting another item**. `Player._apply_item_stats`
+##   recomputes the maximum from the config and the inventory on every pickup, so a penalty written
+##   onto the health component would be refunded by the next reward stand — which is why the debt
+##   lives on `RunManager` instead.
+## - The ceiling can be **rebuilt** from there: base plus the item's ceiling, minus the debt.
+## - The next lethal hit, once the grace has run out, really does end the run.
+func _test_failover_survives_one_hit_and_shrinks_the_pool_for_good() -> void:
+	var failover := _require_item(&"failover")
+	var chassis := _require_item(&"reinforced_chassis")
+	var fan := _require_item(&"cooling_fan")
+	if failover == null or chassis == null or fan == null:
+		return
+
+	check(failover.has_upside(), "Failover reads as an item worth taking")
+	check(not failover.is_stat_only(), "and as a behaviour rather than a number")
+
+	# A fresh run, so the penalty starts at zero — and, at the end, so the next check in this file
+	# does not inherit a five-point integrity debt.
+	GameManager.start_run()
+	RunManager.begin_run(8675309)
+
+	var arena := _make_arena()
+	var player := _add_player(arena)
+	await advance_physics(2)
+
+	var health := player.get_health_component()
+	var base_max := health.max_health
+	check_near(base_max, 6.0, "the robot starts on six integrity")
+
+	var averted: Array[Vector2] = []
+	var deaths := [0]
+	var on_averted := func(at: Vector2) -> void: averted.append(at)
+	var on_died := func() -> void: deaths[0] += 1
+	EventBus.player_death_averted.connect(on_averted)
+	EventBus.player_died.connect(on_died)
+
+	player.get_item_inventory().add(failover)
+	check_near(health.max_health, base_max, "holding Failover changes nothing on its own")
+	check(
+		player.get_item_inventory().get_death_save_charges() == 1,
+		"and arms exactly one save",
+	)
+
+	health.apply_damage(DamageInfo.new(99.0, null, Vector2.RIGHT))
+
+	check(health.is_alive(), "a lethal hit does not end a run holding Failover")
+	check(deaths[0] == 0, "and nothing reports the player dead")
+	check(averted.size() == 1, "the save is announced once (%d)" % averted.size())
+	check_near(health.max_health, 1.0, "maximum integrity collapses to a single point")
+	check_near(health.current, 1.0, "and the robot is left on all of it")
+	check(RunManager.death_saves_spent == 1, "the run records the save as spent")
+	check_near(RunManager.max_integrity_penalty, 5.0, "and charges the five points it cost")
+	check(health.is_invulnerable(), "a grace window covers the rest of the volley")
+
+	# The refund bug, pinned: any item at all recomputes the ceiling.
+	player.get_item_inventory().add(fan)
+	check_near(health.max_health, 1.0, "collecting an unrelated item does not hand the pool back")
+
+	player.get_item_inventory().add(chassis)
+	check_near(
+		health.max_health, 3.0,
+		"a +2 ceiling item rebuilds the pool from one point to three, not back to eight",
+	)
+	check_near(health.current, 3.0, "and its repair fills the rebuilt pool")
+
+	# Past the grace, and now it is fatal: one save per run, not one per hit.
+	health.step(failover.death_save_grace_seconds + 1.0)
+	health.apply_damage(DamageInfo.new(99.0, null, Vector2.RIGHT))
+	check(not health.is_alive(), "the next lethal hit ends the run")
+	check(deaths[0] == 1, "and reports the death exactly once")
+	check(averted.size() == 1, "with no second save")
+
+	EventBus.player_death_averted.disconnect(on_averted)
+	EventBus.player_died.disconnect(on_died)
+	await _teardown(arena)
+
+	# Dying put the game into GAME_OVER, which pauses the tree, and files the run. Both are undone
+	# here so the checks after this one still get frames and a clean run.
+	GameManager.start_run()
+	RunManager.begin_run(1)
 
 
 func _require_item(id: StringName) -> ItemConfig:

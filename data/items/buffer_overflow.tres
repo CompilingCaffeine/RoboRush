@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ItemConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/item_config.gd" id="1_item"]
+[ext_resource type="Texture2D" path="res://art/items/buffer_overflow.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"buffer_overflow"
+display_name = "Buffer Overflow"
+description = "Projectiles are considerably larger."
+rarity = 1
+category = 1
+tags = Array[StringName]([&"projectile", &"size"])
+projectile_add = {
+&"radius": 2.5
+}
+icon = ExtResource("2_icon")
+accent_color = Color(0.949, 0.631, 0.235, 1)
+pickup_sound = &"item_pickup"

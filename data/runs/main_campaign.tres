@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="RunDefinition" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/run_definition.gd" id="1_run"]
+[ext_resource type="Script" path="res://scripts/resources/floor_entry.gd" id="2_entry"]
+
+[sub_resource type="Resource" id="Resource_floor_1"]
+script = ExtResource("2_entry")
+id = &"help_desk"
+config_path = "res://data/floors/floor_1_help_desk.tres"
+
+[sub_resource type="Resource" id="Resource_floor_2"]
+script = ExtResource("2_entry")
+id = &"development"
+config_path = "res://data/floors/floor_2_development.tres"
+
+[resource]
+script = ExtResource("1_run")
+id = &"main_campaign"
+display_name = "RoboRush"
+content_version = 1
+floors = Array[FloorEntry]([SubResource("Resource_floor_1"), SubResource("Resource_floor_2")])
+target_floor_count = 6
+require_complete = false

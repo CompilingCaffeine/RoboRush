@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="FloorConfig" load_steps=20 format=3]
+[gd_resource type="Resource" script_class="FloorConfig" load_steps=19 format=3]
 
 [ext_resource type="Script" path="res://scripts/resources/floor_config.gd" id="1_floor"]
 [ext_resource type="Resource" path="res://data/rooms/start_bay.tres" id="2_start"]
@@ -14,7 +14,6 @@
 [ext_resource type="Resource" path="res://data/spawns/pop_up_drone.tres" id="8_pop_up_drone"]
 [ext_resource type="Resource" path="res://data/spawns/memory_leech.tres" id="8_memory_leech"]
 [ext_resource type="Resource" path="res://data/spawns/firewall_node.tres" id="8_firewall_node"]
-[ext_resource type="Resource" path="res://data/floors/floor_2_development.tres" id="24_next"]
 [ext_resource type="Resource" path="res://data/floors/help_desk_theme.tres" id="26_theme"]
 [ext_resource type="Resource" path="res://data/pools/run_item_pool.tres" id="90_pool"]
 [ext_resource type="Resource" path="res://data/bosses/scrap_king_encounter.tres" id="92_king"]
@@ -22,6 +21,7 @@
 
 [resource]
 script = ExtResource("1_floor")
+id = &"help_desk"
 display_name = "Help Desk"
 floor_number = 1
 theme = ExtResource("26_theme")
@@ -39,5 +39,4 @@ item_pool = ExtResource("90_pool")
 item_clear_indices = Array[int]([2, 5])
 shop = ExtResource("23_shop_cfg")
 treasure_grants_item = true
-next_floor = ExtResource("24_next")
 boss_pool = Array[BossEncounter]([ExtResource("92_king"), ExtResource("93_error")])

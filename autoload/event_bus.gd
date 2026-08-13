@@ -28,6 +28,20 @@ signal player_dash_ended()
 
 signal player_damaged(info: DamageInfo, remaining: float)
 
+## A hit was swallowed whole by a shield charge rather than landing. `left` is how many charges
+## remain this room, so the HUD can show what is still in the bank without polling the player.
+##
+## Distinct from `player_damaged`, which deliberately does *not* fire: nothing was damaged. An
+## absorbed hit that still announced itself as damage would drive the hurt flash, the shake, and the
+## run's damage statistics off a blow that never landed.
+signal player_shield_absorbed(at: Vector2, left: int)
+
+## A hit that would have ended the run was survived instead, by a failover item spending a charge.
+## `player_damaged` still fires for the same blow, reporting the one point the player is left with,
+## so anything that only needs to know "the robot was hurt" needs no change. This exists because the
+## moment deserves to read as more than another hit: it is the run continuing when it should not have.
+signal player_death_averted(at: Vector2)
+
 signal player_died()
 
 # --- Weapons and projectiles ---

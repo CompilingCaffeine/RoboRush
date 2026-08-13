@@ -209,24 +209,40 @@ POP_UP_DRONE = [
     "................",
 ]
 
-# --- Memory Leech: a blob with a bite. Violet, because nothing else hostile is, and it
+# --- Memory Leech: a segmented parasite. Violet, because nothing else hostile is, and it
 # --- is the one enemy the player must never confuse for something they can ignore.
+# ---
+# --- It was a face — two wide eyes over a mouth — and the face was the problem: at 16px a
+# --- symmetrical pair of eyes above a curved mouth reads as friendly however the mouth is
+# --- drawn, so the one enemy that must look dangerous looked like a mascot. Vermin instead.
+# --- Feelers and a ridged carapace carry the threat through the silhouette, where a 16px
+# --- sprite does its reading, rather than through an expression it does not have the pixels
+# --- for. The two red specks are the only warm colour on it and the only thing that could be
+# --- taken for eyes; everything else is body.
+# ---
+# --- Domed rather than flat — light along the top of the carapace, mid violet below the first
+# --- segment line. Shading it the other way, dropping the underside toward the desaturated
+# --- dev-chassis violets, greys out the bottom half and costs exactly what the colour is for.
+# ---
+# --- Nothing here faces anywhere. The sprite is never flipped or rotated (`memory_leech.tscn`
+# --- has a plain Sprite2D, and `Enemy` touches only its modulate), so a design that pointed
+# --- would point the wrong way for three quarters of every charge.
 MEMORY_LEECH = [
     "................",
-    "................",
-    "....o......o....",
+    "...o........o...",
     "...ovo....ovo...",
-    "..ovvvoooovvvo..",
-    "..ovvvvvvvvvvo..",
-    ".ovvvVVvvVVvvvo.",
-    ".ovvVVYYVVYYvvo.",
-    ".ovvvVVvvVVvvvo.",
+    "....ovoooovo....",
+    "...ooVVVVVVoo...",
+    "..ovVVRVVRVVvo..",
+    "..ovVVVVVVVVvo..",
+    ".ovvVVVVVVVVvvo.",
+    ".ovoooovvoooovo.",
     ".ovvvvvvvvvvvvo.",
-    "..ovvYvvvvYvvo..",
-    "..ovvvYYYYvvvo..",
-    "...ovvvvvvvvo...",
-    "....oovvvvoo....",
-    "......oooo......",
+    ".ovoooovvoooovo.",
+    ".ovvvvvvvvvvvvo.",
+    "..ovvvvvvvvvvo..",
+    "...oovvvvvvoo...",
+    "....oooooooo....",
     "................",
 ]
 
@@ -881,6 +897,378 @@ ITEM_ICONS = {
         "..x..x..",
         ".xw..wx.",
         "xxxxxxxx",
+    ],
+    # Lazy Eval.
+    "lazy_eval": [
+        "...aa...",
+        "..a..a..",
+        ".a....a.",
+        "a......a",
+        "a......a",
+        ".a....a.",
+        "..a..a..",
+        "...aa...",
+    ],
+    # Hot Path.
+    "hot_path": [
+        "........",
+        "a...a...",
+        ".a...a..",
+        "..aaaaaa",
+        "..aaaaaa",
+        ".a...a..",
+        "a...a...",
+        "........",
+    ],
+    # Off-By-One: an aimed line that leaves at forty-five degrees.
+    "off_by_one": [
+        "......xx",
+        ".....xx.",
+        "....xx..",
+        "...xx...",
+        "oooo....",
+        "o.......",
+        "o.......",
+        "o.......",
+    ],
+    # Bit Shift.
+    "bit_shift": [
+        "........",
+        "..a.....",
+        "..aa....",
+        "aaaaaaa.",
+        "aaaaaaa.",
+        "..aa....",
+        "..a.....",
+        "........",
+    ],
+    # Buffer Overflow.
+    "buffer_overflow": [
+        "........",
+        "..aaaa..",
+        ".aaaaaa.",
+        ".aaYYaa.",
+        ".aaYYaa.",
+        ".aaaaaa.",
+        "..aaaa..",
+        "........",
+    ],
+    # Interrupt Vector.
+    "interrupt_vector": [
+        "....cc..",
+        "...cc...",
+        "..cc....",
+        ".cccccc.",
+        "....cc..",
+        "...cc...",
+        "..cc....",
+        ".cc.....",
+    ],
+    # Burst Buffer.
+    "burst_buffer": [
+        "........",
+        "cc.cc.cc",
+        "cc.cc.cc",
+        "........",
+        "........",
+        "cc.cc.cc",
+        "cc.cc.cc",
+        "........",
+    ],
+    # Turbo Clock.
+    "turbo_clock": [
+        "..vvvv..",
+        ".v....v.",
+        "v..vv..v",
+        "v..vv..v",
+        "v..vvvvv",
+        "v......v",
+        ".v....v.",
+        "..vvvv..",
+    ],
+    # Kernel Bypass.
+    "kernel_bypass": [
+        "..cccc..",
+        ".c....c.",
+        "c..bb..c",
+        "c.bbbb.c",
+        "c.bbbb.c",
+        "c..bb..c",
+        ".c....c.",
+        "..cccc..",
+    ],
+    # Jump Table.
+    "jump_table": [
+        "..x..x..",
+        ".x.xx.x.",
+        "x.xbbx.x",
+        "..xbbx..",
+        "..xbbx..",
+        "x.xbbx.x",
+        ".x.xx.x.",
+        "..x..x..",
+    ],
+    # Surge Protector.
+    "surge_protector": [
+        "..gggg..",
+        ".gggggg.",
+        "gg.gg.gg",
+        "gggggggg",
+        "gggggggg",
+        ".gg..gg.",
+        "..g..g..",
+        "...gg...",
+    ],
+    # Faraday Cage: a mesh within a mesh. A cage, not a shield — Surge Protector already owns
+    # the shield silhouette, and this item blocks rather than pads.
+    "faraday_cage": [
+        "cccccccc",
+        "c......c",
+        "c.cccc.c",
+        "c.c..c.c",
+        "c.c..c.c",
+        "c.cccc.c",
+        "c......c",
+        "cccccccc",
+    ],
+    # Static Charge: a bolt. The pool's only yellow icon, because shock is the only status that
+    # makes somebody else's damage worth more and it should be findable at a glance.
+    "static_charge": [
+        "...yy...",
+        "..yy....",
+        ".yy.....",
+        "yyyyyy..",
+        "....yy..",
+        "...yy...",
+        "..yy....",
+        ".yy.....",
+    ],
+    # Cache Warmer: an arrow leaving a baseline. The opening shot, drawn as departure.
+    "cache_warmer": [
+        "...aa...",
+        "..aaaa..",
+        ".aa..aa.",
+        "aa....aa",
+        "...aa...",
+        "...aa...",
+        "........",
+        "aaaaaaaa",
+    ],
+    # Garbage Collector: a bin. Unglamorous on purpose — the item is about what a kill leaves
+    # behind rather than about the kill.
+    "garbage_collector": [
+        "..gggg..",
+        ".gggggg.",
+        "gggggggg",
+        "........",
+        ".gggggg.",
+        ".g.gg.g.",
+        ".g.gg.g.",
+        ".gggggg.",
+    ],
+    # Null Check: a zero struck through. The execute, written the way the language writes it.
+    "null_check": [
+        "..xxxx..",
+        ".x....x.",
+        "x....x.x",
+        "x...x..x",
+        "x..x...x",
+        "x.x....x",
+        ".x....x.",
+        "..xxxx..",
+    ],
+    # Mutex Lock: a padlock. Held shut is the whole condition.
+    "mutex_lock": [
+        "..mmmm..",
+        ".mm..mm.",
+        ".mm..mm.",
+        "llllllll",
+        "lll..lll",
+        "lll..lll",
+        "llllllll",
+        "........",
+    ],
+    # Interrupt Handler: a burst leaving a core in every direction at once.
+    "interrupt_handler": [
+        "x..xx..x",
+        ".x.xx.x.",
+        "..xxxx..",
+        "xxx..xxx",
+        "xxx..xxx",
+        "..xxxx..",
+        ".x.xx.x.",
+        "x..xx..x",
+    ],
+    # Compound Interest: a stack of coins that keeps going past the top of the frame.
+    "compound_interest": [
+        "........",
+        "..yyyy..",
+        ".y....y.",
+        "..yyyy..",
+        ".y....y.",
+        "..yyyy..",
+        ".y....y.",
+        "..yyyy..",
+    ],
+    # Adrenal Loop: a hot core inside a red ring. Reads as an alarm, which is the state it pays
+    # the player for being in.
+    "adrenal_loop": [
+        "..rrrr..",
+        ".r....r.",
+        "r..yy..r",
+        "r.yyyy.r",
+        "r.yyyy.r",
+        "r..yy..r",
+        ".r....r.",
+        "..rrrr..",
+    ],
+    # Swap Space: two arrows trading places — damage out, integrity back.
+    "swap_space": [
+        "...b....",
+        "..bb....",
+        ".bbbbbbb",
+        "..bb....",
+        "....bb..",
+        "bbbbbbb.",
+        "....bb..",
+        "...b....",
+    ],
+    # Tractor Beam: two heads closing on a bright core. A pull, drawn as convergence, because at
+    # eight pixels an arrow that means "inwards" and one that means "outwards" are the same arrow.
+    "tractor_beam": [
+        "........",
+        "..v..v..",
+        ".vv..vv.",
+        "vvvYYvvv",
+        "vvvYYvvv",
+        ".vv..vv.",
+        "..v..v..",
+        "........",
+    ],
+    # Fragmentation: a starburst. Everything leaving one point at once, which is what the item does
+    # to a shot's children.
+    "fragmentation": [
+        "c..c..c.",
+        ".c.c.c..",
+        "..ccc...",
+        "cccYccc.",
+        "..ccc...",
+        ".c.c.c..",
+        "c..c..c.",
+        "........",
+    ],
+    # Wide Bus: a ribbon cable that widens. The item is about children carrying full damage, so the
+    # silhouette is about width rather than about splitting.
+    "wide_bus": [
+        "........",
+        "bbb..bbb",
+        "bbb..bbb",
+        "bbbbbbbb",
+        "bbbbbbbb",
+        "bbb..bbb",
+        "bbb..bbb",
+        "........",
+    ],
+    # Failover: a heartbeat that drops to a single blip. Deliberately not another shield — Surge
+    # Protector already owns that silhouette, and this item is not armour, it is a system running
+    # degraded after catching a fault.
+    "failover": [
+        "........",
+        "...Y....",
+        "...a....",
+        "aaaa.aaa",
+        "....a...",
+        "....Y...",
+        "........",
+        "........",
+    ],
+    # Spaghetti Code.
+    "spaghetti_code": [
+        "..xx.x..",
+        ".x..x.x.",
+        "x.xx..x.",
+        ".x..x.x.",
+        "..x.x.x.",
+        ".x.x..x.",
+        "x..x.xx.",
+        ".xx..x..",
+    ],
+    # Deprecated API.
+    "deprecated_api": [
+        "x.......",
+        "xxxxxxxx",
+        "x.......",
+        "........",
+        "........",
+        "x.......",
+        "xxxxxxxx",
+        "x.......",
+    ],
+    # Damage Chip.
+    "chip_damage": [
+        "oooooooo",
+        "oaaaaaao",
+        "oa.aa.ao",
+        "oaaaaaao",
+        "oa.aa.ao",
+        "oaaaaaao",
+        "oooooooo",
+        ".o.oo.o.",
+    ],
+    # Clock Chip.
+    "chip_fire_rate": [
+        "oooooooo",
+        "ovvvvvvo",
+        "ov.vv.vo",
+        "ovvvvvvo",
+        "ov.vv.vo",
+        "ovvvvvvo",
+        "oooooooo",
+        ".o.oo.o.",
+    ],
+    # Plating Chip.
+    "chip_integrity": [
+        "oooooooo",
+        "oggggggo",
+        "og.gg.go",
+        "oggggggo",
+        "og.gg.go",
+        "oggggggo",
+        "oooooooo",
+        ".o.oo.o.",
+    ],
+    # Rail Chip.
+    "chip_speed": [
+        "oooooooo",
+        "obbbbbbo",
+        "ob.bb.bo",
+        "obbbbbbo",
+        "ob.bb.bo",
+        "obbbbbbo",
+        "oooooooo",
+        ".o.oo.o.",
+    ],
+    # Impact Chip.
+    "chip_knockback": [
+        "oooooooo",
+        "oyyyyyyo",
+        "oy.yy.yo",
+        "oyyyyyyo",
+        "oy.yy.yo",
+        "oyyyyyyo",
+        "oooooooo",
+        ".o.oo.o.",
+    ],
+    # Patch Chip.
+    "chip_repair": [
+        "oooooooo",
+        "occcccco",
+        "oc.cc.co",
+        "occcccco",
+        "oc.cc.co",
+        "occcccco",
+        "oooooooo",
+        ".o.oo.o.",
     ],
 }
 

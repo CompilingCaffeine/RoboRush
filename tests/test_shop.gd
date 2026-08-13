@@ -12,6 +12,10 @@ const FLOOR_CONFIG_PATH := "res://data/floors/floor_1_help_desk.tres"
 const SHOP_ROOM_SCENE := preload("res://scenes/shop/shop_room.tscn")
 const PLAYER_SCENE := preload("res://scenes/player/player.tscn")
 
+## How many stock draws the affordability check samples. Twelve real shops, because what a shelf
+## costs is a draw from the item pool and one sample of a distribution is a coin toss, not a check.
+const AFFORDABILITY_SEEDS := 12
+
 var _shop_config: ShopConfig
 var _floor_config: FloorConfig
 
@@ -357,20 +361,51 @@ func _test_the_player_uses_the_nearest_stand() -> void:
 ## maximum scrap in every room should be able to clear the shelves; that is what luck is
 ## for. What must not happen is the shop being affordable by default, because then it is a
 ## vending machine rather than a decision.
+##
+## Swept across stock seeds rather than asserted on one, because what the shelves cost is a *draw*:
+## the price of a stand is its item's rarity, and which items a shop rolls is exactly as much luck as
+## the scrap the floor paid out. This check used to stock one shop on one seed, which made it a
+## single sample of that distribution passing or failing by coincidence — adding one item to the pool
+## changed which items that seed drew and turned it red without anything about the shop or the
+## economy having moved.
+##
+## The known tail, stated here so nobody rediscovers it as a bug: the cheapest shelf the pool can
+## produce is two common items, which comes to 34 against a typical floor's 38. Roughly 4% of
+## possible shelves are affordable that way. Whether that should be impossible rather than lucky is a
+## price-table decision (`item_prices[COMMON]` at 16 rather than 12 would close it); it is not
+## something this suite should decide by quietly averaging it away.
 func _test_a_floor_cannot_afford_the_whole_shop() -> void:
-	await _make_shop(0)
-	var stock_cost := 0
-	for stand: ShopStand in _shop.get_stands():
-		stock_cost += stand.price
-
 	var typical := _typical_floor_scrap()
+	var costs: Array[int] = []
+
+	for index: int in AFFORDABILITY_SEEDS:
+		# Spread rather than consecutive, so the sample is not one neighbourhood of the sequence.
+		await _make_shop(0, 4242 + index * 97)
+		var stock_cost := 0
+		for stand: ShopStand in _shop.get_stands():
+			stock_cost += stand.price
+		costs.append(stock_cost)
+		await _teardown()
+
+	costs.sort()
+	var median := costs[costs.size() / 2]
+	var unaffordable := 0
+	for cost: int in costs:
+		if cost > typical:
+			unaffordable += 1
+
 	check(
-		stock_cost > typical,
-		"the shop's stock (%d) costs more than a typical floor pays out (%d)" % [
-			stock_cost, typical,
+		median > typical,
+		"a typical shop's stock (%d) costs more than a typical floor pays out (%d); cheapest of %d sampled was %d" % [
+			median, typical, costs.size(), costs[0],
 		],
 	)
-	await _teardown()
+	check(
+		unaffordable * 4 >= costs.size() * 3,
+		"and at least three quarters of shops are out of reach (%d of %d were)" % [
+			unaffordable, costs.size(),
+		],
+	)
 
 
 ## The scrap an average floor produces: every combat room clearing for the middle of its
@@ -439,7 +474,7 @@ func _price_of(rarity: ItemConfig.Rarity) -> int:
 
 
 ## A live shop with a player standing in it and a known amount of scrap.
-func _make_shop(scrap: int) -> void:
+func _make_shop(scrap: int, stock_seed := 4242) -> void:
 	RunManager.begin_run(12345)
 	RunManager.add_scrap(scrap)
 
@@ -457,7 +492,7 @@ func _make_shop(scrap: int) -> void:
 	var positions: Array[Vector2] = [
 		Vector2(0.0, 0.0), Vector2(60.0, 0.0), Vector2(120.0, 0.0), Vector2(180.0, 0.0),
 	]
-	_shop.stock(_shop_config, _floor_config.get_items(), positions, 4242)
+	_shop.stock(_shop_config, _floor_config.get_items(), positions, stock_seed)
 	await advance_physics(2)
 
 

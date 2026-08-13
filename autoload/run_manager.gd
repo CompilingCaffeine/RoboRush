@@ -26,9 +26,29 @@ var floor_number: int = 1
 var floor_name: String = "Help Desk"
 var rooms_cleared: int = 0
 
-## The seed the current floor was generated from. Kept so a layout can be reproduced when
-## something goes wrong in it.
+## The seed the current floor was generated from — derived from the run seed and the floor's stable
+## id, so it can be re-derived rather than remembered. Kept because it is what the floor's own named
+## streams come from (`RunRng.stream_seed`) and what the debug overlay shows.
 var floor_seed: int = 0
+
+## The one seed a run has, reachable only through `get_run_seed`. Everything random and reproducible
+## in the run — every floor's layout, boss, roster, shop stock and loot — is derived from this value
+## plus a stable name (see `RunRng`).
+##
+## Private with a getter rather than a public field, which is the only way GDScript makes a value
+## genuinely read-only. It matters here more than it looks. `floor_seed` used to be the only seed
+## anybody held, each floor's being `hash()` of the last, so the run's seed was a *variable*: by
+## floor three the number the debug overlay printed was three transformations removed from the one a
+## player would have to type back in, and anything that advanced it early moved every floor after it.
+## One value, set by `begin_run` and by nothing else, is what makes "this run is `--seed=971330958`"
+## a sentence that stays true for the whole run.
+var _run_seed: int = 0
+
+## Which campaign this run is playing, and which version of its content. Recorded rather than
+## derived, because a seed alone does not identify a run: the same seed builds a different floor 3
+## once that floor is edited, and only the version says so.
+var _campaign_id: StringName = &""
+var _content_version: int = 1
 
 ## Ids of every item this run has already put on the floor. Tracked here rather than on the
 ## inventory because an item counts as spent the moment it *drops*: the player may walk past
@@ -36,9 +56,28 @@ var floor_seed: int = 0
 ## game did not notice".
 var offered_item_ids: Array[StringName] = []
 
+## The most a run's enemies may be scaled to, however much has accrued against them.
+##
+## Tech Debt charges 0.12 per room cleared and used to charge it forever. That was survivable
+## while a run was one ten-room floor: six combat rooms is +0.72, and enemies ended the run at
+## under twice their printed integrity. A six-floor campaign is roughly thirty-six combat rooms,
+## which is +4.32 — enemies with five times the health they were tuned for, a time-to-kill nothing
+## in `tests/test_balance.gd` was ever checked against, and a run that stops being winnable
+## somewhere around floor four rather than becoming harder.
+##
+## A ceiling rather than a smaller per-room charge, because the item's whole idea is that the debt
+## compounds while you keep clearing rooms; slowing it down would blunt that on floor one to
+## survive floor five. Capping it keeps the early pressure exactly as authored and stops the late
+## run being decided by a choice made twenty rooms ago.
+##
+## The number is a tripwire, not a tuned value — the same stance `tests/test_balance.gd` takes
+## about every number it checks. Nobody has played a six-floor run; when somebody has, this should
+## move to whatever that taught them.
+const MAX_ENEMY_HEALTH_SCALE := 2.5
+
 ## Multiplier on every enemy's maximum integrity, for the rest of the run. One unless
 ## something has accrued against it — Tech Debt is the only thing that does, adding to it on
-## every room cleared.
+## every room cleared. Bounded by `MAX_ENEMY_HEALTH_SCALE`.
 ##
 ## Run-scoped rather than carried on the item, because the debt has to outlive the room it
 ## was incurred in and apply to enemies the inventory will never meet. It is deliberately not
@@ -46,6 +85,27 @@ var offered_item_ids: Array[StringName] = []
 ## penalty the player accepted eight rooms earlier would end runs at the door rather than in
 ## the fight.
 var enemy_health_scale: float = 1.0
+
+## Maximum integrity this run has permanently lost, subtracted by `Player._apply_item_stats` from
+## the ceiling the config and the inventory would otherwise give. Zero for a run that has not spent
+## a death save.
+##
+## Run-scoped rather than held on the health component, and for the same reason `enemy_health_scale`
+## is: `_apply_item_stats` recomputes the maximum from `PlayerConfig` plus the inventory on every
+## pickup, so a value written straight onto the component is erased by the next item the player
+## collects — the penalty would silently refund itself at the next reward stand. It also has to cross
+## a floor boundary, and the run is the thing that does.
+##
+## Stored as a *debt* rather than as a clamp so the pool can be rebuilt. Failover drops the ceiling
+## to one point by charging the difference; a Reinforced Chassis found afterwards raises the ceiling
+## from one to three, because the +2 is added to the config's base and only then is the debt taken
+## off. "Extra fragile until you rebuild" is that subtraction and nothing else.
+var max_integrity_penalty: float = 0.0
+
+## Death saves this run has already spent, against the total its items grant. Counted here rather
+## than on the inventory because the *charges* are a property of the items held and the *spending* is
+## a property of the run: dropping and re-collecting a failover item must not hand back a save.
+var death_saves_spent: int = 0
 
 ## Ids of every boss this run has already been sent to fight. Run-scoped for exactly the
 ## reason `offered_item_ids` is: a floor drawing its boss cannot see what the previous floor
@@ -90,16 +150,29 @@ func _process(delta: float) -> void:
 		stats.duration += delta
 
 
-## Clears everything run-scoped. Called at the start of a run, not on entering a floor.
-func begin_run(seed_value: int) -> void:
+## Clears everything run-scoped and fixes the run's identity. Called at the start of a run, not on
+## entering a floor.
+##
+## The campaign is optional so that a suite driving one floor in an arena can still start a run
+## without inventing a campaign to do it. What it costs is only reproduction bookkeeping: such a run
+## records no campaign id, and its floor seeds are whatever its caller passed to `build`.
+func begin_run(seed_value: int, campaign: RunDefinition = null) -> void:
 	scrap = 0
 	rooms_cleared = 0
 	floor_number = 1
+	_run_seed = seed_value
+	_campaign_id = campaign.id if campaign != null else &""
+	_content_version = campaign.content_version if campaign != null else 1
 	floor_seed = seed_value
 	offered_item_ids.clear()
 	enemy_health_scale = 1.0
+	max_integrity_penalty = 0.0
+	death_saves_spent = 0
 	fought_boss_ids.clear()
 	stats = RunStats.new()
+	stats.run_seed = _run_seed
+	stats.campaign_id = _campaign_id
+	stats.content_version = _content_version
 	records_beaten = []
 	_is_timing = true
 	_is_finished = false
@@ -108,22 +181,91 @@ func begin_run(seed_value: int) -> void:
 	rooms_cleared_changed.emit(rooms_cleared)
 
 
+## The run's seed. See `_run_seed` for why this is a function rather than a field.
+func get_run_seed() -> int:
+	return _run_seed
+
+
+func get_campaign_id() -> StringName:
+	return _campaign_id
+
+
+func get_content_version() -> int:
+	return _content_version
+
+
+## Records that the run is now standing on a floor, and which one. Called by `FloorController` as it
+## opens a session — for the floor a run opens on and for every floor it descends into.
+##
+## The three fields the HUD reads and the statistics' per-floor record are filled in one place on
+## purpose. They were three separate assignments at the controller's call site, which is three
+## chances for a floor to be announced under the previous floor's name or seed.
+func begin_floor(number: int, id: StringName, seed_value: int, display: String) -> void:
+	floor_number = number
+	floor_name = display
+	floor_seed = seed_value
+	stats.begin_floor(number, id, seed_value)
+
+
+## Notes which boss the current floor drew. Separate from `begin_floor` because the draw needs the
+## floor's seeded streams, which only exist once the floor is opening.
+func record_floor_boss(boss_id: StringName) -> void:
+	stats.record_floor_boss(boss_id)
+
+
+## Closes the current floor's record with how it ended. Descending is the controller's business;
+## every other outcome arrives through `end_run`.
+func finish_floor(outcome: FloorRecord.Outcome) -> void:
+	stats.finish_floor(outcome)
+
+
 ## Stops the clock and files the result. Called when the run ends, whichever way it ended.
 ##
 ## Guarded by its own flag rather than by the clock: `GameManager` stops the clock before it
 ## announces the ending, and a run counted twice would corrupt a record the player cannot
 ## repair.
-func end_run(won: bool) -> void:
+##
+## `abandoned` separates walking out to the title screen from being destroyed. Both are filed as
+## losses — the player still cleared those rooms, and a personal best lost to using the menu would
+## read as the game forgetting rather than as a rule — but the floor they happened on should say
+## which it was, because "floor 5 killed nine players in a row" and "nine players quit on floor 5"
+## are different problems with the same total.
+func end_run(won: bool, abandoned := false) -> void:
 	if _is_finished:
 		return
 	_is_finished = true
 	_is_timing = false
+	finish_floor(
+		FloorRecord.Outcome.WON if won
+		else FloorRecord.Outcome.ABANDONED if abandoned
+		else FloorRecord.Outcome.LOST
+	)
 	records_beaten = SaveManager.record_run_finished(stats, won)
 
 
 ## Pauses the clock without ending the run.
 func set_timing(timing: bool) -> void:
 	_is_timing = timing
+
+
+## Charges `amount` against the run's enemy scaling, up to the ceiling. Routed through here rather
+## than added to the field directly so there is one place the bound is applied and one place to
+## read to find out that there is one.
+func add_enemy_health_growth(amount: float) -> void:
+	if amount <= 0.0:
+		return
+	enemy_health_scale = minf(enemy_health_scale + amount, MAX_ENEMY_HEALTH_SCALE)
+
+
+## Spends one death save and charges what surviving cost: everything above one point of maximum
+## integrity, for the rest of the run.
+##
+## `from_max` is the ceiling at the moment of the save, so a second save later charges only what the
+## player had rebuilt since the first — the debt accumulates rather than being recomputed, and two
+## saves can never credit the player with integrity they never had.
+func spend_death_save(from_max: float, floor_value: float) -> void:
+	death_saves_spent += 1
+	max_integrity_penalty += maxf(from_max - floor_value, 0.0)
 
 
 func add_scrap(amount: int) -> void:
@@ -144,19 +286,44 @@ func try_spend_scrap(amount: int) -> bool:
 	return true
 
 
-## Picks an item from `pool` that this run has not offered yet, and records it. Returns null
-## once the pool is exhausted, which the caller treats as "drop nothing" rather than as an
-## error: a floor generous enough to run a pool dry is a tuning problem, not a crash.
+## Picks an item from `pool` for one offer, and records it if it was a one-time one.
+##
+## The declared order, and the whole of the six-floor reward policy:
+##
+##   1. **Uniques the run has not seen.** Build-defining items, offered once each. These carry the
+##      intended experience and are drawn until there are none left.
+##   2. **Repeatables.** Stackable chips, offered as often as needed. They are the reason an offer
+##      can no longer come up empty.
+##
+## Uniques first rather than mixed, because a run that has not exhausted them should never be
+## handed a +1 chip in place of a mechanic it has not met yet. The chips are a floor under the
+## economy, not a dilution of it — on a campaign whose offer budget the unique pool covers, a
+## player may never see one, and that is the intended shape.
+##
+## Still returns null for a pool with neither, which every caller treats as "drop nothing". That is
+## now a content bug rather than a tuning one — `CampaignValidator` refuses a campaign whose pool
+## cannot fill its offers — but the graceful fallback stays, because a crash in front of the player
+## is worse than a repair cell.
 func draw_item(pool: Array[ItemConfig], rng: RandomNumberGenerator) -> ItemConfig:
-	var candidates: Array[ItemConfig] = []
+	var unique_candidates: Array[ItemConfig] = []
+	var repeatable_candidates: Array[ItemConfig] = []
 	for item: ItemConfig in pool:
-		if item != null and item.id not in offered_item_ids:
-			candidates.append(item)
+		if item == null:
+			continue
+		if item.is_repeatable():
+			repeatable_candidates.append(item)
+		elif item.id not in offered_item_ids:
+			unique_candidates.append(item)
+
+	var candidates := unique_candidates if not unique_candidates.is_empty() else repeatable_candidates
 	if candidates.is_empty():
 		return null
 
 	var drawn := candidates[rng.randi_range(0, candidates.size() - 1)]
-	offered_item_ids.append(drawn.id)
+	# Only uniques are spent. Recording a chip would strike it off the run the first time it was
+	# offered, which is the opposite of what makes it a chip.
+	if not drawn.is_repeatable():
+		offered_item_ids.append(drawn.id)
 	return drawn
 
 

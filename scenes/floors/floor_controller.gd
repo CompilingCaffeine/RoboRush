@@ -39,6 +39,7 @@ signal boss_encountered(display_name: String, defeat_banner: String, phase_banne
 const ROOM_SCENE := preload("res://scenes/rooms/room.tscn")
 const DOOR_SCENE := preload("res://scenes/rooms/door.tscn")
 const SHOP_ROOM_SCENE := preload("res://scenes/shop/shop_room.tscn")
+const SESSION_SCENE := preload("res://scenes/floors/floor_session.tscn")
 
 ## How many rare items the boss offers, and where they stand relative to the reward point.
 ## Spec section 16: choose one of three.
@@ -65,8 +66,18 @@ const REPAIR_EVERY_CLEARS := 3
 
 @export var config: FloorConfig
 
+## The run's floor order. Assigned in the scene rather than pushed in by `main.gd`, so a
+## controller instantiated on its own — which is how every suite that drives a descent builds one
+## — knows what floor comes next without a caller having to remember to wire it.
+@export var campaign: RunDefinition
+
 var layout: FloorLayout
 var current_room_id := -1
+
+## Where `config` sits in `campaign`, resolved in `build()`. -1 for content the campaign does not
+## contain, which a run treats as its last floor rather than descending into whatever is at index
+## zero — a test arena is a floor with no floor after it, not a floor that loops to the start.
+var floor_index := -1
 
 ## Room ids the player has been inside, for the minimap.
 var visited: Dictionary[int, bool] = {}
@@ -75,7 +86,27 @@ var _rooms: Dictionary[int, Room] = {}
 var _doors_by_room: Dictionary[int, Array] = {}
 var _cleared: Dictionary[int, bool] = {}
 var _player: Player
-var _rng := RandomNumberGenerator.new()
+
+## One generator per subsystem, each seeded from this floor's seed and its own name (see `RunRng`).
+##
+## This was one `RandomNumberGenerator` shared by all four, which made them one stream separated
+## only by how many numbers had already been taken. Drawing the boss consumed a number, so
+## populating the rooms started one number later; adding a single draw anywhere — one more shuffle,
+## one extra placement retry — silently changed every later subsystem's results. "The same seed
+## reproduces the same run" was therefore true only until the next commit touched an unrelated
+## system, which is the weakest possible version of the promise.
+##
+## Separate generators cannot do that to each other. The boss draw can consume ten numbers or none
+## and the shop still stocks itself identically.
+var _boss_rng := RandomNumberGenerator.new()
+var _encounter_rng := RandomNumberGenerator.new()
+var _shop_rng := RandomNumberGenerator.new()
+var _reward_rng := RandomNumberGenerator.new()
+
+## A fingerprint of the content this floor was built from, alongside the seed it was built with —
+## see `RunManifest`. Computed once per floor rather than on demand, because the debug overlay reads
+## it every frame and it cannot change while a floor is standing.
+var _content_fingerprint := ""
 
 ## Combat rooms cleared on this floor, counted here rather than read from RunManager. The
 ## floor is notified through the room's own `cleared` signal, which fires before the
@@ -90,37 +121,101 @@ var _boss: Boss
 ## Which boss guards this floor, drawn once in `build()`.
 var _boss_encounter: BossEncounter
 
-@onready var _rooms_container: Node2D = %Rooms
-@onready var _doors_container: Node2D = %Doors
-@onready var _loot: LootSpawner = %LootSpawner
+## This floor's disposable half: its rooms, doors, loot, projectiles, and hazards. Replaced
+## wholesale at every boundary — see `_open_session` and `_release_session`.
+var _session: FloorSession
+
+## Counts sessions opened, and is what deferred floor-local work is checked against. Kept on the
+## controller rather than the session because the session it belongs to is the thing being freed,
+## and a token has to outlive what it invalidates.
+var _generation := 0
+
+## The bound `EventBus.boss_defeated` handler, held so it can be taken back down. A bound callable
+## cannot be reconstructed for `is_connected` — `_on_boss_defeated.bind(room)` makes a different
+## Callable every time it is written — so the one that was connected is the one that has to be
+## kept. Without it a floor released before its boss died leaves a connection pointing at a room
+## that no longer exists.
+var _boss_defeated_handler := Callable()
 
 
 ## Generates and builds the floor. Returns false if generation failed, so the caller can
 ## report it rather than presenting an empty world.
 func build(player: Player, seed_value: int) -> bool:
 	assert(config != null, "FloorController.config is unset: assign a FloorConfig resource.")
-	_player = player
-	_rng.seed = seed_value
-	floor_theme_changed.emit(config.theme)
 
-	layout = FloorGenerator.generate(config, seed_value)
-	if layout == null:
+	# Generated before anything is created or emitted, because generation is the only step here
+	# that can fail. A build that fails now has changed nothing — it used to have already
+	# announced the new floor's theme, so a refused floor took the music with it.
+	var generated := FloorGenerator.generate(config, RunRng.stream_seed(seed_value, RunRng.LAYOUT))
+	if generated == null:
 		return false
 
-	_loot.setup(config, seed_value)
-	RunManager.floor_number = config.floor_number
-	RunManager.floor_name = config.display_name
-	RunManager.floor_seed = seed_value
+	_player = player
+	_open_session(generated, seed_value)
+	return true
+
+
+## Brings a floor into existence from a layout that has already been generated.
+##
+## Split from `build` so a descent can generate the destination *before* giving up the floor the
+## player is standing on. Everything below this point succeeds: it instantiates and wires, and
+## nothing in it can decide the floor was impossible.
+func _open_session(generated: FloorLayout, seed_value: int) -> void:
+	layout = generated
+	_seed_streams(seed_value)
+	# Resolved from the floor's own id rather than tracked across the descent, so the two ways a
+	# floor can begin — a run opening on it, and a descent rebuilding into it — cannot disagree
+	# about where in the run it is.
+	floor_index = campaign.index_of(config.id) if campaign != null else -1
+	# Fingerprinted under the campaign's id for this position where there is one, so this agrees with
+	# `RunManifest.floor_row` by construction rather than by the two ids happening to match — which
+	# `CampaignValidator` insists on, but a controller in a test arena has no campaign to insist.
+	var manifest_id := campaign.floor_id_at(floor_index) if floor_index >= 0 else config.id
+	_content_fingerprint = RunManifest.row_for(
+		config, floor_index, manifest_id, seed_value
+	)["fingerprint"]
+	floor_theme_changed.emit(config.theme)
+
+	_generation += 1
+	_session = SESSION_SCENE.instantiate()
+	_session.generation = _generation
+	add_child(_session)
+
+	_session.loot.setup(config, RunRng.stream_seed(seed_value, RunRng.LOOT))
+	RunManager.begin_floor(config.floor_number, config.id, seed_value, config.display_name)
 
 	# Drawn here rather than when the player reaches the arena, so it is decided by the floor's
 	# seed alone. Drawing it on arrival would make which boss you fight depend on how the RNG
 	# had been consumed getting there, and one `--seed` would stop reproducing the whole run.
 	_boss_encounter = _draw_boss_encounter()
+	RunManager.record_floor_boss(_boss_encounter.id if _boss_encounter != null else &"")
 
 	_instantiate_rooms()
 	_instantiate_doors()
 	_place_player_in_start_room()
-	return true
+
+
+## Points every subsystem's generator at its own stream of this floor's seed.
+##
+## The layout's stream is not here: `FloorGenerator` is handed a seed and makes its own generator,
+## because generation happens *before* a session is opened — it is the one step of a descent that
+## may fail, and it has to fail while the player is still standing on the floor they have.
+func _seed_streams(seed_value: int) -> void:
+	_boss_rng.seed = RunRng.stream_seed(seed_value, RunRng.BOSS)
+	_encounter_rng.seed = RunRng.stream_seed(seed_value, RunRng.ENCOUNTER)
+	_shop_rng.seed = RunRng.stream_seed(seed_value, RunRng.SHOP)
+	_reward_rng.seed = RunRng.stream_seed(seed_value, RunRng.REWARD)
+
+
+## A fingerprint of this floor's content and seed. What a bug report carries so that "floor 3 does
+## not generate like that any more" can be answered with "the content changed" — see `RunManifest`.
+func get_content_fingerprint() -> String:
+	return _content_fingerprint
+
+
+## This floor's session. Null before the first `build`; a different node after every boundary.
+func get_session() -> FloorSession:
+	return _session
 
 
 ## Which boss guards this floor. Null before `build()` has run.
@@ -128,28 +223,38 @@ func get_boss_encounter() -> BossEncounter:
 	return _boss_encounter
 
 
-## Picks this floor's boss from its pool, preferring one the run has not fought yet.
+## Picks this floor's boss from its pool. Never one the run has already fought.
 ##
-## The preference is what turns two independent rolls into a shuffle: with two bosses and two
-## floors, whichever the Help Desk draws, Development is left with the other. Falling back to
-## the full pool when everything has been fought — rather than returning null — is what keeps a
-## hypothetical third floor working: a repeated boss is a worse run than a boss-less one is a
-## broken one.
+## The campaign policy is one distinct boss per floor, so a repeat is not a degraded outcome to
+## fall back on — it is a content error, and this is where it becomes visible instead of silent.
+##
+## It used to fall back to the whole pool once everything had been fought, on the reasoning that a
+## repeated boss is a better run than a boss-less one. That reasoning was sound while there were
+## two floors and two bosses, because the fallback was unreachable. At six floors it stops being a
+## safety net and becomes the actual behaviour: floors 3, 4, 5 and 6 would each quietly re-run a
+## fight the player had already won, and nothing anywhere would say so. A player cannot tell an
+## intended rematch from an exhausted pool, and neither could the log.
+##
+## Refusing instead is safe because the failure cannot reach a player: `CampaignValidator` proves
+## before the run starts that every floor can be given a boss of its own, so an empty draw here
+## means the campaign was never validated. Loud and once, rather than quiet and four times.
 func _draw_boss_encounter() -> BossEncounter:
 	var unfought: Array[BossEncounter] = []
-	var all: Array[BossEncounter] = []
 	for entry: BossEncounter in config.boss_pool:
 		if entry == null or not entry.is_valid():
 			continue
-		all.append(entry)
 		if entry.id not in RunManager.fought_boss_ids:
 			unfought.append(entry)
 
-	var candidates := unfought if not unfought.is_empty() else all
-	if candidates.is_empty():
+	if unfought.is_empty():
+		push_error(
+			("FloorController: floor %d ('%s') has no boss the run has not already fought. "
+			+ "The campaign must give every floor a boss of its own — see CampaignValidator.")
+			% [config.floor_number, config.id]
+		)
 		return null
 
-	var drawn := candidates[_rng.randi_range(0, candidates.size() - 1)]
+	var drawn := unfought[_boss_rng.randi_range(0, unfought.size() - 1)]
 	RunManager.fought_boss_ids.append(drawn.id)
 	return drawn
 
@@ -182,11 +287,11 @@ func _instantiate_rooms() -> void:
 		var room: Room = ROOM_SCENE.instantiate()
 		# Grid cell to world: the room's interior origin sits one wall inside its cell.
 		room.position = Vector2(plan.cell * Room.OUTER_SIZE + Vector2i.ONE * Room.WALL_THICKNESS)
-		_rooms_container.add_child(room)
+		_session.rooms.add_child(room)
 
 		room.build(plan, config.theme)
 		if plan.type == RoomTemplate.Type.COMBAT:
-			room.populate(config, _rng)
+			room.populate(config, _encounter_rng)
 		elif plan.type == RoomTemplate.Type.SHOP:
 			_stock_shop(room)
 		room.set_active(false)
@@ -199,13 +304,18 @@ func _instantiate_rooms() -> void:
 ## items it holds are drawn from the pool before any room reward can take them — a shop
 ## whose stock depended on when the player happened to walk in would be a shop that got
 ## worse the longer they explored.
+##
+## The shop is handed one number from this floor's shop stream and seeds itself from it, rather
+## than sharing a generator: the room it stands in is instantiated among nine others, and a shop
+## reading from the stream the rooms are populated from would restock itself every time an enemy
+## placement changed.
 func _stock_shop(room: Room) -> void:
 	var positions := room.get_shop_positions()
 	if config.shop == null or positions.is_empty():
 		return
 	var shop: ShopRoom = SHOP_ROOM_SCENE.instantiate()
 	room.add_child(shop)
-	shop.stock(config.shop, config.get_items(), positions, _rng.randi())
+	shop.stock(config.shop, config.get_items(), positions, _shop_rng.randi())
 
 
 ## One door per link, filling the passage between two rooms. Each link is visited once — the
@@ -224,7 +334,7 @@ func _instantiate_doors() -> void:
 			)
 
 			var door: Door = DOOR_SCENE.instantiate()
-			_doors_container.add_child(door)
+			_session.doors.add_child(door)
 			door.global_position = _door_centre(plan, direction)
 			door.setup(passage)
 
@@ -331,15 +441,29 @@ func _spawn_boss(room: Room) -> void:
 	# One-shot: a boss is defeated exactly once per floor, and this controller now outlives a
 	# single floor. Without it, the next floor's boss spawn would stack a second connection,
 	# and its death would also invoke the handler still bound to this (by-then-freed) room.
-	EventBus.boss_defeated.connect(_on_boss_defeated.bind(room), CONNECT_ONE_SHOT)
+	#
+	# Held rather than only connected, because one-shot only covers the boss that *dies*. A floor
+	# abandoned with its boss alive — a restart, a death, a campaign edit — leaves this pointing at
+	# a room that is about to be freed, and `_release_session` is what takes it back down.
+	_boss_defeated_handler = _on_boss_defeated.bind(room)
+	EventBus.boss_defeated.connect(_boss_defeated_handler, CONNECT_ONE_SHOT)
 	# Deferred, for the fourth time in this project and the same reason every time: rooms
 	# are entered through an Area2D trigger, and registering the boss's collision bodies
 	# while the physics server is flushing queries is refused outright.
-	_add_boss.call_deferred(room)
+	_add_boss.call_deferred(room, _generation)
 
 
-func _add_boss(room: Room) -> void:
-	if not is_instance_valid(_boss) or not is_instance_valid(room):
+## `generation` is the floor this boss was summoned for. A boss walked into on the same frame a
+## floor is released would otherwise be added to a room from the floor being left — and the boss
+## is the one deferred spawn whose arrival is loud, since it brings a health bar and an arena with
+## it. The instance is freed rather than dropped: it was created in `_spawn_boss` and, unparented,
+## nothing else would ever free it.
+func _add_boss(room: Room, generation: int) -> void:
+	if not is_instance_valid(_boss):
+		return
+	if generation != _generation or not is_instance_valid(room) or not room.is_inside_tree():
+		_boss.queue_free()
+		_boss = null
 		return
 	room.add_child(_boss)
 	_boss.begin(room.get_interior_rect())
@@ -348,6 +472,22 @@ func _add_boss(room: Room) -> void:
 ## Spec section 16's reward: three rare items on stands, and taking one closes the others.
 ## Winning the run waits on that choice rather than on the killing blow, so the player is
 ## never shown a victory screen with an unclaimed prize behind it.
+##
+## **Nothing is made safe here, and that is deliberate.** No projectile is cleared, no compile lane
+## is cancelled, and the player is granted no immunity. An attack that was fired or painted before
+## the boss died goes on to resolve, and it can damage or kill the player while the reward is
+## standing there — the fight is over when the arena is, not when the health bar empties. A player
+## who empties the pool and walks into the prize through their own last volley has earned the
+## death.
+##
+## The reason to say this out loud is that it looks exactly like a bug from the outside, and the
+## obvious fix — sweep the hazards when `boss_defeated` fires — is one line and would be silently
+## accepted by every test in this project that predates `tests/test_post_boss.gd`. That suite
+## exists to make the removal fail loudly. What a dead boss must not do is start anything *new*;
+## both bosses enforce that themselves by refusing to run their attack clock once dead.
+##
+## `_finish_floor` is where the other half lives: the hazards stay live, but if one of them kills
+## the player first, the loss wins.
 func _on_boss_defeated(_boss_node: Node, room: Room) -> void:
 	_cleared[room.plan.id] = true
 	_set_doors_locked(room.plan.id, false)
@@ -380,81 +520,230 @@ func _on_boss_reward_taken(_item: ItemConfig) -> void:
 
 
 ## Winning the run and advancing to the next floor are the same event from the boss's point of
-## view — "this floor is done" — so both call sites funnel through here rather than deciding
-## for themselves. `config.next_floor == null` is what makes a floor the run's last one.
+## view — "this floor is done" — so both call sites funnel through here rather than deciding for
+## themselves. Being the last floor the *campaign* lists is what makes a floor the run's last one;
+## it used to be having no `next_floor`, which was the same fact restated once per floor.
 func _finish_floor() -> void:
-	if config.next_floor == null:
+	# The loss wins the race. A hazard committed before the boss died is allowed to kill the player
+	# while the reward stands unclaimed — that is the feature, not a defect — but a run that has
+	# already ended must not then descend, win, or hand anything over.
+	#
+	# It is a genuine race and not a theoretical one. `choice_taken` and a compile lane's strike
+	# can land in the same frame, in either order, and both paths below are deferred: a deferred
+	# call is flushed by the tree whether or not the tree is paused, so `GameManager.end_run`
+	# setting `paused` does not stop a descent that was already scheduled. The run would be filed
+	# as a loss, the summary would be on screen, and the next floor would quietly build underneath
+	# it.
+	#
+	# Checked here rather than at the moment of death because death is not the only way in: the
+	# empty-pool path in `_on_boss_defeated` reaches this too.
+	if GameManager.is_run_over():
+		return
+
+	if campaign == null or campaign.is_terminal(floor_index):
 		GameManager.win_run.call_deferred()
 		return
-	_advance_to_next_floor.call_deferred(config.next_floor, _derive_next_seed(RunManager.floor_seed))
+
+	# The destination's seed comes from the *run's* seed and the destination's own id, not from
+	# transforming the seed of the floor being left. That is what makes floor 4 the same floor 4
+	# whether a run fought through floors 1-3 or `--floor=4` jumped to it — see
+	# `RunDefinition.floor_seed_for`. Chaining made a floor's layout a function of every floor
+	# before it, so editing floor 2 quietly relaid floors 3 to 6.
+	_advance_to_next_floor.call_deferred(
+		floor_index + 1, campaign.floor_seed_for(RunManager.get_run_seed(), floor_index + 1)
+	)
 
 
-## Tears down the current floor and rebuilds this same controller from `next_config`. Deferred
-## by the caller because this runs from inside a pickup's physics callback (the boss reward
-## stand), and this project has hit "touching physics bodies while the server is flushing
-## queries is refused outright" enough times already (see `_add_boss`, `LootSpawner`) that
-## rebuilding synchronously in that same callback is not worth risking again.
-func _advance_to_next_floor(next_config: FloorConfig, seed_value: int) -> void:
-	_teardown()
-	config = next_config
-	if not build(_player, seed_value):
-		# Same stance as main.gd's own build() call: a content bug, not something to hide
-		# behind a blank screen.
-		push_error("FloorController: floor generation failed advancing to floor %d." % next_config.floor_number)
+## Replaces this controller's floor with the campaign's next one. Deferred by the caller because
+## this runs from inside a pickup's physics callback (the boss reward stand), and this project has
+## hit "touching physics bodies while the server is flushing queries is refused outright" enough
+## times already (see `_add_boss`, `LootSpawner`) that rebuilding synchronously in that same
+## callback is not worth risking again.
+##
+## A transaction, in the order that makes it one:
+##
+##   1. **Preflight.** Load the destination and generate its layout. Both can fail, and both fail
+##      here — while the floor the player is standing on is still whole and still theirs.
+##   2. **Commit.** Close the old session so nothing queued against it can still land, take it out
+##      of the tree so it stops answering as the projectile container, and release it.
+##   3. **Open.** Build the new session from the layout preflight already produced.
+##
+## The old order was teardown-then-build, which meant a destination that would not generate left
+## the run in `RUN` with no floor at all: no rooms, no doors, a player standing in a void, and no
+## way to reach a menu. Nothing about that state was recoverable, and it was reachable by a typo
+## in a `.tres`.
+func _advance_to_next_floor(next_index: int, seed_value: int) -> void:
+	# Re-checked rather than inherited from `_finish_floor`, because everything between the two is
+	# a frame the run can end in — and a lane painted before the boss died is precisely the thing
+	# that resolves in it.
+	if GameManager.is_run_over():
 		return
+
+	var next_config := campaign.load_floor(next_index)
+	if next_config == null:
+		push_error(
+			"FloorController: floor %d ('%s') would not load; staying on floor %d."
+			% [next_index + 1, campaign.floor_id_at(next_index), config.floor_number]
+		)
+		return
+
+	var generated := FloorGenerator.generate(
+		next_config, RunRng.stream_seed(seed_value, RunRng.LAYOUT)
+	)
+	if generated == null:
+		# Same stance as main.gd's own build() call: a content bug, not something to hide behind a
+		# blank screen. The difference from before is that the player is still on a playable floor
+		# while it is reported.
+		push_error(
+			"FloorController: floor %d generation failed; staying on floor %d."
+			% [next_config.floor_number, config.floor_number]
+		)
+		return
+
+	_release_session()
+	# Filed after the commit is certain and before the new floor opens, so a floor's record closes
+	# exactly once and in the order it happened. A preflight that failed above returns with the
+	# record still open, because the run is still on this floor.
+	RunManager.finish_floor(FloorRecord.Outcome.DESCENDED)
+	config = next_config
+	_open_session(generated, seed_value)
 	floor_advanced.emit(config)
 
 
-## Clears every piece of the floor that `build()` creates, so it can be called a second time.
-## Rooms and doors are freed rather than reused: a `Room` carries its own combat/spawn state,
-## and rebuilding it from scratch is simpler than resetting it in place. Freeing is safe here
-## because every signal a `Room`/`RoomCombat` connects is local to its own subtree — nothing
-## outlives it that needs disconnecting first.
-func _teardown() -> void:
-	for room: Room in _rooms.values():
-		room.queue_free()
-	for doors: Array in _doors_by_room.values():
-		for door: Door in doors:
-			if is_instance_valid(door):
-				door.queue_free()
+## Ends the current floor: everything it owned is freed, and everything the *run* owns is left
+## alone.
+##
+## The whole floor goes at once, because the whole floor is one node. This used to be a list —
+## free the rooms, free the doors — and the list was the bug: the loot spawner and the projectile
+## container were not on it, so pickups and shots crossed every boundary, and any hazard added
+## later would have started out equally forgotten. There is nothing to enumerate now; a thing dies
+## with the floor if it was parented inside the session, and that is a decision made where it is
+## spawned rather than remembered here.
+##
+## Order matters, and each step is load-bearing:
+##
+## - **Close first.** A spawn already queued against this floor has to be refused while there is
+##   still a session to refuse it. After the node is freed, the deferred call is dropped silently
+##   and the node it would have added is owned by nothing.
+## - **Remove from the tree before freeing.** `queue_free` does not take effect until the end of
+##   the frame, and `SceneTree.get_first_node_in_group` only sees nodes that are *in* the tree —
+##   so a session left parented while the next one is built is a second answer to "where do
+##   projectiles go", and it is the one that answers first.
+##
+## The counters below are the floor-local half of the run: what the minimap has seen, which room
+## the player is in, how many rooms they have cleared *here*. `RunManager`'s cumulative totals are
+## deliberately untouched — that split is what a boundary is.
+func _release_session() -> void:
+	if _boss_defeated_handler.is_valid():
+		if EventBus.boss_defeated.is_connected(_boss_defeated_handler):
+			EventBus.boss_defeated.disconnect(_boss_defeated_handler)
+		_boss_defeated_handler = Callable()
+
+	# Only reachable when the floor ends between the boss being summoned and the deferred add
+	# landing. Unparented, it is owned by nothing and freed by nothing.
+	if is_instance_valid(_boss) and _boss.get_parent() == null:
+		_boss.queue_free()
+	_boss = null
+
+	if _session != null:
+		_session.close()
+		remove_child(_session)
+		_session.queue_free()
+		_session = null
+
 	_rooms.clear()
 	_doors_by_room.clear()
 	_cleared.clear()
 	visited.clear()
+	layout = null
 	current_room_id = -1
 	_clears = 0
-	_boss = null
+	_boss_encounter = null
 
 
-## Deterministic from the floor it follows, so a run is still fully reproducible from its
-## opening seed, but decorrelated from it rather than an obvious "plus one" — a floor's seed
-## should not read as a function of the last one when compared in the debug overlay.
-func _derive_next_seed(seed_value: int) -> int:
-	return absi(hash(seed_value))
-
-
-## Rare items by preference, because that is what spec section 16 promises. Falls back to
-## whatever the pool has left rather than offering fewer than three — a floor generous
-## enough to have exhausted its rares has earned the choice anyway.
+## Spec section 16's choice of three: rare items by preference, shuffled, and never all bad.
+##
+## This method shipped broken in two ways that compounded into one very visible bug. It walked the
+## pool in *file order* and took the first three eligible entries, so the choice was not a draw at
+## all — every player who reached the first boss was offered the same three items, run after run.
+## And "rare or better" is `rarity >= RARE`, which includes CORRUPTED: the shared pool happens to
+## begin with Blocking I/O, Tech Debt and Legacy Runtime, which are precisely the three items the
+## design calls pure costs. Every first boss in the game handed the player a choice between a
+## weapon that will not fire while moving, permanent enemy growth, and a tripled dash cooldown,
+## with no way to decline. That is not opt-in pressure, it is a toll.
+##
+## Both halves are fixed here. The candidates are shuffled with the floor's own seeded RNG, so the
+## choice varies by run and is still reproducible from `--seed`. And one slot is reserved for an
+## item that gives something back: hindrances remain in the pool and remain offerable, but they can
+## no longer occupy the whole set of stands.
+##
+## Rarity ordering is preserved within each group, so a boss still offers the best the pool has.
+## Repeatable chips are last: they are the guarantee that three stands can always be filled, not a
+## prize a boss should be handing out while unique items remain.
 func _draw_boss_reward() -> Array[ItemConfig]:
-	var rares: Array[ItemConfig] = []
-	var rest: Array[ItemConfig] = []
+	var rare_gifts: Array[ItemConfig] = []
+	var rare_hindrances: Array[ItemConfig] = []
+	var common_gifts: Array[ItemConfig] = []
+	var common_hindrances: Array[ItemConfig] = []
+	var repeatables: Array[ItemConfig] = []
+
 	for item: ItemConfig in config.get_items():
-		if item == null or item.id in RunManager.offered_item_ids:
+		if item == null:
+			continue
+		if item.is_repeatable():
+			repeatables.append(item)
+			continue
+		if item.id in RunManager.offered_item_ids:
 			continue
 		if item.rarity >= ItemConfig.Rarity.RARE:
-			rares.append(item)
+			if item.is_hindrance():
+				rare_hindrances.append(item)
+			else:
+				rare_gifts.append(item)
+		elif item.is_hindrance():
+			common_hindrances.append(item)
 		else:
-			rest.append(item)
+			common_gifts.append(item)
 
+	for group: Array in [rare_gifts, rare_hindrances, common_gifts, common_hindrances, repeatables]:
+		_shuffle(group)
+
+	# The reserved slot goes first, so that if the pool can only fill one stand it fills it with
+	# something worth taking.
 	var chosen: Array[ItemConfig] = []
-	for pool: Array in [rares, rest]:
-		for item: ItemConfig in pool:
+	var beneficial: Array[Array] = [rare_gifts, common_gifts, repeatables]
+	for group: Array in beneficial:
+		if not group.is_empty():
+			_take_reward(chosen, group[0])
+			group.remove_at(0)
+			break
+
+	for group: Array in [rare_gifts, rare_hindrances, common_gifts, common_hindrances, repeatables]:
+		for item: ItemConfig in group:
 			if chosen.size() >= BOSS_REWARD_COUNT:
 				break
-			chosen.append(item)
-			RunManager.offered_item_ids.append(item.id)
+			_take_reward(chosen, item)
+
 	return chosen
+
+
+## Adds `item` to the offer and spends it, unless it is a chip — a repeatable is never struck off
+## the run, which is the whole of what makes it repeatable.
+func _take_reward(chosen: Array[ItemConfig], item: ItemConfig) -> void:
+	chosen.append(item)
+	if not item.is_repeatable():
+		RunManager.offered_item_ids.append(item.id)
+
+
+## Fisher-Yates against this floor's own RNG, so the boss's choice is decided by the floor seed and
+## nothing else. `Array.shuffle` would use the global generator, which is seeded from the clock and
+## would make one `--seed` stop reproducing the reward it was reported with.
+func _shuffle(items: Array) -> void:
+	for index: int in range(items.size() - 1, 0, -1):
+		var swap := _reward_rng.randi_range(0, index)
+		var held: Variant = items[index]
+		items[index] = items[swap]
+		items[swap] = held
 
 
 func _boss_reward_positions(room: Room) -> Array[Vector2]:
@@ -482,12 +771,12 @@ func _on_room_cleared(id: int) -> void:
 	# was still at full integrity and could not use it. The line below already used `_clears`,
 	# so two counters for one idea sat next to each other, one of them wrong.
 	var include_repair := _clears % REPAIR_EVERY_CLEARS == 0
-	_loot.spawn_room_reward(room.get_reward_position(), include_repair)
+	_session.loot.spawn_room_reward(room.get_reward_position(), include_repair)
 
 	# Items are the reason to keep fighting rather than to run for the exit, so most of a
 	# floor's items come from clearing rooms rather than from the one treasure vault.
 	if _clears in config.item_clear_indices:
-		_loot.spawn_item(room.get_reward_position() + ITEM_REWARD_OFFSET)
+		_session.loot.spawn_item(room.get_reward_position() + ITEM_REWARD_OFFSET)
 
 
 ## Payout for walking into a room that needs no fighting. The treasure room is the reason to
@@ -501,9 +790,9 @@ func _award_first_visit(id: int) -> void:
 	if room.plan.type != RoomTemplate.Type.TREASURE:
 		return
 	if config.treasure_grants_item:
-		_loot.spawn_treasure(room.get_reward_position())
+		_session.loot.spawn_treasure(room.get_reward_position())
 	else:
-		_loot.spawn_room_reward(room.get_reward_position(), true)
+		_session.loot.spawn_room_reward(room.get_reward_position(), true)
 
 
 ## Only reports a change when a door actually moved, so re-entering a cleared room does not

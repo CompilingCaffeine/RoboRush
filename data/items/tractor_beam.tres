@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ItemConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/item_config.gd" id="1_item"]
+[ext_resource type="Texture2D" path="res://art/items/tractor_beam.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"tractor_beam"
+display_name = "Tractor Beam"
+description = "Shots drag what they hit toward the robot instead of shoving it away, which is how a scattered room becomes one pile to blow up."
+rarity = 2
+category = 1
+tags = Array[StringName]([&"projectile", &"knockback", &"control"])
+projectile_add = {
+&"knockback": -140.0
+}
+icon = ExtResource("2_icon")
+accent_color = Color(0.658, 0.424, 0.941, 1)
+pickup_sound = &"item_pickup"

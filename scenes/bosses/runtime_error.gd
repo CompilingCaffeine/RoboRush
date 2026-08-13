@@ -228,12 +228,27 @@ func _enter_phase(next: Phase) -> void:
 	EventBus.boss_phase_changed.emit(int(_phase))
 
 
+## The line between what survives this boss and what does not is drawn here, and it is the same
+## line the whole game draws: **committed attacks resolve, uncommitted ones never happen.**
+##
+## A lane already painted is left alone. It goes on to strike into an arena the player has
+## apparently just won, and it can kill them there — `CompileLane`'s own rule, that a warning
+## already given should still cost something to ignore, does not stop applying because the thing
+## that gave the warning is dead. Projectiles already in flight are left for the same reason.
+##
+## A lane that was never painted is dropped instead: `_staggered_lane_left` is a scheduled second
+## half that the player has had no warning of, and an unannounced hazard appearing in a won arena
+## is the opposite of everything this fight does.
+##
+## Nothing else is scheduled once this returns, and two independent things see to that: `_is_dead`
+## stops `_physics_process` before the attack clock runs at all, and freeing `_part` makes
+## `_step_attacks` return on its own. Belt and braces, worth knowing about rather than tidying:
+## removing either one alone changes no behaviour and passes every test, which is exactly the kind
+## of edit that looks free and leaves the next boss — one that keeps its body for a death
+## animation — attacking from beyond the grave. `tests/test_post_boss.gd` asserts the outcome
+## rather than either mechanism, so it fails when the last one goes.
 func _die() -> void:
 	_is_dead = true
-	# A lane already painted is left to resolve — `CompileLane`'s own rule, that a warning
-	# already given should still cost something to ignore. One that was never painted is
-	# dropped instead: an unannounced hazard appearing in an arena the player has just won is
-	# the opposite of everything this fight does.
 	_staggered_lane_left = 0.0
 
 	var where := _part.global_position if is_instance_valid(_part) else global_position

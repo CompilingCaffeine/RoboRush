@@ -14,8 +14,9 @@ extends RefCounted
 const PROJECTILE_SCENE := preload("res://scenes/projectiles/projectile.tscn")
 
 ## Projectiles are parented to a container in the level, never to the shooter — a
-## projectile must not move when the thing that fired it moves. The room registers
-## itself in this group.
+## projectile must not move when the thing that fired it moves. The floor's `FloorSession`
+## holds the node in this group, which is what makes a shot die with the floor it was fired
+## on; a test arena registers its own.
 const CONTAINER_GROUP := &"projectile_container"
 
 
@@ -51,10 +52,18 @@ static func spawn(
 	if modifiers != null:
 		modifiers.apply(config, shot_index)
 
+	# The one place a shot's direction is allowed to disagree with where it was aimed. Applied here
+	# rather than inside `spawn_configured`, which splits also go through: a child inheriting an
+	# already-rotated config would be rotated again, and a 45 degree item would bend further with
+	# every generation instead of once.
+	var launched := direction
+	if not is_zero_approx(config.aim_offset_degrees):
+		launched = direction.rotated(deg_to_rad(config.aim_offset_degrees))
+
 	return spawn_configured(
 		spawner,
 		config,
-		direction,
+		launched,
 		muzzle,
 		team,
 		attributed_to if attributed_to != null else spawner,
@@ -95,7 +104,15 @@ static func spawn_configured(
 	)
 
 	if deferred:
-		container.add_child.call_deferred(projectile)
+		# Through the session where there is one, so a split fired on the frame a floor is
+		# released is refused rather than landing on the next floor — see
+		# `FloorSession.add_deferred`. Falls back to the plain deferral in a test arena, which has
+		# no session and therefore no generation to be stale against.
+		var session := FloorSession.owning(container)
+		if session != null:
+			session.add_deferred(container, projectile)
+		else:
+			container.add_child.call_deferred(projectile)
 	else:
 		container.add_child(projectile)
 	return projectile

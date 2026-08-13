@@ -6,6 +6,11 @@ extends Node2D
 ## world object at a world position — nothing about it needs to know which room it is standing
 ## in, and parenting per room would mean rooms had to stay alive purely to hold loot.
 ##
+## This node lives inside the floor's `FloorSession`, which is what makes "a pickup belongs to the
+## floor it dropped on" true by parentage rather than by anybody remembering to sweep. It used to
+## sit beside the session's contents instead of inside them, and the result was that every
+## uncollected scrap and repair cell on a floor arrived on the next one.
+##
 ## Spec section 17: scrap drops from enemies and from room rewards. Both paths land here so
 ## the floor's drop rates are one file to tune. Items go through the same path — an item is a
 ## `Pickup` with a `PickupConfig` built at drop time, not a scene of its own.
@@ -36,14 +41,32 @@ var _config: FloorConfig
 var _rng := RandomNumberGenerator.new()
 
 
+## `seed_value` is the floor's *loot stream* — `RunRng.stream_seed(floor_seed, RunRng.LOOT)`, passed
+## in by `FloorController` rather than derived here so that a bare spawner in a test arena can be
+## given any seed at all. What matters is that it is nobody else's stream: scrap amounts, scatter
+## offsets and item draws move only when loot itself changes, not when a boss pool grows.
 func setup(config: FloorConfig, seed_value: int) -> void:
 	_config = config
 	_rng.seed = seed_value
-	# Guarded because a floor advance calls setup() again on this same node: an unguarded
-	# connect would stack a second EventBus.enemy_killed listener and quietly double every
-	# scrap drop from the second floor onward.
+	# Guarded because nothing stops setup() being called twice on one spawner. It used to be the
+	# ordinary case — one spawner lived in `floor.tscn` and was re-set-up on every descent, and an
+	# unguarded connect quietly doubled every scrap drop from the second floor onward. A spawner
+	# now belongs to one `FloorSession` and dies with it, so the guard is defence rather than the
+	# mechanism, and `close` is what takes the connection down before the next floor's is made.
 	if not EventBus.enemy_killed.is_connected(_on_enemy_killed):
 		EventBus.enemy_killed.connect(_on_enemy_killed)
+
+
+## Stops this spawner reacting to anything. Called by `FloorSession.close` at the moment a
+## transition commits.
+##
+## Disconnected then rather than left to the node being freed, because `queue_free` is not
+## immediate: the old spawner and the new one are both connected to `EventBus.enemy_killed` for
+## the rest of the frame in which a floor is released, and an enemy dying in that window would
+## drop its scrap twice — once into a floor that is being thrown away.
+func close() -> void:
+	if EventBus.enemy_killed.is_connected(_on_enemy_killed):
+		EventBus.enemy_killed.disconnect(_on_enemy_killed)
 
 
 ## Called by the floor when a combat room is cleared. The reward is the payoff for the fight,
@@ -95,6 +118,17 @@ func _spawn_scrap(position: Vector2, count: int) -> void:
 ## physics server is flushing queries, and registering a new Area2D's shape at that moment is
 ## refused outright, which would mean kills silently dropped nothing.
 ##
+## Deferred through the session rather than through `add_child.call_deferred`, because the gap
+## this opens is exactly a floor boundary wide. An enemy killed by a projectile still in flight
+## when the player takes the boss reward asks for a pickup on the floor being left and gets it on
+## the floor being entered — which is one of the two objects the five-transition probe caught
+## crossing every boundary. `FloorSession.add_deferred` refuses the late arrival and frees it;
+## `add_child.call_deferred` could not, because at that moment the pickup is not a child of
+## anything and the deferred call is silently dropped along with the node it would have added.
+##
+## The fallback keeps a bare `LootSpawner.new()` in a test arena working: no session means no
+## generation to be stale against, and the ordinary deferral is correct.
+##
 ## `scatter` is off for items. Scrap scatters so a pile of it is countable; an item is a
 ## single object the player walks to deliberately, and nudging it off the reward point only
 ## makes it harder to find.
@@ -102,7 +136,12 @@ func _spawn(config: PickupConfig, position: Vector2, scatter := true) -> void:
 	var pickup: Pickup = PICKUP_SCENE.instantiate()
 	pickup.config = config
 	pickup.position = _resolve_position(position, scatter)
-	add_child.call_deferred(pickup)
+
+	var session := FloorSession.owning(self)
+	if session != null:
+		session.add_deferred(self, pickup)
+	else:
+		add_child.call_deferred(pickup)
 
 
 ## Scatter lands most drops in the open, but an unchecked offset can just as easily land one

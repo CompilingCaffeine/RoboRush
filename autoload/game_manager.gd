@@ -178,8 +178,11 @@ func _set_state(new_state: State) -> void:
 	# Abandoning a run files it too, as a loss. The player still cleared those rooms, and
 	# losing a personal best because you went back to the menu would read as the game
 	# forgetting rather than as a rule. RunManager ignores this when no run is open.
+	#
+	# It is still told *which* kind of loss it was, so the floor the run stopped on records
+	# "abandoned" rather than "destroyed here" — see `RunManager.end_run`.
 	if is_run_over() or state == State.MAIN_MENU:
-		RunManager.end_run(state == State.VICTORY)
+		RunManager.end_run(state == State.VICTORY, state == State.MAIN_MENU)
 	state_changed.emit(state)
 
 

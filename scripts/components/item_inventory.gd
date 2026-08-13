@@ -19,12 +19,22 @@ signal item_added(item: ItemConfig)
 var _items: Array[ItemConfig] = []
 
 
-## Returns whether the item was accepted. Duplicates are refused: an item's whole effect
-## is described by its resource, and two of the same resource is a balance question
-## nobody has answered yet. The floor's pool draws without repetition for the same reason,
-## so this is a guard rather than a rule the player will meet.
+## Returns whether the item was accepted.
+##
+## An item may be held up to `ItemConfig.max_stacks` times, which is 1 for everything that defines
+## a build. Duplicates of those are still refused, and for the original reason: an item's whole
+## effect is described by its resource, and a second copy of "projectiles bounce" is a balance
+## question nobody has answered. What changed is that the answer is now *per item* rather than
+## global — a repeatable chip declares how many of itself a run may hold, and the guard reads that
+## number instead of assuming one.
+##
+## Nothing below this method knows the difference. Every aggregate already sums or multiplies
+## across everything held, so two copies of a +damage chip are +2 damage without a line of stacking
+## code anywhere: the duplicate guard was the only thing standing in the way.
 func add(item: ItemConfig) -> bool:
-	if item == null or has(item.id):
+	if item == null:
+		return false
+	if count_of(item.id) >= maxi(item.max_stacks, 1):
 		return false
 	_items.append(item)
 	item_added.emit(item)
@@ -32,10 +42,17 @@ func add(item: ItemConfig) -> bool:
 
 
 func has(id: StringName) -> bool:
+	return count_of(id) > 0
+
+
+## How many copies of `id` are held. One or zero for a unique item; up to its `max_stacks` for a
+## repeatable one.
+func count_of(id: StringName) -> int:
+	var total := 0
 	for item: ItemConfig in _items:
 		if item.id == id:
-			return true
-	return false
+			total += 1
+	return total
 
 
 ## A copy, so a caller iterating the inventory cannot reorder or empty it.
@@ -134,6 +151,114 @@ func get_drone_count() -> int:
 	for item: ItemConfig in _items:
 		total += item.drone_count
 	return total
+
+
+## Hits the build can absorb per room. Summed: two shields are two blocked blows.
+func get_shield_charges_per_room() -> int:
+	var total := 0
+	for item: ItemConfig in _items:
+		total += item.shield_charges_per_room
+	return total
+
+
+## What the first shot in a room is multiplied by. Multiplied together rather than summed, the same
+## way `get_fire_rate_multiplier` composes, so two such items are a product and not a surprise.
+func get_first_shot_damage_scale() -> float:
+	var scale := 1.0
+	for item: ItemConfig in _items:
+		scale *= item.first_shot_damage_scale
+	return scale
+
+
+## Items that vent a status burst where an enemy dies. Returned rather than resolved, because
+## applying a status needs a world and this component deliberately has none — the same split
+## `get_kill_explosions` and `get_dash_pulses` already make.
+func get_kill_pulses() -> Array[ItemConfig]:
+	var found: Array[ItemConfig] = []
+	for item: ItemConfig in _items:
+		if item.emits_kill_pulse():
+			found.append(item)
+	return found
+
+
+## Items that answer a hit on the player with a blast.
+func get_retaliations() -> Array[ItemConfig]:
+	var found: Array[ItemConfig] = []
+	for item: ItemConfig in _items:
+		if item.retaliates():
+			found.append(item)
+	return found
+
+
+## Fire rate multiplier for a robot that has been standing still, and how long it must have been
+## still to earn it. The bonus is a product; the wait is the *shortest* any held item asks for,
+## because a second, quicker item should make the build quicker rather than average out.
+func get_stillness_fire_rate_scale() -> float:
+	var scale := 1.0
+	for item: ItemConfig in _items:
+		scale *= item.stillness_fire_rate_scale
+	return scale
+
+
+func get_stillness_seconds() -> float:
+	var shortest := 0.0
+	for item: ItemConfig in _items:
+		if item.stillness_fire_rate_scale > 1.0:
+			shortest = item.stillness_seconds if shortest <= 0.0 else minf(shortest, item.stillness_seconds)
+	return shortest
+
+
+## Fire rate multiplier for a robot down to its last points, and the ceiling that counts as "last".
+## The threshold is the *highest* any held item names, so an item that triggers earlier triggers.
+func get_low_integrity_fire_rate_scale() -> float:
+	var scale := 1.0
+	for item: ItemConfig in _items:
+		scale *= item.low_integrity_fire_rate_scale
+	return scale
+
+
+func get_low_integrity_points() -> float:
+	var highest := 0.0
+	for item: ItemConfig in _items:
+		if item.low_integrity_fire_rate_scale > 1.0:
+			highest = maxf(highest, item.low_integrity_points)
+	return highest
+
+
+## Fraction of held scrap paid out per room cleared, and fraction of a room's damage repaid on
+## clearing it. Both summed: two of either is twice as much.
+func get_scrap_interest_fraction() -> float:
+	var total := 0.0
+	for item: ItemConfig in _items:
+		total += item.scrap_interest_fraction
+	return total
+
+
+func get_room_damage_refund() -> float:
+	var total := 0.0
+	for item: ItemConfig in _items:
+		total += item.room_damage_refund
+	return total
+
+
+## Lethal hits the held items can survive between them. Summed for the reason drones are: two
+## failover items are two saves. How many have been *used* is the run's business, not the
+## inventory's — see `RunManager.death_saves_spent`.
+func get_death_save_charges() -> int:
+	var total := 0
+	for item: ItemConfig in _items:
+		total += item.death_save_charges
+	return total
+
+
+## The longest grace window any held failover item grants. The best rather than the sum, like the
+## magnet's speed: two overlapping windows are one window, and it is as long as the better item says.
+func get_death_save_grace_seconds() -> float:
+	var best := 0.0
+	for item: ItemConfig in _items:
+		if item.death_save_charges > 0:
+			best = maxf(best, item.death_save_grace_seconds)
+	return best
 
 
 ## Items that detonate when an enemy dies. Read by ItemEffects rather than acted on here,

@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ItemConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/item_config.gd" id="1_item"]
+[ext_resource type="Texture2D" path="res://art/items/kernel_bypass.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"kernel_bypass"
+display_name = "Kernel Bypass"
+description = "Dashing chills everything nearby, and the dash recharges faster."
+rarity = 2
+category = 3
+tags = Array[StringName]([&"mobility", &"dash", &"status", &"chill"])
+dash_pulse_radius = 34.0
+dash_cooldown_scale = 0.75
+dash_pulse_effects = Array[StringName]([&"chill"])
+icon = ExtResource("2_icon")
+accent_color = Color(0.298, 0.549, 0.941, 1)
+pickup_sound = &"item_pickup"

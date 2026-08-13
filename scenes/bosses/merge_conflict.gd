@@ -324,6 +324,19 @@ func _enter_merged() -> void:
 	EventBus.boss_phase_changed.emit(int(_phase))
 
 
+## The bodies go; what they already fired does not.
+##
+## Shots in flight are not swept up here, deliberately. A volley the player watched this boss
+## launch goes on to cross the arena and can still hit them after the health bar has emptied — the
+## fight ends when the arena is quiet, not when the last point of damage lands.
+##
+## Nothing new is ever announced by a corpse, and as in `RuntimeError._die` two independent things
+## see to it: `_is_dead` stops `_physics_process` before the attack clock runs, and the parts freed
+## below leave `_step_attacks` with no body to fire from. The deferred `_build_duplicate` checks the
+## same flag rather than spawning a clone into a won fight.
+##
+## The distinction is the whole rule: committed attacks resolve, uncommitted ones never happen.
+## `tests/test_post_boss.gd` holds both ends of it.
 func _die() -> void:
 	_is_dead = true
 	var where := _primary.global_position if is_instance_valid(_primary) else global_position

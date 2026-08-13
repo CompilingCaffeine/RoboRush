@@ -35,6 +35,20 @@ extends Resource
 ## Impulse applied to whatever it hits, in pixels per second.
 @export var knockback: float = 55.0
 
+## Degrees the shot actually leaves at, measured from where it was aimed. Zero for everything
+## anybody fires on purpose.
+##
+## Applied in `ProjectileFactory.spawn` and deliberately *not* in `spawn_configured`. The two are
+## the same call for an ordinary shot, but split children go through the second one with a config
+## their parent has already been rotated by — offsetting there too would turn one 45 degree item
+## into a shot that veers further with every generation of splits, which is not what the item says
+## it does and is impossible to aim around.
+##
+## A projectile field rather than a weapon or player one because it belongs to the *shot*: it
+## travels through `ProjectileModifierStack` like every other item effect, so an item that causes
+## it composes with bounces, homing and splits without any of them knowing it exists.
+@export var aim_offset_degrees: float = 0.0
+
 @export_group("Composition")
 
 ## Extra bodies the projectile passes through before expiring. 0 = stops on first hit.
@@ -75,6 +89,17 @@ extends Resource
 
 ## How far each jump may reach for its next target.
 @export var chain_radius: float = 72.0
+
+## Fraction of a target's maximum integrity at or below which a hit finishes it outright. Zero for
+## every shot that does not execute, which is all of them until an item says otherwise.
+##
+## A projectile field rather than an item hook, for the reason every other behaviour here is one: it
+## then composes with the rest for free. A split child executes, a chain jump executes, a bounced
+## shot executes — none of that is written anywhere, it falls out of the child carrying its parent's
+## config. Threshold rather than flat damage because what makes an execute feel different from more
+## damage is that it ignores how much integrity the enemy *had*: on a floor where Tech Debt has
+## quadrupled everything's pool, a fifth of a very large number is still a fifth.
+@export var execute_threshold: float = 0.0
 
 ## Whether the projectile turns around once instead of dying. Return Protocol switches this on.
 ##

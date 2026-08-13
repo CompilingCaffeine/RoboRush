@@ -7,11 +7,12 @@
 script = ExtResource("1_item")
 id = &"blocking_io"
 display_name = "Blocking I/O"
-description = "The weapon will not fire while the robot is moving. You must stop to shoot. No upside."
+description = "The weapon will not fire while the robot is moving, and the chassis loses one maximum integrity. No upside."
 rarity = 4
 category = 6
 tags = Array[StringName]([&"corrupted", &"weapon", &"hindrance"])
 fire_requires_stillness = true
+max_integrity_delta = -1.0
 icon = ExtResource("2_icon")
 accent_color = Color(0.878, 0.290, 0.290, 1)
 pickup_sound = &"item_pickup"

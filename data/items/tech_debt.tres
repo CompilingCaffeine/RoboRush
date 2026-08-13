@@ -7,11 +7,12 @@
 script = ExtResource("1_item")
 id = &"tech_debt"
 display_name = "Tech Debt"
-description = "Every room you clear permanently toughens every enemy for the rest of the run. It compounds. No upside."
+description = "Every room you clear permanently toughens every enemy for the rest of the run, and the chassis loses one maximum integrity. It compounds. No upside."
 rarity = 4
 category = 6
 tags = Array[StringName]([&"corrupted", &"hindrance", &"on_clear"])
 enemy_health_growth_per_room = 0.12
+max_integrity_delta = -1.0
 icon = ExtResource("2_icon")
 accent_color = Color(0.878, 0.290, 0.290, 1)
 pickup_sound = &"item_pickup"

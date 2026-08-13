@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ItemConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/item_config.gd" id="1_item"]
+[ext_resource type="Texture2D" path="res://art/items/chip_integrity.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"chip_integrity"
+display_name = "Plating Chip"
+description = "One more maximum integrity, and one repaired. Stacks."
+rarity = 0
+category = 4
+tags = Array[StringName]([&"chip", &"repeatable", &"integrity"])
+max_stacks = 5
+max_integrity_delta = 1.0
+heal_on_pickup = 1.0
+icon = ExtResource("2_icon")
+accent_color = Color(0.18, 0.627, 0.384, 1)
+pickup_sound = &"item_pickup"

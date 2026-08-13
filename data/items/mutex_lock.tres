@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="ItemConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/item_config.gd" id="1_item"]
+[ext_resource type="Texture2D" path="res://art/items/mutex_lock.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"mutex_lock"
+display_name = "Mutex Lock"
+description = "Standing still for a moment locks the weapon into a much faster cycle."
+rarity = 1
+category = 2
+tags = Array[StringName]([&"processor", &"fire_rate", &"stance"])
+stillness_fire_rate_scale = 1.5
+stillness_seconds = 0.6
+icon = ExtResource("2_icon")
+accent_color = Color(0.658, 0.718, 0.769, 1)
+pickup_sound = &"item_pickup"

@@ -33,6 +33,8 @@ const ROWS: Array[String] = [
 	"ENEMIES",
 	"ROOM",
 	"FLOOR",
+	"SEED",
+	"CONTENT",
 	"ITEMS",
 ]
 
@@ -130,10 +132,36 @@ func _refresh() -> void:
 	])
 	_set_value("ENEMIES", _describe_enemies())
 	_set_value("ROOM", _describe_room())
-	_set_value("FLOOR", "%s  seed %d  scrap %d" % [
-		RunManager.floor_name, RunManager.floor_seed, RunManager.scrap,
+	_set_value("FLOOR", "%s  %d  scrap %d" % [
+		RunManager.floor_name, RunManager.floor_number, RunManager.scrap,
 	])
+	_set_value("SEED", _describe_seeds())
+	_set_value("CONTENT", _describe_content())
 	_set_value("ITEMS", _describe_items())
+
+
+## The two numbers a reproducible bug report needs, in the order they matter: the run's seed, which
+## is what `--seed=` takes, and this floor's, which is what it derives to.
+##
+## Both, rather than only the floor's. The floor seed used to be the only one shown, and by floor
+## three it was three `hash()` steps away from anything a player could type back in — a number that
+## looked reproducible and was not. It is still worth showing next to the run seed, because it is
+## what the floor's own streams come from and what a generation bug is filed against.
+func _describe_seeds() -> String:
+	return "run %d  floor %d" % [RunManager.get_run_seed(), RunManager.floor_seed]
+
+
+## Which content this floor's seed was spent on: the campaign, its version, and a fingerprint of
+## this floor in particular (see `RunManifest`). Turns a screenshot into something reproducible — the
+## same seed on a different content build is a different floor, and this is the line that says so.
+func _describe_content() -> String:
+	var campaign := String(RunManager.get_campaign_id())
+	var fingerprint := _floor.get_content_fingerprint() if _floor != null else ""
+	return "%s v%d  %s" % [
+		campaign if not campaign.is_empty() else "no campaign",
+		RunManager.get_content_version(),
+		fingerprint if not fingerprint.is_empty() else "-".repeat(RunManifest.FINGERPRINT_DIGITS),
+	]
 
 
 ## Ids rather than display names, because the id is what a bug report needs to reproduce a

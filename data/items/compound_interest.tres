@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="ItemConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/item_config.gd" id="1_item"]
+[ext_resource type="Texture2D" path="res://art/items/compound_interest.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"compound_interest"
+display_name = "Compound Interest"
+description = "Every room cleared pays a tenth of the scrap already in hand."
+rarity = 1
+category = 5
+tags = Array[StringName]([&"utility", &"scrap"])
+scrap_interest_fraction = 0.1
+icon = ExtResource("2_icon")
+accent_color = Color(1.0, 0.824, 0.235, 1)
+pickup_sound = &"item_pickup"

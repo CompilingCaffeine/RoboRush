@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ItemConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/item_config.gd" id="1_item"]
+[ext_resource type="Texture2D" path="res://art/items/static_charge.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"static_charge"
+display_name = "Static Charge"
+description = "Shots leave the target shocked, and everything that hits a shocked target hurts it more."
+rarity = 1
+category = 1
+tags = Array[StringName]([&"projectile", &"status", &"shock"])
+projectile_add = {
+&"status_effects": Array[StringName]([&"shock"])
+}
+icon = ExtResource("2_icon")
+accent_color = Color(0.98, 0.86, 0.35, 1)
+pickup_sound = &"item_pickup"

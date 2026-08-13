@@ -12,6 +12,7 @@ extends TestCase
 
 const FLOOR_CONFIG_PATH := "res://data/floors/floor_1_help_desk.tres"
 const FLOOR_2_CONFIG_PATH := "res://data/floors/floor_2_development.tres"
+const CAMPAIGN_PATH := "res://data/runs/main_campaign.tres"
 
 ## Seeds to sweep. Enough that a rare structural bug has to be very rare to survive.
 const SEED_COUNT := 120
@@ -46,6 +47,11 @@ func run() -> void:
 	await _test_repair_cells_drop_on_every_third_clear()
 	await _test_boss_defeat_advances_to_the_next_floor_and_only_the_last_wins()
 	await _test_a_descent_enters_only_the_new_floors_start_room()
+	await _test_five_boundaries_leave_exactly_one_floor()
+	await _test_nothing_from_a_floor_survives_its_boundary()
+	await _test_a_boundary_keeps_run_state_and_resets_floor_state()
+	await _test_an_ungeneratable_destination_keeps_the_current_floor()
+	_clean_up_greybox()
 
 
 func _test_config_has_content() -> void:
@@ -651,14 +657,25 @@ func _test_repair_cells_drop_on_every_third_clear() -> void:
 	await advance_physics(1)
 
 
-## Step 1 of multi-level: floor 1 chains to a duplicate as floor 2 via `FloorConfig.next_floor`.
 ## Defeating a boss must advance the run into the next floor rather than end it, and only the
-## *last* floor's boss may reach victory. Drives the boss-defeat handlers directly, the same way
-## `_test_repair_cells_drop_on_every_third_clear` drives `_on_room_cleared` directly above.
+## *last floor the campaign lists* may reach victory. Drives the boss-defeat handlers directly,
+## the same way `_test_repair_cells_drop_on_every_third_clear` drives `_on_room_cleared` above.
+##
+## Read off the campaign rather than off floor 1, because the campaign is now the floor order:
+## a controller that still descended correctly while ignoring it would be the second authority
+## this package exists to remove.
 func _test_boss_defeat_advances_to_the_next_floor_and_only_the_last_wins() -> void:
-	var floor_config: FloorConfig = load(FLOOR_CONFIG_PATH) as FloorConfig
-	if not require(floor_config.next_floor, "floor 1 has a next floor configured"):
+	var campaign := load(CAMPAIGN_PATH) as RunDefinition
+	if not require(campaign, "the campaign loads"):
 		return
+	var floor_config := campaign.load_floor(0)
+	var next_config := campaign.load_floor(1)
+	if not require(floor_config, "the campaign's first floor loads"):
+		return
+	if not require(next_config, "the campaign has a floor to descend into"):
+		return
+	check(campaign.is_terminal(campaign.size() - 1), "only the campaign's last floor is terminal")
+	check(not campaign.is_terminal(0), "and the first floor is not")
 
 	var arena := Node2D.new()
 	add_child(arena)
@@ -669,41 +686,55 @@ func _test_boss_defeat_advances_to_the_next_floor_and_only_the_last_wins() -> vo
 	await advance_physics(1)
 
 	GameManager.start_run()
-	RunManager.begin_run(9001)
-	check(floor_node.build(player, 9001), "floor 1 builds")
+	RunManager.begin_run(9001, campaign)
+	check(floor_node.build(player, campaign.floor_seed_for(9001, 0)), "floor 1 builds")
 
-	var boss_room := _find_boss_room(floor_node)
-	if require(boss_room, "floor 1 has a boss room"):
+	# Every floor the campaign declares, rather than the two that exist. The interesting claim is
+	# "each floor advances and only the last one wins", and a test that spelled out two floors
+	# would keep passing against a six-floor campaign that won on the second.
+	for index: int in campaign.size():
+		var config := campaign.load_floor(index)
+		var number := index + 1
+		var boss_room := _find_boss_room(floor_node)
+		if not require(boss_room, "floor %d has a boss room" % number):
+			break
+
 		floor_node._on_boss_defeated(Node.new(), boss_room)
 		await advance_physics(1)
+		# Victory waits on the claim, not on the killing blow, on every floor including the last.
 		check(
 			GameManager.state == GameManager.State.RUN,
-			"defeating floor 1's boss does not end the run",
+			"defeating floor %d's boss does not end the run on its own" % number,
 		)
 
-		floor_node._on_boss_reward_taken(floor_config.get_items()[0])
+		floor_node._on_boss_reward_taken(config.get_items()[0])
 		await advance_physics(1)
-		check(
-			GameManager.state == GameManager.State.RUN,
-			"taking floor 1's reward advances, not wins",
-		)
-		check(RunManager.floor_number == 2, "RunManager reports floor 2")
-		check(
-			floor_node.config == floor_config.next_floor,
-			"the controller rebuilt from floor 2's config",
-		)
-		check(floor_node._clears == 0, "floor 2 starts with a clean clear count")
-		check(floor_node.visited.size() == 1, "floor 2 starts with only its own start room visited")
 
-		var boss_room_2 := _find_boss_room(floor_node)
-		if require(boss_room_2, "floor 2 has a boss room"):
-			floor_node._on_boss_defeated(Node.new(), boss_room_2)
-			floor_node._on_boss_reward_taken(floor_config.next_floor.get_items()[0])
-			await advance_physics(1)
+		if campaign.is_terminal(index):
 			check(
 				GameManager.state == GameManager.State.VICTORY,
-				"defeating the last floor's boss wins the run",
+				"taking the last floor's reward wins the run",
 			)
+			break
+
+		check(
+			GameManager.state == GameManager.State.RUN,
+			"taking floor %d's reward advances, not wins" % number,
+		)
+		check(RunManager.floor_number == number + 1, "RunManager reports floor %d" % (number + 1))
+		check(
+			floor_node.config == campaign.load_floor(index + 1),
+			"the controller rebuilt from floor %d's config" % (number + 1),
+		)
+		check(
+			floor_node.floor_index == index + 1,
+			"and knows it is standing on floor %d" % (number + 1),
+		)
+		check(floor_node._clears == 0, "floor %d starts with a clean clear count" % (number + 1))
+		check(
+			floor_node.visited.size() == 1,
+			"floor %d starts with only its own start room visited" % (number + 1),
+		)
 
 	# Winning pauses the tree (GameManager._set_state); leaving it paused would break every
 	# suite that runs after this one and needs physics frames to actually advance.
@@ -729,8 +760,13 @@ func _test_boss_defeat_advances_to_the_next_floor_and_only_the_last_wins() -> vo
 ## "those three seeds". Nothing here spawns floor 1's boss, because the trigger depends only
 ## on where the player is standing when the floor is rebuilt under them.
 func _test_a_descent_enters_only_the_new_floors_start_room() -> void:
-	var floor_config: FloorConfig = load(FLOOR_CONFIG_PATH) as FloorConfig
-	if not require(floor_config.next_floor, "floor 1 has a next floor to descend into"):
+	var campaign := load(CAMPAIGN_PATH) as RunDefinition
+	if not require(campaign, "the campaign loads"):
+		return
+	var floor_config := campaign.load_floor(0)
+	if not require(floor_config, "the campaign's first floor loads"):
+		return
+	if not require(campaign.load_floor(1), "there is a floor to descend into"):
 		return
 
 	var arena := Node2D.new()
@@ -863,3 +899,421 @@ func _count_repair_cells() -> int:
 		if pickup.config != null and pickup.config.kind == PickupConfig.Kind.REPAIR_CELL:
 			found += 1
 	return found
+
+
+# --- Floor session lifecycle -------------------------------------------------------------
+#
+# A floor is one node now (`FloorSession`), and a boundary frees it whole. The checks below are
+# the ones that were impossible to write when "what dies with a floor" was a list in `_teardown`:
+# the interesting failure was never a room surviving, it was the things nobody had listed.
+
+
+## Where the greybox campaign's floors are written. Under `user://` because a campaign resolves
+## its floors by path — an in-memory `FloorConfig` would skip the load this is partly testing.
+const GREYBOX_DIR := "user://test_floor_greybox"
+
+## Long enough for a lane to still be telegraphing when the floor under it is released. Its damage
+## is zero as well: this is a check on ownership, not on whether a lane can hit anybody.
+const LANE_TELEGRAPH_SECONDS := 10.0
+
+var _greybox: RunDefinition
+var _greybox_written: PackedStringArray = []
+
+
+## Five boundaries, and after each one exactly one of everything a floor owns.
+##
+## Five rather than one because the failure this exists for is *accumulation*: one leaked room
+## graph looks like a working game, and the probe that found the original bug only found it by
+## counting across transitions. A greybox campaign rather than the shipped two floors, because two
+## floors can only produce one boundary and one boundary cannot show a trend.
+func _test_five_boundaries_leave_exactly_one_floor() -> void:
+	var campaign := _greybox_campaign(6)
+	if not require(campaign, "a six-floor greybox campaign builds"):
+		return
+
+	var arena := Node2D.new()
+	add_child(arena)
+	var floor_node := _open_greybox(arena, campaign, 31337)
+	if floor_node == null:
+		arena.queue_free()
+		await advance_physics(1)
+		return
+
+	var expected_rooms := floor_node.config.room_count
+	for boundary: int in 5:
+		await _descend(floor_node)
+		var number := boundary + 2
+		check(
+			floor_node.config.floor_number == number,
+			"boundary %d lands on floor %d (landed on %d)"
+				% [boundary + 1, number, floor_node.config.floor_number],
+		)
+		check(
+			_sessions_under(floor_node) == 1,
+			"floor %d is the only floor in the tree (%d are)"
+				% [number, _sessions_under(floor_node)],
+		)
+		check(
+			_containers_under(floor_node) == 1,
+			"and owns the only projectile container (%d do)" % _containers_under(floor_node),
+		)
+		check(
+			floor_node._rooms.size() == expected_rooms,
+			"and has %d rooms, not %d floors' worth" % [expected_rooms, floor_node._rooms.size()],
+		)
+		check(
+			floor_node.get_session().generation == number,
+			"and is the %dth session opened (is %d)"
+				% [number, floor_node.get_session().generation],
+		)
+
+	check(
+		floor_node.get_session().pending_count() == 0,
+		"nothing is left queued after five boundaries",
+	)
+
+	arena.queue_free()
+	await advance_physics(1)
+
+
+## One of everything a floor can leave behind, then a boundary, then none of it.
+##
+## The queued pickup is the one that matters most. It is a spawn that has been *asked for* and has
+## not happened yet — the state deleting the current children cannot reach, because at that moment
+## the pickup is not a child of anything. That is the shape of the original bug: loot and
+## projectiles are added deferred, so a floor can end between the request and the arrival.
+func _test_nothing_from_a_floor_survives_its_boundary() -> void:
+	var campaign := _greybox_campaign(6)
+	if not require(campaign, "the greybox campaign builds"):
+		return
+
+	var arena := Node2D.new()
+	add_child(arena)
+	var floor_node := _open_greybox(arena, campaign, 4711)
+	if floor_node == null:
+		arena.queue_free()
+		await advance_physics(1)
+		return
+
+	var session := floor_node.get_session()
+	var origin := floor_node.get_current_room().get_interior_centre()
+
+	# A pickup that has landed, a projectile in flight, and a lane mid-telegraph.
+	session.loot._spawn(LootSpawner.SCRAP_CONFIG, origin)
+	await advance_physics(2)
+	var pickup := _first_pickup_under(floor_node)
+	# Stationary, long-lived, and on the player's own team, so that the *only* thing which can end
+	# this projectile is the floor it belongs to. Both halves of that were learned by watching this
+	# check pass against a deliberately broken build: a rivet's 1.4s lifetime expires inside the
+	# descent, and an enemy-team shot spawned on the room's centre point is a shot spawned on top
+	# of the player, which despawns it on contact. Either way the assertion held for a reason that
+	# had nothing to do with floor ownership.
+	var shot := (load("res://data/projectiles/rivet.tres") as ProjectileConfig).spawn_copy()
+	shot.speed = 0.0
+	shot.lifetime = 600.0
+	shot.damage = 0.0
+	var projectile := ProjectileFactory.spawn_configured(
+		session.projectiles, shot, Vector2.RIGHT, origin, Teams.Id.PLAYER
+	)
+	var lane := CompileLane.spawn(
+		floor_node, Rect2(origin, Vector2(16.0, 16.0)), 0.0, LANE_TELEGRAPH_SECONDS, 1.0
+	)
+	var enemy := _first_enemy_under(floor_node)
+	var door := _first_door(floor_node)
+
+	# And two that have been asked for and have not arrived. Queued last, so the boundary happens
+	# before the idle frame that would have delivered them.
+	#
+	# `stranded` is held by name because it is the case with no other symptom: a node queued
+	# through `add_child.call_deferred` against a parent that is then freed is not added, not
+	# freed, and not referenced by anything — it simply stays alive for the rest of the process
+	# with nothing pointing at it. Nothing observable happens, which is why it needs asserting
+	# directly rather than through a count of what is in the tree.
+	session.loot._spawn(LootSpawner.SCRAP_CONFIG, origin)
+	var stranded := Node2D.new()
+	session.add_deferred(session.projectiles, stranded)
+
+	var present := (
+		pickup != null and projectile != null and lane != null and enemy != null and door != null
+	)
+	check(present, "a floor with loot, a shot, a lane, an enemy, and a door to leave behind")
+	check(session.pending_count() == 2, "and two spawns queued against it (%d)" % session.pending_count())
+	if not present:
+		arena.queue_free()
+		await advance_physics(1)
+		return
+
+	await _descend(floor_node)
+
+	for pair: Array in [
+		[pickup, "pickup"], [projectile, "projectile"], [lane, "compile lane"],
+		[enemy, "enemy"], [door, "door"], [session, "session"],
+	]:
+		check(
+			not is_instance_valid(pair[0]),
+			"the previous floor's %s does not survive the boundary" % pair[1],
+		)
+
+	check(
+		not is_instance_valid(stranded),
+		"a spawn queued against the old floor is freed rather than stranded outside the tree",
+	)
+
+	var opened := floor_node.get_session()
+	check(opened.pending_count() == 0, "the new floor inherits no queued spawn")
+	check(_first_pickup_under(floor_node) == null, "and no loot")
+	check(opened.projectiles.get_child_count() == 0, "and nothing in its projectile container")
+
+
+	arena.queue_free()
+	await advance_physics(1)
+
+
+## The other half of the boundary: what must *not* be reset. The run is the thing that crosses,
+## and it crosses by not being inside the floor — so this is really a check that the session
+## boundary was drawn in the right place.
+func _test_a_boundary_keeps_run_state_and_resets_floor_state() -> void:
+	var campaign := _greybox_campaign(6)
+	if not require(campaign, "the greybox campaign builds"):
+		return
+
+	var arena := Node2D.new()
+	add_child(arena)
+	var floor_node := _open_greybox(arena, campaign, 8080)
+	if floor_node == null:
+		arena.queue_free()
+		await advance_physics(1)
+		return
+
+	var player: Player = arena.get_node("Player")
+	var health := player.get_health_component()
+	var inventory := player.get_item_inventory()
+
+	RunManager.add_scrap(37)
+	RunManager.enemy_health_scale = 1.5
+	RunManager.rooms_cleared = 4
+	RunManager.stats.enemies_defeated = 9
+	health.apply_damage(DamageInfo.new(1.0, null, Vector2.RIGHT))
+	inventory.add(_config.get_items()[0])
+	floor_node._clears = 3
+
+	var integrity := health.current
+	var offered_before := RunManager.offered_item_ids.size()
+	var bosses_before := RunManager.fought_boss_ids.size()
+
+	await _descend(floor_node)
+
+	check(arena.get_node("Player") == player, "the same player node crosses the boundary")
+	check_near(health.current, integrity, "and keeps the integrity it arrived with")
+	check(inventory.size() == 1, "and its inventory (%d items)" % inventory.size())
+	check(RunManager.scrap == 37, "scrap survives (%d)" % RunManager.scrap)
+	check_near(RunManager.enemy_health_scale, 1.5, "enemy scaling survives")
+	check(RunManager.rooms_cleared == 4, "the cumulative room count survives")
+	check(RunManager.stats.enemies_defeated == 9, "run statistics survive")
+	check(
+		RunManager.offered_item_ids.size() > offered_before,
+		"the offered-item history is added to, not cleared",
+	)
+	check(
+		RunManager.fought_boss_ids.size() == bosses_before + 1,
+		"and the new floor's boss is recorded alongside the old one's",
+	)
+
+	check(floor_node._clears == 0, "the floor-local clear count resets")
+	check(floor_node.visited.size() == 1, "only the new start room has been visited")
+	check(
+		floor_node.current_room_id == floor_node.layout.get_start_room().id,
+		"and the player is standing in it",
+	)
+
+	arena.queue_free()
+	await advance_physics(1)
+
+
+## A destination that loads and will not generate. The old order tore the floor down first, so this
+## left the run in `RUN` with no rooms, no doors, and a player in a void — reachable from a typo in
+## a `.tres` and not recoverable from at all.
+func _test_an_ungeneratable_destination_keeps_the_current_floor() -> void:
+	print("    (the next FloorGenerator error is expected: refusing an impossible floor 2)")
+	var campaign := _greybox_campaign(2, func(config: FloorConfig, index: int) -> void:
+		if index == 1:
+			config.room_count = 1
+	)
+	if not require(campaign, "a campaign with an impossible second floor builds"):
+		return
+
+	var arena := Node2D.new()
+	add_child(arena)
+	var floor_node := _open_greybox(arena, campaign, 9119)
+	if floor_node == null:
+		arena.queue_free()
+		await advance_physics(1)
+		return
+
+	var session := floor_node.get_session()
+	var rooms := floor_node._rooms.size()
+
+	await _descend(floor_node)
+
+	check(GameManager.state == GameManager.State.RUN, "the run is still running")
+	check(floor_node.get_session() == session, "the player keeps the floor they were standing on")
+	check(is_instance_valid(session), "which has not been released")
+	check(floor_node.config.floor_number == 1, "and is still floor 1")
+	check(floor_node._rooms.size() == rooms, "with all %d of its rooms" % rooms)
+	check(_sessions_under(floor_node) == 1, "and is the only floor in the tree")
+
+	arena.queue_free()
+	await advance_physics(1)
+
+
+## Fights this floor's boss and takes its reward, which is the only thing that descends. Drives the
+## handlers directly, the way every other floor-advance check in this file does.
+func _descend(floor_node: FloorController) -> void:
+	var boss_room := _find_boss_room(floor_node)
+	if boss_room == null:
+		fail("floor %d has no boss room to descend from" % floor_node.config.floor_number)
+		return
+
+	# Freed rather than left to the collector: `Node` is not reference counted, so a stand-in boss
+	# dropped here is an object still alive at exit.
+	var stand_in := Node.new()
+	floor_node._on_boss_defeated(stand_in, boss_room)
+	stand_in.free()
+	await advance_physics(1)
+
+	floor_node._on_boss_reward_taken(floor_node.config.get_items()[0])
+	# The rebuild is deferred, and so is the physics flush that follows it. One frame is not enough.
+	await advance_physics(4)
+
+
+## Builds a controller on `campaign`'s first floor. Returns null and records the failure if it will
+## not open, so each check above can bail without repeating the reporting.
+func _open_greybox(arena: Node2D, campaign: RunDefinition, seed_value: int) -> FloorController:
+	var floor_node: FloorController = FLOOR_SCENE.instantiate()
+	floor_node.campaign = campaign
+	floor_node.config = campaign.load_floor(0)
+	arena.add_child(floor_node)
+	var player: Player = PLAYER_SCENE.instantiate()
+	player.name = "Player"
+	arena.add_child(player)
+
+	GameManager.start_run()
+	RunManager.begin_run(seed_value, campaign)
+	# The campaign's own derived seed for its first floor, not the run seed raw. Either builds a
+	# floor, but only this one is the floor a real run would have opened on — and these checks are
+	# about what a real descent does.
+	if not floor_node.build(player, campaign.floor_seed_for(seed_value, 0)):
+		fail("the greybox campaign's first floor would not build")
+		return null
+	return floor_node
+
+
+## A campaign of `count` floors written to `user://`, each a copy of the Help Desk under its own id.
+##
+## Copies of real content rather than `FloorConfig.new()`, so a descent through it exercises rooms,
+## enemies, loot, and a boss rather than an empty graph. The one thing that has to change is
+## eligibility: the Help Desk's own templates stop at `max_floor = 2`, so floors 3 and beyond would
+## have nothing to build from and the generator would rightly refuse them.
+##
+## `mutate` breaks one floor deliberately, for the check that a broken destination is survivable.
+func _greybox_campaign(count: int, mutate := Callable()) -> RunDefinition:
+	var source := load(FLOOR_CONFIG_PATH) as FloorConfig
+	if source == null:
+		fail("floor 1 must load to build a greybox campaign from")
+		return null
+	if not DirAccess.dir_exists_absolute(GREYBOX_DIR):
+		DirAccess.make_dir_recursive_absolute(GREYBOX_DIR)
+
+	var floors: Array[FloorEntry] = []
+	for index: int in count:
+		# Shallow, so every property below is *reassigned* rather than edited in place: the arrays
+		# are shared with the shipped resource, and mutating one here would rewrite the Help Desk
+		# for every suite that runs after this file.
+		var config := source.duplicate() as FloorConfig
+		config.id = StringName("greybox_%d" % (index + 1))
+		config.floor_number = index + 1
+		config.start_templates = _reaching_floor(source.start_templates, count)
+		config.combat_templates = _reaching_floor(source.combat_templates, count)
+		config.treasure_templates = _reaching_floor(source.treasure_templates, count)
+		config.shop_templates = _reaching_floor(source.shop_templates, count)
+		config.boss_templates = _reaching_floor(source.boss_templates, count)
+		if mutate.is_valid():
+			mutate.call(config, index)
+
+		var path := "%s/floor_%d_of_%d.tres" % [GREYBOX_DIR, index + 1, count]
+		if ResourceSaver.save(config, path) != OK:
+			fail("could not write the greybox floor %s" % path)
+			return null
+		if not _greybox_written.has(path):
+			_greybox_written.append(path)
+
+		var entry := FloorEntry.new()
+		entry.id = config.id
+		entry.config_path = path
+		floors.append(entry)
+
+	var campaign := RunDefinition.new()
+	campaign.id = &"greybox"
+	campaign.floors = floors
+	campaign.target_floor_count = count
+	return campaign
+
+
+## Copies of `templates` that stay eligible all the way to `last_floor`.
+func _reaching_floor(templates: Array[RoomTemplate], last_floor: int) -> Array[RoomTemplate]:
+	var raised: Array[RoomTemplate] = []
+	for template: RoomTemplate in templates:
+		var copy := template.duplicate() as RoomTemplate
+		copy.max_floor = last_floor
+		raised.append(copy)
+	return raised
+
+
+func _sessions_under(floor_node: FloorController) -> int:
+	var found := 0
+	for child: Node in floor_node.get_children():
+		if child is FloorSession:
+			found += 1
+	return found
+
+
+## Nodes answering as the projectile container beneath `node`. Tree-wide rather than by reading the
+## session's own child, because the failure is a *second* container answering first — a session
+## left in the tree while the next one is built — and asking the session would never see it.
+func _containers_under(node: Node) -> int:
+	var found := 0
+	for candidate: Node in node.get_tree().get_nodes_in_group(ProjectileFactory.CONTAINER_GROUP):
+		if node.is_ancestor_of(candidate):
+			found += 1
+	return found
+
+
+func _first_pickup_under(node: Node) -> Pickup:
+	for candidate: Node in node.get_tree().get_nodes_in_group(Pickup.GROUP):
+		if node.is_ancestor_of(candidate):
+			return candidate as Pickup
+	return null
+
+
+func _first_enemy_under(node: Node) -> Node:
+	for candidate: Node in node.get_tree().get_nodes_in_group(Teams.GROUP_ENEMY):
+		if node.is_ancestor_of(candidate):
+			return candidate
+	return null
+
+
+func _first_door(floor_node: FloorController) -> Door:
+	for doors: Array in floor_node._doors_by_room.values():
+		for door: Door in doors:
+			if is_instance_valid(door):
+				return door
+	return null
+
+
+## The greybox floors are content written into the user's data directory. Left behind they would be
+## read by the next run of this suite from a build that had since changed what a floor looks like.
+func _clean_up_greybox() -> void:
+	for path: String in _greybox_written:
+		DirAccess.remove_absolute(path)
+	_greybox_written.clear()
+	DirAccess.remove_absolute(GREYBOX_DIR)

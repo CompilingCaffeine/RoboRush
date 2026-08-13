@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="ItemConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/item_config.gd" id="1_item"]
+[ext_resource type="Texture2D" path="res://art/items/spaghetti_code.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"spaghetti_code"
+display_name = "Spaghetti Code"
+description = "Projectiles split into three, all of them crawl, and the chassis loses one maximum integrity."
+rarity = 4
+category = 6
+tags = Array[StringName]([&"corrupted", &"projectile", &"split"])
+projectile_add = {
+&"split_count": 3.0
+}
+projectile_scale = {
+&"speed": 0.55
+}
+max_integrity_delta = -1.0
+icon = ExtResource("2_icon")
+accent_color = Color(0.878, 0.29, 0.29, 1)
+pickup_sound = &"item_pickup"
