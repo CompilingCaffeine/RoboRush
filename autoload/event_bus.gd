@@ -124,3 +124,8 @@ signal doors_changed(are_locked: bool)
 ## it exists so the strike is drawn/heard in one place rather than by whatever queued the
 ## lane. `rect` is in global coordinates.
 signal compile_lane_executed(rect: Rect2)
+
+## A Data Center throughput zone filled up and vented. Fired whether or not the player was still
+## standing in it, for the same reason `compile_lane_executed` is: the effect belongs to the event,
+## not to its outcome. `rect` is in global coordinates. See `ThermalZone`.
+signal thermal_zone_vented(rect: Rect2)

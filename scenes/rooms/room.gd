@@ -44,6 +44,7 @@ const WALL_BLOCK := preload("res://scenes/rooms/wall_block.tscn")
 
 @onready var _floor: Sprite2D = %Floor
 @onready var _walls: Node2D = %Walls
+@onready var _thermals: Node2D = %Thermals
 @onready var _obstacles: Node2D = %Obstacles
 @onready var _enemies: Node2D = %Enemies
 @onready var _bounds: Area2D = %Bounds
@@ -72,6 +73,7 @@ func build(room_plan: RoomPlan, room_theme: FloorTheme = null) -> void:
 	_floor.region_rect = Rect2(Vector2.ZERO, Vector2(INTERIOR_SIZE))
 	_build_wall_ring(plan.get_door_directions())
 	_build_obstacles()
+	_build_thermal_zones()
 	_build_bounds()
 
 	_bounds.body_entered.connect(_on_body_entered)
@@ -104,9 +106,12 @@ func populate(floor_config: FloorConfig, rng: RandomNumberGenerator) -> void:
 ## Enemies in rooms the player is not standing in must not think, shoot, or chase — both
 ## because it would be unfair and because ten rooms of active AI is wasted work.
 func set_active(active: bool) -> void:
-	_enemies.process_mode = (
-		Node.PROCESS_MODE_INHERIT if active else Node.PROCESS_MODE_DISABLED
-	)
+	var mode := Node.PROCESS_MODE_INHERIT if active else Node.PROCESS_MODE_DISABLED
+	_enemies.process_mode = mode
+	# The throughput zones stop with the enemies. A zone left running in a room the player is not
+	# in would heat nothing, hurt nobody, and still cost a physics step and a group lookup per
+	# frame — and on the frame it filled, it would announce a vent into an empty room.
+	_thermals.process_mode = mode
 
 
 func get_room_combat() -> RoomCombat:
@@ -279,6 +284,27 @@ func _build_obstacles() -> void:
 		block.texture = _wall_texture()
 		block.position = Vector2(tile_rect.position * TILE_SIZE)
 		_obstacles.add_child(block)
+
+
+## Lays out this template's throughput zones, if it has any. See `ThermalZone` for what they do and
+## `RoomTemplate.thermal_zones` for why they are declared on the template rather than the floor.
+##
+## Under their own `Thermals` node, for the reason the enemies have one: `set_active` switches it
+## off in every room the player is not standing in. A zone is cheap, but ten rooms of zones running
+## a physics step and a group lookup each is the same wasted work ten rooms of AI would be — and a
+## zone in a room nobody is in would go on venting into an empty room and announcing it.
+##
+## Drawn above the floor tiles and below anything solid, which is where a painted-on hazard belongs:
+## it is furniture that bites, not a hazard spawned into the session the way a compile lane is, and
+## it has no business outliving the room.
+##
+## Placed through `get_tile_block_rect`, which clamps a block into the interior — so a template
+## whose zone runs off the edge of the room draws a zone at the edge rather than half outside it.
+func _build_thermal_zones() -> void:
+	if plan.template == null:
+		return
+	for tile_rect: Rect2i in plan.template.thermal_zones:
+		ThermalZone.spawn(_thermals, get_tile_block_rect(tile_rect.position, tile_rect.size))
 
 
 ## The entry trigger is inset from the interior so it fires only once the player is clearly

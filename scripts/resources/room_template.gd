@@ -54,6 +54,16 @@ enum Type {
 ## as unpredictable as before.
 @export var forced_enemies: Array[PackedScene] = []
 
+## Throughput zones, in tile coordinates: patches of floor that heat up under sustained
+## stationary fire and vent. Floor 3's signature mechanic — see `ThermalZone`.
+##
+## Declared per template rather than per floor, which is what keeps the mechanic out of the
+## generator and out of every floor that does not want it. A Data Center template carries its own
+## zones; a Help Desk template leaves this empty and gets none; and no code anywhere asks what
+## floor number it is on. That is the property Floor 4 of the plan exists to prove, and it was
+## cheaper to have from the first floor that needed it than to retrofit later.
+@export var thermal_zones: Array[Rect2i] = []
+
 ## Where a room-clear reward or treasure appears, in tile coordinates.
 @export var reward_spawn := Vector2i(13, 6)
 

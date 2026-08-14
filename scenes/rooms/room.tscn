@@ -19,6 +19,9 @@ region_rect = Rect2(0, 0, 416, 192)
 [node name="Walls" type="Node2D" parent="."]
 unique_name_in_owner = true
 
+[node name="Thermals" type="Node2D" parent="."]
+unique_name_in_owner = true
+
 [node name="Obstacles" type="Node2D" parent="."]
 unique_name_in_owner = true
 
