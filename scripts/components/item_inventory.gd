@@ -41,6 +41,24 @@ func add(item: ItemConfig) -> bool:
 	return true
 
 
+## Puts a saved build back, without announcing any of it.
+##
+## `add` is the wrong tool for this and the difference is not cosmetic. Every accepted item emits
+## `item_added`, the owner answers that by applying the item's one-shot effects, and the player
+## re-emits it as `EventBus.item_collected` — which appends the item's name to the run's
+## statistics and records an unlock. Restoring eleven items through `add` would therefore repair
+## the robot eleven times and file a run that collected each of its items twice.
+##
+## The aggregates need no announcement to be correct, because every one of them is computed from
+## the whole list on demand. What the owner does still have to do is apply them once — see
+## `Player.restore_build`, this method's only caller.
+func restore(items: Array[ItemConfig]) -> void:
+	_items.clear()
+	for item: ItemConfig in items:
+		if item != null:
+			_items.append(item)
+
+
 func has(id: StringName) -> bool:
 	return count_of(id) > 0
 

@@ -6,9 +6,14 @@ extends Node
 ## run. Keeping them apart means "what should a restart clear?" has an obvious answer instead of
 ## being a list someone has to remember to update.
 ##
-## Spec section 24 is explicit that a run in progress is not saved, so nothing here is
-## persisted. Spec section 25's statistics live in `stats`, and this node is where the EventBus
-## is translated into them — a RefCounted cannot sit in the tree and listen for itself.
+## Spec section 24 said a run in progress is never saved. That held while a run was one ten-room
+## floor and stopped holding at six: an hour-long campaign interrupted at floor five is an hour
+## the player does not get back. A run is now written out *at floor boundaries only* — see
+## `RunCheckpoint` for what that means and `checkpoint_floor` below for the one place it happens.
+## Nothing else here is persisted, and nothing is written mid-floor.
+##
+## Spec section 25's statistics live in `stats`, and this node is where the EventBus is
+## translated into them — a RefCounted cannot sit in the tree and listen for itself.
 ##
 ## The run's *result* does outlive it. Beginning and ending a run are the two moments the
 ## lifetime record changes, and they are both here rather than in SaveManager because this is
@@ -177,8 +182,72 @@ func begin_run(seed_value: int, campaign: RunDefinition = null) -> void:
 	_is_timing = true
 	_is_finished = false
 	SaveManager.record_run_started()
+	# A new run is one of the four ways a checkpoint stops being valid, and it is the one that is
+	# easy to miss: restarting from the summary screen never passes through `end_run` a second
+	# time, so without this the abandoned run would still be offered on the title screen.
+	SaveManager.clear_checkpoint()
 	scrap_changed.emit(scrap)
 	rooms_cleared_changed.emit(rooms_cleared)
+
+
+## Puts a saved run back. The counterpart to `begin_run`, and it sets exactly the same fields —
+## which is the point of them being in one function each rather than assigned wherever they are
+## needed.
+##
+## What it does *not* do is count a run started. A resumed run is the same run: counting it again
+## would inflate the lifetime total by one per interruption, and a player who saves and quits
+## between every floor would end a campaign having "started" six runs.
+##
+## The player is not touched here. Integrity and the build belong to the robot, and the robot is
+## restored by whoever owns it — see `main.gd`. This node restores the run.
+func restore_run(checkpoint: RunCheckpoint, campaign: RunDefinition) -> void:
+	scrap = checkpoint.scrap
+	rooms_cleared = checkpoint.rooms_cleared
+	floor_number = checkpoint.floor_number
+	_run_seed = checkpoint.run_seed
+	_campaign_id = campaign.id
+	_content_version = campaign.content_version
+	floor_seed = campaign.floor_seed_for(checkpoint.run_seed, campaign.index_of(checkpoint.floor_id))
+	offered_item_ids = checkpoint.offered_item_ids.duplicate()
+	enemy_health_scale = checkpoint.enemy_health_scale
+	max_integrity_penalty = checkpoint.max_integrity_penalty
+	death_saves_spent = checkpoint.death_saves_spent
+	fought_boss_ids = checkpoint.fought_boss_ids.duplicate()
+	# A copy, like the two arrays above it. `SaveManager` goes on holding the checkpoint after a
+	# resume — it is still the run to come back to until the next boundary replaces it — and the
+	# live statistics object shared with it would keep absorbing the floor being played. The next
+	# ordinary save would then write a checkpoint whose statistics had advanced past the boundary
+	# its own counters describe, which is a file this build refuses to load: `RunCheckpoint.validate`
+	# checks those two against each other precisely because they cannot disagree honestly.
+	stats = RunStats.from_dict(checkpoint.stats.to_dict())
+	records_beaten = []
+	_is_timing = true
+	_is_finished = false
+	scrap_changed.emit(scrap)
+	rooms_cleared_changed.emit(rooms_cleared)
+
+
+## Takes a checkpoint of the run and hands it to `SaveManager` to keep. Called at a floor
+## boundary, once the descent has committed and the new floor is open.
+##
+## Refuses a run that has ended, which is the race `FloorController._finish_floor` documents: a
+## hazard committed before the boss died can kill the player in the same frame the reward is
+## claimed. The descent is already refused in that case; this is the same guard one level down,
+## because a checkpoint written for a run that lost would offer the player their death back.
+func checkpoint_floor(campaign: RunDefinition, floor_config: FloorConfig, player: Player) -> void:
+	if _is_finished or GameManager.is_run_over() or campaign == null or floor_config == null:
+		return
+	if player == null or not is_instance_valid(player) or player.is_dead():
+		return
+
+	var health := player.get_health_component()
+	var inventory := player.get_item_inventory()
+	if health == null or inventory == null:
+		return
+
+	SaveManager.store_checkpoint(
+		RunCheckpoint.capture(campaign, floor_config, health.current, inventory.get_items())
+	)
 
 
 ## The run's seed. See `_run_seed` for why this is a function rather than a field.
@@ -240,6 +309,10 @@ func end_run(won: bool, abandoned := false) -> void:
 		else FloorRecord.Outcome.ABANDONED if abandoned
 		else FloorRecord.Outcome.LOST
 	)
+	# Three of the four endings a checkpoint has to survive — won, lost, abandoned — arrive here,
+	# and they arrive here *whichever* of them it was, which is why the clearing is here rather
+	# than at each ending's own call site. The fourth is `begin_run`.
+	SaveManager.clear_checkpoint()
 	records_beaten = SaveManager.record_run_finished(stats, won)
 
 

@@ -18,6 +18,16 @@ const BUTTONS: Array = [
 	["QUIT", "_on_quit_pressed"],
 ]
 
+## Where the entry that continues a saved run goes, and what it says. First, above START RUN,
+## because a player who has a run waiting is here to get back to it — and because the alternative
+## is a menu whose first entry silently throws that run away.
+##
+## Only present when there is a run to continue. A permanent, greyed-out CONTINUE would tell a
+## first-time player that the game has a feature they are locked out of, which is the opposite of
+## what it means.
+const CONTINUE_INDEX := 0
+const CONTINUE_LABEL := "CONTINUE"
+
 ## Marks the focused entry. The theme also draws a focus border; this is here because the
 ## settings list marks its selection the same way, and one game should have one idiom for
 ## "you are here".
@@ -58,7 +68,21 @@ func _ready() -> void:
 
 
 func _build_buttons() -> void:
-	for entry: Array in BUTTONS:
+	var entries := BUTTONS.duplicate()
+	# The label carries the floor and the elapsed time, because "CONTINUE" alone does not say
+	# *what*: a player coming back the next day needs to recognise the run before they commit to
+	# it, and the alternative is loading it to find out.
+	#
+	# Offered on the checkpoint merely existing. Whether it can be played is decided against the
+	# campaign, which this screen deliberately does not load — see `main.gd._resolve_checkpoint`,
+	# which refuses an unplayable one and puts the player back here without it.
+	if SaveManager.has_checkpoint():
+		var checkpoint := SaveManager.get_checkpoint()
+		entries.insert(CONTINUE_INDEX, [
+			"%s  %s" % [CONTINUE_LABEL, checkpoint.describe()], "_on_continue_pressed",
+		])
+
+	for entry: Array in entries:
 		var button := Button.new()
 		button.text = FOCUS_PADDING + (entry[0] as String)
 		button.focus_mode = Control.FOCUS_ALL
@@ -117,6 +141,15 @@ func _on_panel_closed() -> void:
 	_focus_first()
 
 
+func _on_continue_pressed() -> void:
+	AudioManager.play_sfx(&"ui_confirm")
+	SceneRouter.resume_run()
+
+
+## Starts a fresh run, and throws away a saved one if there was one. No confirmation: the entry
+## below CONTINUE says START RUN, the saved run is named on the entry above it, and a title screen
+## that asks "are you sure?" for its most-pressed button is a worse trade than the rare misclick.
+## The checkpoint is cleared by `RunManager.begin_run`, which is the one place a new run begins.
 func _on_start_pressed() -> void:
 	AudioManager.play_sfx(&"ui_confirm")
 	SceneRouter.start_run()

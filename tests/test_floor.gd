@@ -51,7 +51,7 @@ func run() -> void:
 	await _test_nothing_from_a_floor_survives_its_boundary()
 	await _test_a_boundary_keeps_run_state_and_resets_floor_state()
 	await _test_an_ungeneratable_destination_keeps_the_current_floor()
-	_clean_up_greybox()
+	_greybox.clean_up()
 
 
 func _test_config_has_content() -> void:
@@ -97,8 +97,31 @@ func _test_generation_is_deterministic() -> void:
 		)
 
 
-## The four requirements from spec section 9, swept across many seeds.
+## The four requirements from spec section 9, swept across many seeds — on every floor the
+## campaign lists, independently.
+##
+## It used to sweep floor 1 alone, on the reasoning that the generator is shared so one floor's
+## worth of seeds exercises it. That reasoning is wrong in the one direction that matters: the
+## generator is shared but its *input* is not, and a floor's room count, template pool, and
+## eligibility rules are what decide whether a layout is possible at all. A floor whose templates
+## cannot fill its room count fails on every seed, and floor 1 passing says nothing about it.
+##
+## Per floor rather than pooled, so a failure names the floor rather than the seed alone.
 func _test_invariants_across_seeds() -> void:
+	var campaign := load(CAMPAIGN_PATH) as RunDefinition
+	if not require(campaign, "the campaign loads, to sweep every floor it lists"):
+		return
+
+	check(campaign.size() > 0, "the campaign has floors to sweep")
+	for index: int in campaign.size():
+		var config := campaign.load_floor(index)
+		if not require(config, "floor %d's content loads" % (index + 1)):
+			continue
+		_sweep_seeds(config, "floor %d ('%s')" % [index + 1, config.id])
+
+
+## `SEED_COUNT` seeds against one floor, asserting every structural invariant on each.
+func _sweep_seeds(config: FloorConfig, where: String) -> void:
 	var failures := PackedStringArray()
 	var dead_end_specials := 0
 	var multi_door_rooms := 0
@@ -106,14 +129,14 @@ func _test_invariants_across_seeds() -> void:
 
 	for offset: int in SEED_COUNT:
 		var seed_value := 1000 + offset * 37
-		var layout := FloorGenerator.generate(_config, seed_value)
+		var layout := FloorGenerator.generate(config, seed_value)
 		if layout == null:
 			failures.append("seed %d failed to generate" % seed_value)
 			continue
 
-		if layout.rooms.size() != _config.room_count:
+		if layout.rooms.size() != config.room_count:
 			failures.append("seed %d produced %d rooms, expected %d" % [
-				seed_value, layout.rooms.size(), _config.room_count,
+				seed_value, layout.rooms.size(), config.room_count,
 			])
 
 		# 9.3 / 9.1: nothing disconnected, so everything is reachable from the start.
@@ -187,23 +210,23 @@ func _test_invariants_across_seeds() -> void:
 			if room.get_degree() > 1:
 				multi_door_rooms += 1
 
-	check(failures.is_empty(), "all invariants hold across %d seeds" % SEED_COUNT)
+	check(failures.is_empty(), "%s: all invariants hold across %d seeds" % [where, SEED_COUNT])
 	for failure: String in failures.slice(0, 6):
-		fail(failure)
+		fail("%s: %s" % [where, failure])
 
 	check(
 		dead_end_specials == SEED_COUNT * 3,
-		"every seed's treasure, shop, and boss rooms are all dead ends",
+		"%s: every seed's treasure, shop, and boss rooms are all dead ends" % where,
 	)
 	check(
 		boss_is_farthest == SEED_COUNT,
-		"the boss room is always the furthest room from the start (%d of %d seeds)" % [
-			boss_is_farthest, SEED_COUNT,
+		"%s: the boss room is always the furthest from the start (%d of %d seeds)" % [
+			where, boss_is_farthest, SEED_COUNT,
 		],
 	)
 	# Guards against the generator degenerating into a single corridor, which would satisfy
 	# every requirement above and still be dull.
-	check(multi_door_rooms > SEED_COUNT, "floors branch rather than forming one chain")
+	check(multi_door_rooms > SEED_COUNT, "%s: floors branch rather than forming one chain" % where)
 
 
 ## Verifies the treasure room is not a cut vertex, by checking connectivity of the rest of the
@@ -699,7 +722,7 @@ func _test_boss_defeat_advances_to_the_next_floor_and_only_the_last_wins() -> vo
 		if not require(boss_room, "floor %d has a boss room" % number):
 			break
 
-		floor_node._on_boss_defeated(Node.new(), boss_room)
+		_defeat_boss(floor_node, boss_room)
 		await advance_physics(1)
 		# Victory waits on the claim, not on the killing blow, on every floor including the last.
 		check(
@@ -814,7 +837,7 @@ func _test_a_descent_enters_only_the_new_floors_start_room() -> void:
 		floor_node._enter_room(boss_room.plan.id)
 		await advance_physics(2)
 
-		floor_node._on_boss_defeated(Node.new(), boss_room)
+		_defeat_boss(floor_node, boss_room)
 		_entered_during_descent.clear()
 		floor_node._on_boss_reward_taken(floor_config.get_items()[0])
 		# Long enough for the deferred rebuild and for the physics flush that delivers a
@@ -881,6 +904,20 @@ func _test_a_descent_enters_only_the_new_floors_start_room() -> void:
 	await advance_physics(1)
 
 
+## Reports a boss defeat to `floor_node` without a boss.
+##
+## The handler only needs something non-null to name as the source, so a bare `Node` stands in for
+## the fight. It has to be *freed*, which is the part that was missed at two of the call sites:
+## `Node` is not reference counted, so a stand-in dropped on the floor is an object alive for the
+## rest of the process — and one of those call sites is inside a 123-seed loop, which is where 123
+## of this project's 125 reported exit leaks came from. One helper rather than the same three lines
+## at each site, so the next call site cannot forget.
+func _defeat_boss(floor_node: FloorController, boss_room: Room) -> void:
+	var stand_in := Node.new()
+	floor_node._on_boss_defeated(stand_in, boss_room)
+	stand_in.free()
+
+
 func _on_room_entered_during_descent(_type: int, id: int) -> void:
 	_entered_during_descent.append(id)
 
@@ -908,16 +945,13 @@ func _count_repair_cells() -> int:
 # the interesting failure was never a room surviving, it was the things nobody had listed.
 
 
-## Where the greybox campaign's floors are written. Under `user://` because a campaign resolves
-## its floors by path — an in-memory `FloorConfig` would skip the load this is partly testing.
-const GREYBOX_DIR := "user://test_floor_greybox"
-
 ## Long enough for a lane to still be telegraphing when the floor under it is released. Its damage
 ## is zero as well: this is a check on ownership, not on whether a lane can hit anybody.
 const LANE_TELEGRAPH_SECONDS := 10.0
 
-var _greybox: RunDefinition
-var _greybox_written: PackedStringArray = []
+## The floors this suite's multi-floor checks are built from. See `GreyboxCampaign`, which owns
+## what a greybox floor is; this suite owns only when to clean them up.
+var _greybox := GreyboxCampaign.new()
 
 
 ## Five boundaries, and after each one exactly one of everything a floor owns.
@@ -1174,11 +1208,7 @@ func _descend(floor_node: FloorController) -> void:
 		fail("floor %d has no boss room to descend from" % floor_node.config.floor_number)
 		return
 
-	# Freed rather than left to the collector: `Node` is not reference counted, so a stand-in boss
-	# dropped here is an object still alive at exit.
-	var stand_in := Node.new()
-	floor_node._on_boss_defeated(stand_in, boss_room)
-	stand_in.free()
+	_defeat_boss(floor_node, boss_room)
 	await advance_physics(1)
 
 	floor_node._on_boss_reward_taken(floor_node.config.get_items()[0])
@@ -1208,65 +1238,13 @@ func _open_greybox(arena: Node2D, campaign: RunDefinition, seed_value: int) -> F
 	return floor_node
 
 
-## A campaign of `count` floors written to `user://`, each a copy of the Help Desk under its own id.
-##
-## Copies of real content rather than `FloorConfig.new()`, so a descent through it exercises rooms,
-## enemies, loot, and a boss rather than an empty graph. The one thing that has to change is
-## eligibility: the Help Desk's own templates stop at `max_floor = 2`, so floors 3 and beyond would
-## have nothing to build from and the generator would rightly refuse them.
-##
-## `mutate` breaks one floor deliberately, for the check that a broken destination is survivable.
+## Delegates to `GreyboxCampaign`, reporting a build failure against this suite rather than
+## letting it surface as a null nobody attributes.
 func _greybox_campaign(count: int, mutate := Callable()) -> RunDefinition:
-	var source := load(FLOOR_CONFIG_PATH) as FloorConfig
-	if source == null:
-		fail("floor 1 must load to build a greybox campaign from")
-		return null
-	if not DirAccess.dir_exists_absolute(GREYBOX_DIR):
-		DirAccess.make_dir_recursive_absolute(GREYBOX_DIR)
-
-	var floors: Array[FloorEntry] = []
-	for index: int in count:
-		# Shallow, so every property below is *reassigned* rather than edited in place: the arrays
-		# are shared with the shipped resource, and mutating one here would rewrite the Help Desk
-		# for every suite that runs after this file.
-		var config := source.duplicate() as FloorConfig
-		config.id = StringName("greybox_%d" % (index + 1))
-		config.floor_number = index + 1
-		config.start_templates = _reaching_floor(source.start_templates, count)
-		config.combat_templates = _reaching_floor(source.combat_templates, count)
-		config.treasure_templates = _reaching_floor(source.treasure_templates, count)
-		config.shop_templates = _reaching_floor(source.shop_templates, count)
-		config.boss_templates = _reaching_floor(source.boss_templates, count)
-		if mutate.is_valid():
-			mutate.call(config, index)
-
-		var path := "%s/floor_%d_of_%d.tres" % [GREYBOX_DIR, index + 1, count]
-		if ResourceSaver.save(config, path) != OK:
-			fail("could not write the greybox floor %s" % path)
-			return null
-		if not _greybox_written.has(path):
-			_greybox_written.append(path)
-
-		var entry := FloorEntry.new()
-		entry.id = config.id
-		entry.config_path = path
-		floors.append(entry)
-
-	var campaign := RunDefinition.new()
-	campaign.id = &"greybox"
-	campaign.floors = floors
-	campaign.target_floor_count = count
+	var campaign := _greybox.build(count, mutate)
+	if campaign == null:
+		fail(_greybox.error)
 	return campaign
-
-
-## Copies of `templates` that stay eligible all the way to `last_floor`.
-func _reaching_floor(templates: Array[RoomTemplate], last_floor: int) -> Array[RoomTemplate]:
-	var raised: Array[RoomTemplate] = []
-	for template: RoomTemplate in templates:
-		var copy := template.duplicate() as RoomTemplate
-		copy.max_floor = last_floor
-		raised.append(copy)
-	return raised
 
 
 func _sessions_under(floor_node: FloorController) -> int:
@@ -1308,12 +1286,3 @@ func _first_door(floor_node: FloorController) -> Door:
 			if is_instance_valid(door):
 				return door
 	return null
-
-
-## The greybox floors are content written into the user's data directory. Left behind they would be
-## read by the next run of this suite from a build that had since changed what a floor looks like.
-func _clean_up_greybox() -> void:
-	for path: String in _greybox_written:
-		DirAccess.remove_absolute(path)
-	_greybox_written.clear()
-	DirAccess.remove_absolute(GREYBOX_DIR)

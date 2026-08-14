@@ -48,6 +48,38 @@ If assets show as missing after a fresh clone, import them once:
 godot --headless --import
 ```
 
+## Cutting a release
+
+```bash
+tools/release.sh v0.3.0
+```
+
+Builds all four targets from that tag into `build/0.3.0/`, and writes a `manifest.json` and
+`SHA256SUMS` recording the commit, engine version, size and hash of everything it produced.
+
+It refuses to run from a dirty tree, from a commit that is not the tag, or with an engine or
+export templates that differ from the ones pinned in `tools/engine.lock` — a Godot patch
+release changes the binary, so an unpinned engine makes "reproducible" untrue in the one way
+nobody checks. It runs the test suite before building anything, and it rewrites the version
+fields in `export_presets.cfg` from the tag and puts them back afterwards, so the number
+inside the binary and the number on the release cannot disagree.
+
+After upgrading Godot on purpose, re-record the pins so the change is a reviewable diff:
+
+```bash
+tools/release.sh --relock
+```
+
+Signing is wired but needs credentials the repository does not carry. Without them the script
+says so and records `"signing": "unsigned"` in the manifest rather than shipping artifacts as
+though they were signed. With them:
+
+```bash
+export MACOS_SIGNING_IDENTITY="Developer ID Application: …"
+export MACOS_NOTARY_PROFILE=roborush      # xcrun notarytool store-credentials
+export WINDOWS_SIGNING_PFX=…/cert.pfx WINDOWS_SIGNING_PASSWORD=…
+```
+
 To skip the menu and drop straight into a run — which is what the tests do, and what
 `--seed=` debugging wants:
 
@@ -440,8 +472,9 @@ autoload/game_manager.gd                  Feedback config, hit pause, game state
 autoload/audio_manager.gd                 Pooled one-shot SFX, and crossfaded music
 autoload/run_manager.gd                   Run state: scrap, floor, one immutable seed, items,
                                             per-floor records, statistics
-autoload/save_manager.gd                + Settings, unlocks, bosses beaten, best runs; and
-                                            the one place a setting becomes behaviour
+autoload/save_manager.gd                + Settings, unlocks, bosses beaten, best runs, the run
+                                            in progress; and the one place a setting becomes
+                                            behaviour
 autoload/scene_router.gd                + The only thing that changes scenes
 autoload/screen_effects.gd              + CRT filter and damage vignette, above every layer
 
@@ -493,6 +526,8 @@ scripts/systems/campaign_validator.gd   + Refuses a broken campaign before a run
 scripts/systems/run_rng.gd              + One run seed, derived into named per-floor streams
 scripts/systems/run_manifest.gd         + What a seed will build: derived seeds and content
 scripts/systems/floor_record.gd         + One floor's duration, boss, and how it ended
+scripts/systems/run_checkpoint.gd       + A run frozen at a floor boundary, and what makes
+                                            one safe to read back
 scripts/systems/loot_spawner.gd           Enemy drops, room rewards, and item drops
 scripts/systems/game_settings.gd        + Spec section 21's eight settings, as plain data
 scripts/systems/best_run_stats.gd       + What survives a run, and what counts as a record
@@ -559,10 +594,19 @@ tests/test_run.gd                          64 statistics, state, and summary che
 tests/test_shop.gd                         47 price, purchase, and refusal checks
 tests/test_boss.gd                         85 phase, terminal, and defeat checks
 tests/test_save.gd                      + 72 settings, save format, and record checks
+tests/test_checkpoint.gd                + 129 boundary-checkpoint, resume, refusal, and
+                                            file-recovery checks
+tests/test_soak.gd                      + 100 complete six-floor campaigns, checked for
+                                            anything left behind
+tests/greybox_campaign.gd               + A campaign of any length, for suites needing more
+                                            floors than the game has
 tests/test_audio.gd                     + 55 library, loop, and crossfade checks
 tests/test_gamepad.gd                   + 67 checks driven by a synthesized controller
 tests/test_balance.gd                   + 63 checks on what the tuning numbers mean
 
+tools/release.sh                        + Builds every target from a tag, hashed and
+                                            manifested
+tools/engine.lock                       + The pinned engine and export-template hashes
 tools/generate_input_map.gd                Regenerates project.godot's [input]
 tools/generate_art.py                      Regenerates every sprite and tile sheet
 tools/generate_audio.py                    Synthesizes all 19 sound effects

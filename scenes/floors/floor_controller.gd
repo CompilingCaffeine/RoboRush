@@ -621,6 +621,11 @@ func _advance_to_next_floor(next_index: int, seed_value: int) -> void:
 	RunManager.finish_floor(FloorRecord.Outcome.DESCENDED)
 	config = next_config
 	_open_session(generated, seed_value)
+	# Written here, at the one moment in a run when nothing is in flight: the old floor is
+	# released, the new one is built and empty, and the run's whole state is a handful of numbers.
+	# Anywhere earlier and the checkpoint would describe a floor that is being torn down; anywhere
+	# later and it would have to describe a fight in progress. See `RunCheckpoint`.
+	RunManager.checkpoint_floor(campaign, config, _player)
 	floor_advanced.emit(config)
 
 
