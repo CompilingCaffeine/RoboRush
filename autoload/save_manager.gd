@@ -15,6 +15,12 @@ extends Node
 ## Nothing in the game reads the save file directly. Gameplay asks this node, this node owns
 ## the format, and the format is versioned so that changing it later is a migration rather
 ## than an apology.
+##
+## Since version 2 a *run in progress* lives here too, as a `RunCheckpoint` written at floor
+## boundaries. That reverses spec section 24 deliberately, and only for the six-floor campaign:
+## the spec's "runs are not saved" was written for a ten-room run that could be replayed in six
+## minutes, and a sixty-room run cannot. See `RunCheckpoint` for what is stored and why the
+## boundary is the only safe moment to store it.
 
 const SAVE_PATH := "user://save.json"
 
@@ -24,7 +30,26 @@ const SAVE_PATH := "user://save.json"
 ## ever reported once, by someone who has stopped playing.
 const SAVE_TEMP_PATH := "user://save.json.tmp"
 
-const SAVE_VERSION := 1
+## The previous save, kept as it is replaced. The rename above makes a *torn* file impossible;
+## it does nothing about a file that was written whole and is wrong — a bad migration, a disk
+## that returned zeroes, an edit made with a text editor. One generation back is the difference
+## between "your records are gone" and "your records are one run out of date", and it costs a
+## copy of a four-kilobyte file per save.
+const SAVE_BACKUP_PATH := "user://save.json.bak"
+
+## Where a primary that could not be read is moved before anything replaces it. Never read by
+## the game — it exists so that a player whose save failed to load still has the bytes, and so a
+## bug report can carry them. One slot, overwritten: the interesting file is the one that just
+## broke, and a growing pile of them in `user://` is its own problem.
+const SAVE_CORRUPT_PATH := "user://save.json.corrupt"
+
+const SAVE_VERSION := 2
+
+## The most a save file may be. A save with a run checkpoint in it is about four kilobytes and
+## nothing in the format grows with play except the per-floor records, which are capped at six.
+## Anything approaching this ceiling is a file that has been appended to or filled with junk, and
+## refusing to parse it is cheaper than finding out what it parses into.
+const MAX_SAVE_BYTES := 256 * 1024
 
 ## Seconds of quiet before a requested save is actually written. A settings slider emits a
 ## value every frame it is dragged; without this, one drag is sixty file writes.
@@ -57,6 +82,22 @@ var tutorial_completed := false
 ## overwrite the save file of whoever is running it.
 var persistence_enabled := true
 
+## The run the player can go back to, or null. Written at a floor boundary and cleared by every
+## way a run can end. Private with accessors because the two operations that may touch it —
+## storing one and clearing it — both have to reach the disk immediately, and a field anyone
+## could assign would make "the file says one thing and the manager another" reachable.
+var _checkpoint: RunCheckpoint = null
+
+## Set when the file on disk was written by a build newer than this one. Every write is refused
+## while it is true: the newer build recorded fields this one does not know about, and writing
+## our idea of the save over it would delete them silently. Failing closed loses this session's
+## settings changes; the alternative loses the player's run.
+var _writes_refused := false
+
+## Set when the save in use was recovered from the backup or an orphaned temporary rather than
+## read from the primary. It costs the run in progress, and only the run — see `_read_checkpoint`.
+var _recovered := false
+
 var _dirty := false
 var _save_countdown := 0.0
 
@@ -69,6 +110,8 @@ var _failed_writes := 0
 ## real path would clobber the save file of whoever ran it.
 var _save_path := SAVE_PATH
 var _temp_path := SAVE_TEMP_PATH
+var _backup_path := SAVE_BACKUP_PATH
+var _corrupt_path := SAVE_CORRUPT_PATH
 
 
 func _ready() -> void:
@@ -207,6 +250,49 @@ func _on_item_collected(item: ItemConfig) -> void:
 	request_save()
 
 
+# --- Run checkpoint -----------------------------------------------------------
+
+
+## The run the player left, or null. Whether it can actually be *played* is a separate question
+## — see `RunCheckpoint.validate`, which needs the campaign this node deliberately knows nothing
+## about.
+func get_checkpoint() -> RunCheckpoint:
+	return _checkpoint
+
+
+func has_checkpoint() -> bool:
+	return _checkpoint != null
+
+
+## Records the run at a floor boundary and writes it out now rather than in half a second.
+##
+## The debounce exists for settings sliders, which emit sixty times a drag. A checkpoint is the
+## opposite case: it happens once a floor, and the entire reason it exists is the session ending
+## unexpectedly — a crash or a closed lid inside the debounce window would lose exactly the thing
+## being saved.
+func store_checkpoint(checkpoint: RunCheckpoint) -> void:
+	_checkpoint = checkpoint
+	_dirty = true
+	save_game()
+
+
+## Forgets the run in progress. Called on every ending: victory, destruction, abandoning to the
+## title screen, and starting a new run.
+##
+## Written out immediately for the same reason as storing one, mirrored: a checkpoint that
+## outlived the run it belonged to would offer the player a run they had already finished, and
+## "continue" would hand back the scrap, the build, and the boss they had just lost with.
+##
+## Does nothing when there is no checkpoint, so the four callers can all call it unconditionally
+## rather than each deciding whether there is anything to clear.
+func clear_checkpoint() -> void:
+	if _checkpoint == null:
+		return
+	_checkpoint = null
+	_dirty = true
+	save_game()
+
+
 # --- Persistence --------------------------------------------------------------
 
 
@@ -232,6 +318,14 @@ func save_game() -> void:
 		_dirty = false
 		return
 
+	if _writes_refused:
+		# Not retryable, so it is not left pending: the file will still have been written by a
+		# newer build in five seconds' time, and a pending write would only mean `_process` came
+		# back here every five seconds for the rest of the session. Warned once by `_migrate`,
+		# where the reason is known.
+		_dirty = false
+		return
+
 	var failure := _write_save_file()
 	if not failure.is_empty():
 		_failed_writes += 1
@@ -250,8 +344,14 @@ func save_game() -> void:
 
 ## Returns an empty string on success, or a description of what went wrong.
 ##
-## Written to a temporary file and renamed over the real one, so a crash mid-write costs the
-## temporary rather than the player's records.
+## Three steps, and each one is a failure this has actually had:
+##
+##   1. **Write the temporary file.** A crash here costs the temporary and nothing else.
+##   2. **Copy the current save aside.** One generation of backup, taken from a file that has
+##      already been proved readable — copying an unreadable primary over a good backup would
+##      turn one broken file into two.
+##   3. **Rename over the real file.** Atomic on every platform this ships to, which is what
+##      makes a torn save impossible rather than unlikely.
 func _write_save_file() -> String:
 	var payload := {
 		"save_version": SAVE_VERSION,
@@ -260,6 +360,10 @@ func _write_save_file() -> String:
 		"bosses_defeated": _to_string_array(bosses_defeated),
 		"statistics": best.to_dict(),
 		"tutorial_completed": tutorial_completed,
+		# Present and null rather than absent when there is no run, so "this build does not write
+		# checkpoints" and "this player has no run in progress" are distinguishable in a file
+		# somebody is looking at to work out why a run did not come back.
+		"checkpoint": _checkpoint.to_dict() if _checkpoint != null else null,
 	}
 
 	var file := FileAccess.open(_temp_path, FileAccess.WRITE)
@@ -270,6 +374,8 @@ func _write_save_file() -> String:
 	file.store_string(JSON.stringify(payload, "  "))
 	file.close()
 
+	_back_up_current_save()
+
 	var error := DirAccess.rename_absolute(
 		ProjectSettings.globalize_path(_temp_path),
 		ProjectSettings.globalize_path(_save_path),
@@ -277,7 +383,39 @@ func _write_save_file() -> String:
 	if error != OK:
 		return "could not replace %s (%s)" % [_save_path, error_string(error)]
 
+	_flush_web_filesystem()
 	return ""
+
+
+## Keeps the save that is about to be replaced, if it is worth keeping.
+##
+## Deliberately silent about its own failures. A backup that cannot be made is not a reason to
+## fail the write that is about to succeed — the player keeps their current save either way, and
+## the alternative is a full disk turning "no spare copy" into "no save at all".
+func _back_up_current_save() -> void:
+	if not FileAccess.file_exists(_save_path):
+		return
+	# Only a file that reads as a save. The backup exists to be the thing to fall back to, and a
+	# backup made from a corrupt primary is a second copy of the corruption — which is precisely
+	# the failure it is supposed to survive.
+	if _parse_save_file(_save_path).is_empty():
+		return
+	DirAccess.copy_absolute(
+		ProjectSettings.globalize_path(_save_path),
+		ProjectSettings.globalize_path(_backup_path),
+	)
+
+
+## On the Web, `user://` is an IndexedDB image that the browser writes back asynchronously. A
+## player who closes the tab straight after a boundary would otherwise lose the checkpoint that
+## the game had already reported as written — the file is in the in-memory filesystem and never
+## reaches the database. Godot syncs on its own schedule; this asks for it now, which is what
+## makes "the save landed" mean the same thing in a browser as it does on a desktop.
+##
+## A no-op everywhere else, and guarded rather than merely relied upon to be one.
+func _flush_web_filesystem() -> void:
+	if OS.has_feature("web"):
+		JavaScriptBridge.force_fs_sync()
 
 
 ## Reads the save file if there is one, then applies whatever came back. A first run, a
@@ -290,43 +428,154 @@ func load_game() -> void:
 	unlocked_items = _to_name_array(data.get("unlocks"))
 	bosses_defeated = _to_name_array(data.get("bosses_defeated"))
 	tutorial_completed = data.get("tutorial_completed") == true
+	_checkpoint = _read_checkpoint(data)
 	apply_settings()
 
+	# A recovered save is written back to the primary immediately, so a session that recovers and
+	# then crashes does not have to recover again from the same fallback — and, more importantly, so
+	# the next launch reads an ordinary save rather than one that still contains the run
+	# `_read_checkpoint` has just refused. Written from this node's state rather than copied from
+	# the fallback file, which is what makes those two the same thing.
+	if _recovered and not _writes_refused:
+		_dirty = true
+		save_game()
 
+
+## Finds the best readable save among the files that could be one, in the order they are worth
+## trusting.
+##
+## The primary first, obviously. Then the backup, which is a file this node wrote and then proved
+## readable, so it is the known-good fallback. Then the temporary file, last and only if nothing
+## else survived: an orphaned temporary is either a complete write whose rename lost a race — in
+## which case it is the newest state there is — or a half-written file from a crash, and there is
+## no way to tell those apart beyond it parsing. Newest-but-unproven is worth having when the
+## alternative is starting from defaults, and worth nothing when a proven file exists.
+##
+## Whatever is adopted from a fallback is written back to the primary immediately, so the next
+## launch is an ordinary one rather than another recovery.
 func _read_save_file() -> Dictionary:
-	if not FileAccess.file_exists(_save_path):
+	# Decided by the file about to be read, not inherited. `load_game` is called again whenever the
+	# manager is pointed somewhere else, and a session frozen by a future-version file it no longer
+	# has any reason to protect would refuse writes for good.
+	_writes_refused = false
+	_recovered = false
+
+	var primary := _parse_save_file(_save_path)
+	if not primary.is_empty():
+		# A temporary file left beside a readable save is debris from a write that failed after the
+		# file was written: keeping it would make the *next* recovery adopt a state older than the
+		# save it is recovering from.
+		_discard_file(_temp_path)
+		return _migrate(primary, _save_path)
+
+	var had_primary := FileAccess.file_exists(_save_path)
+	for path: String in [_backup_path, _temp_path]:
+		var recovered := _parse_save_file(path)
+		if recovered.is_empty():
+			continue
+
+		_recovered = true
+		push_warning(
+			"SaveManager: %s could not be read; recovered from %s." % [_save_path, path]
+		)
+		# Moved aside rather than deleted or overwritten. It is the only evidence of what went
+		# wrong, and a player who has just lost a save is owed the bytes at least.
+		if had_primary:
+			DirAccess.rename_absolute(
+				ProjectSettings.globalize_path(_save_path),
+				ProjectSettings.globalize_path(_corrupt_path),
+			)
+		return _migrate(recovered, path)
+
+	if had_primary:
+		push_warning(
+			"SaveManager: %s could not be read and there is no usable backup; starting from defaults."
+			% _save_path
+		)
+		DirAccess.rename_absolute(
+			ProjectSettings.globalize_path(_save_path),
+			ProjectSettings.globalize_path(_corrupt_path),
+		)
+	_discard_file(_temp_path)
+	return {}
+
+
+## A save file's contents, or an empty dictionary if it is missing, empty, oversized, not JSON,
+## or JSON that is not an object. Every one of those is a file that cannot be read, and the
+## caller's job is to try the next candidate rather than to tell them apart.
+func _parse_save_file(path: String) -> Dictionary:
+	if not FileAccess.file_exists(path):
 		return {}
 
-	var text := FileAccess.get_file_as_string(_save_path)
-	if text.is_empty():
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
 		return {}
+	# Checked before the bytes are read rather than after: the point of a ceiling is not to
+	# validate a large file, it is to never hold one.
+	var length := file.get_length()
+	if length == 0 or length > MAX_SAVE_BYTES:
+		if length > MAX_SAVE_BYTES:
+			push_warning("SaveManager: %s is %d bytes and cannot be a save file." % [path, length])
+		return {}
+
+	var text := file.get_as_text()
+	file.close()
 
 	var parsed: Variant = JSON.parse_string(text)
-	if not (parsed is Dictionary):
-		push_warning("SaveManager: %s is not valid JSON; starting from defaults." % _save_path)
-		return {}
-
-	return _migrate(parsed)
+	return parsed as Dictionary if parsed is Dictionary else {}
 
 
-## Brings an older file up to the current shape.
+func _discard_file(path: String) -> void:
+	if FileAccess.file_exists(path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+## Brings an older file up to the current shape, and decides what to do about a newer one.
 ##
-## There is nothing to migrate yet — version 1 is the first version — so this exists as the
-## place a migration goes rather than as one. It is written now because the alternative is
-## discovering at version 2 that the loader assumed the current shape everywhere.
+## Version 1 had no run checkpoint. Nothing else about the format changed, so migrating a version
+## 1 file is reading it: every field it has is still a field, and the checkpoint it lacks reads
+## as "no run in progress", which is exactly what a version 1 player had.
 ##
-## A file from a *newer* build is not rejected. Every reader in `GameSettings` and
-## `BestRunStats` already ignores what it does not recognise, so a player who rolls back a
-## version loses the fields that version never had rather than their whole save.
-func _migrate(data: Dictionary) -> Dictionary:
+## A file from a *newer* build is read for what is recognised and then **frozen**. Every reader
+## here already ignores fields it does not know, so a player who rolls back a build can still see
+## their settings and records — but writing this build's idea of the save back over it would
+## delete whatever the newer build had added, silently and permanently. Refusing every subsequent
+## write is the only one of the three options in the plan (refuse, preserve unknown fields, back
+## up and migrate) that cannot lose data it does not understand.
+func _migrate(data: Dictionary, path: String) -> Dictionary:
 	var raw_version: Variant = data.get("save_version")
 	var version := int(raw_version) if raw_version is float or raw_version is int else 0
 	if version > SAVE_VERSION:
+		_writes_refused = true
 		push_warning(
-			"SaveManager: %s was written by a newer build (version %d); reading what is recognised."
-			% [_save_path, version]
+			("SaveManager: %s was written by a newer build (version %d, this build writes %d). "
+			% [path, version, SAVE_VERSION])
+			+ "Reading what is recognised; nothing will be saved this session, so that build's "
+			+ "data is not overwritten."
 		)
 	return data
+
+
+## The run in progress, or null. Structural checks only: whether the run is *playable* depends on
+## the campaign, which this node has no business loading — see `RunCheckpoint.validate`, called by
+## whoever is about to resume.
+##
+## A checkpoint from a newer build is ignored rather than read. The rest of the save survives a
+## rollback because every reader skips what it does not recognise, but a run is not a collection
+## of independent fields: half a checkpoint is a run missing state the newer build was relying on,
+## and resuming it would be worse than not offering it.
+##
+## A *recovered* save gives up its run too, and this is the sharper of the two rules. The backup is
+## by definition one generation old, so its checkpoint may describe a run that has since been won,
+## lost, or abandoned — and resuming a finished run would hand back its scrap, its build, and its
+## boss credit, then file a second result for it. Records and settings being one save out of date
+## is an inconvenience; a run counted twice is a lifetime record the player cannot repair. So a
+## recovery keeps everything that only moves forward and refuses the one thing that does not.
+func _read_checkpoint(data: Dictionary) -> RunCheckpoint:
+	if _writes_refused or _recovered:
+		return null
+	var raw: Variant = data.get("checkpoint")
+	return RunCheckpoint.from_dict(raw as Dictionary) if raw is Dictionary else null
 
 
 func _sub_dictionary(data: Dictionary, key: String) -> Dictionary:

@@ -23,13 +23,40 @@ func go_to_main_menu() -> void:
 	_change_scene(MAIN_MENU_SCENE)
 
 
+## Whether the game scene about to be built should continue the saved run rather than begin a
+## new one. A flag rather than an argument to the scene, because a scene cannot be handed one:
+## `change_scene_to_file` builds it later, and `main.gd` is the thing that has to ask.
+##
+## Consumed by whoever reads it, so it cannot survive into a run that did not ask for it. That is
+## the failure this shape exists to prevent — a resume request left set would silently turn the
+## *next* "START RUN" into a continue.
+var _resume_requested := false
+
+
 ## Starts a fresh run. Also the restart path: reloading and starting are the same operation
 ## once the run's state lives in autoloads rather than in the scene.
 func start_run() -> void:
+	_resume_requested = false
 	# Before the scene change, not after: main.gd reads the state as it builds, and a frame
 	# spent in the previous run's GAME_OVER would pause the tree under the new floor.
 	GameManager.start_run()
 	_change_scene(GAME_SCENE)
+
+
+## Continues the run in the save file, from the floor it was left at. The same scene and the same
+## state change as `start_run` — the only difference is the flag, because the difference between
+## the two runs is entirely in what `main.gd` puts into `RunManager` before the floor is built.
+func resume_run() -> void:
+	_resume_requested = true
+	GameManager.start_run()
+	_change_scene(GAME_SCENE)
+
+
+## Whether this scene was asked to continue a saved run. Answers true at most once per request.
+func consume_resume_request() -> bool:
+	var requested := _resume_requested
+	_resume_requested = false
+	return requested
 
 
 ## Ends the process. `get_tree().quit()` takes effect at the end of the current frame, which

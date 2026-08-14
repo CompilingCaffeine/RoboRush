@@ -321,6 +321,32 @@ func _on_item_added(item: ItemConfig) -> void:
 	EventBus.item_collected.emit(item)
 
 
+## Puts the robot back the way a saved run left it: the build it had, and the integrity it had
+## left. Called once, by `main.gd`, when a run is resumed from a checkpoint.
+##
+## Order is the whole of it. The items go in first so `_apply_item_stats` can recompute the
+## ceiling from the whole inventory — and from the run's integrity penalty, which
+## `RunManager.restore_run` has already put back — and only then is the saved integrity written
+## into that ceiling. Restoring integrity first would clamp it to whatever the robot's unmodified
+## pool happens to be, so a build carrying two Reinforced Chassis would come back on four points
+## instead of eight.
+##
+## Nothing here emits a pickup. See `ItemInventory.restore`: a resumed run has already collected
+## these items, and collecting them again would repair the robot and double every item in the
+## run's statistics.
+func restore_build(items: Array[ItemConfig], integrity: float) -> void:
+	_items.restore(items)
+	_apply_item_stats()
+
+	# Last accent wins, exactly as it would have during play: `_on_item_added` sets it per pickup,
+	# so the colour the robot ends up wearing is the last coloured item it took.
+	for item: ItemConfig in items:
+		if item.accent_color.a > 0.0:
+			_visuals.set_accent(item.accent_color)
+
+	_health.restore(integrity)
+
+
 ## Uses the closest thing in reach, if anything is in reach at all.
 ##
 ## The robot goes looking rather than being told, so a shop stand is a plain object in a

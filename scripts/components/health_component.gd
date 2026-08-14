@@ -150,6 +150,22 @@ func grant_invulnerability(seconds: float) -> void:
 	_invulnerable_left = maxf(_invulnerable_left, seconds)
 
 
+## Puts integrity back where a saved run left it. Not `heal`, and deliberately not built out of
+## it: healing is an event the game reacts to — a repair sound, a flash, a statistic — and a
+## resumed run did not repair anything, it merely continued.
+##
+## Silent for the same reason. Nothing needs telling: the HUD reads integrity every frame rather
+## than tracking it from signals, so a restored value is on screen the next frame without any
+## listener having to be lied to about a repair that did not happen.
+##
+## Clamped into the pool that exists *now*, which is what makes the order in `Player.restore_build`
+## matter: the items come back first so the ceiling is the one the build earned, and only then is
+## the integrity written into it.
+func restore(amount: float) -> void:
+	current = clampf(amount, 0.0, max_health)
+	_is_dead = current <= 0.0
+
+
 func heal(amount: float) -> void:
 	if amount <= 0.0 or _is_dead or is_approx_full():
 		return

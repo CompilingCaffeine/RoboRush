@@ -90,6 +90,50 @@ func close(final_outcome: Outcome, elapsed: float, rooms: int) -> void:
 	rooms_cleared = maxi(rooms - _rooms_cleared_at_open, 0)
 
 
+## What a checkpoint has to carry for this record to keep working after a restore.
+##
+## The two private counters go in as well as the public numbers, which is the part that is easy to
+## leave out: a record restored while still open is closed later by subtracting them from the run's
+## totals, so a record that came back without them would report the *whole run's* duration as having
+## been spent on the floor it was resumed onto.
+func to_dict() -> Dictionary:
+	return {
+		"floor_number": floor_number,
+		"floor_id": String(floor_id),
+		"seed": seed_value,
+		"boss_id": String(boss_id),
+		"outcome": int(outcome),
+		"duration": duration,
+		"rooms_cleared": rooms_cleared,
+		"duration_at_open": _duration_at_open,
+		"rooms_at_open": _rooms_cleared_at_open,
+	}
+
+
+## Rebuilds a record from `to_dict`. Anything malformed comes back as the field's default rather
+## than as a failure: a checkpoint is refused by `RunCheckpoint.validate`, which reads the values
+## this produces, so the reader's job is to produce values rather than to judge them.
+static func from_dict(data: Dictionary) -> FloorRecord:
+	var record := FloorRecord.new()
+	record.floor_number = RunStats.read_int(data, "floor_number")
+	record.floor_id = RunStats.read_name(data, "floor_id")
+	record.seed_value = RunStats.read_int(data, "seed")
+	record.boss_id = RunStats.read_name(data, "boss_id")
+	record.duration = RunStats.read_float(data, "duration")
+	record.rooms_cleared = RunStats.read_int(data, "rooms_cleared")
+	record._duration_at_open = RunStats.read_float(data, "duration_at_open")
+	record._rooms_cleared_at_open = RunStats.read_int(data, "rooms_at_open")
+
+	# Clamped rather than trusted: an out-of-range enum read straight into `outcome` would index
+	# `Outcome.keys()` out of bounds the first time anything described the run.
+	var raw_outcome := RunStats.read_int(data, "outcome")
+	record.outcome = (
+		raw_outcome as Outcome if raw_outcome >= 0 and raw_outcome < Outcome.size()
+		else Outcome.IN_PROGRESS
+	)
+	return record
+
+
 ## One line, for a log or a test failure message. Compact on purpose: six of these is the whole
 ## shape of a run, and it should fit in a terminal without wrapping.
 func describe() -> String:

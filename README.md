@@ -440,8 +440,9 @@ autoload/game_manager.gd                  Feedback config, hit pause, game state
 autoload/audio_manager.gd                 Pooled one-shot SFX, and crossfaded music
 autoload/run_manager.gd                   Run state: scrap, floor, one immutable seed, items,
                                             per-floor records, statistics
-autoload/save_manager.gd                + Settings, unlocks, bosses beaten, best runs; and
-                                            the one place a setting becomes behaviour
+autoload/save_manager.gd                + Settings, unlocks, bosses beaten, best runs, the run
+                                            in progress; and the one place a setting becomes
+                                            behaviour
 autoload/scene_router.gd                + The only thing that changes scenes
 autoload/screen_effects.gd              + CRT filter and damage vignette, above every layer
 
@@ -493,6 +494,8 @@ scripts/systems/campaign_validator.gd   + Refuses a broken campaign before a run
 scripts/systems/run_rng.gd              + One run seed, derived into named per-floor streams
 scripts/systems/run_manifest.gd         + What a seed will build: derived seeds and content
 scripts/systems/floor_record.gd         + One floor's duration, boss, and how it ended
+scripts/systems/run_checkpoint.gd       + A run frozen at a floor boundary, and what makes
+                                            one safe to read back
 scripts/systems/loot_spawner.gd           Enemy drops, room rewards, and item drops
 scripts/systems/game_settings.gd        + Spec section 21's eight settings, as plain data
 scripts/systems/best_run_stats.gd       + What survives a run, and what counts as a record
@@ -559,6 +562,8 @@ tests/test_run.gd                          64 statistics, state, and summary che
 tests/test_shop.gd                         47 price, purchase, and refusal checks
 tests/test_boss.gd                         85 phase, terminal, and defeat checks
 tests/test_save.gd                      + 72 settings, save format, and record checks
+tests/test_checkpoint.gd                + 128 boundary-checkpoint, resume, refusal, and
+                                            file-recovery checks
 tests/test_audio.gd                     + 55 library, loop, and crossfade checks
 tests/test_gamepad.gd                   + 67 checks driven by a synthesized controller
 tests/test_balance.gd                   + 63 checks on what the tuning numbers mean

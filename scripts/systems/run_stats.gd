@@ -176,6 +176,117 @@ func describe() -> Array:
 	return rows
 
 
+## Everything a checkpoint carries. Written out field by field rather than reflected over, so
+## adding a statistic is a deliberate decision about whether a resumed run should keep it — the
+## alternative silently persists whatever anyone adds, including things that should not survive.
+func to_dict() -> Dictionary:
+	var floor_dicts: Array = []
+	for record: FloorRecord in floors:
+		floor_dicts.append(record.to_dict())
+
+	var weapon_shots: Dictionary = {}
+	for weapon_name: String in shots_by_weapon:
+		weapon_shots[weapon_name] = shots_by_weapon[weapon_name]
+
+	return {
+		"duration": duration,
+		"run_seed": run_seed,
+		"campaign_id": String(campaign_id),
+		"content_version": content_version,
+		"rooms_cleared": rooms_cleared,
+		"enemies_defeated": enemies_defeated,
+		"bosses_defeated": bosses_defeated,
+		"deepest_floor": deepest_floor,
+		"floors": floor_dicts,
+		"damage_dealt": damage_dealt,
+		"damage_taken": damage_taken,
+		"scrap_collected": scrap_collected,
+		"items_collected": Array(items_collected),
+		"highest_hit": highest_hit,
+		"current_clean_streak": current_clean_streak,
+		"longest_clean_streak": longest_clean_streak,
+		"shots_by_weapon": weapon_shots,
+		"cause_of_death": cause_of_death,
+	}
+
+
+## Rebuilds the statistics of a run in progress. Forgiving in the same way `BestRunStats.from_dict`
+## is — a malformed field costs that field — because what makes a checkpoint safe to load is
+## `RunCheckpoint.validate` refusing the whole thing, not each reader inventing its own refusal.
+static func from_dict(data: Dictionary) -> RunStats:
+	var stats := RunStats.new()
+	stats.duration = read_float(data, "duration")
+	stats.run_seed = read_int(data, "run_seed")
+	stats.campaign_id = read_name(data, "campaign_id")
+	stats.content_version = read_int(data, "content_version")
+	stats.rooms_cleared = read_int(data, "rooms_cleared")
+	stats.enemies_defeated = read_int(data, "enemies_defeated")
+	stats.bosses_defeated = read_int(data, "bosses_defeated")
+	stats.deepest_floor = read_int(data, "deepest_floor")
+	stats.damage_dealt = read_float(data, "damage_dealt")
+	stats.damage_taken = read_float(data, "damage_taken")
+	stats.scrap_collected = read_int(data, "scrap_collected")
+	stats.highest_hit = read_float(data, "highest_hit")
+	stats.current_clean_streak = read_int(data, "current_clean_streak")
+	stats.longest_clean_streak = read_int(data, "longest_clean_streak")
+	stats.cause_of_death = read_text(data, "cause_of_death")
+
+	var raw_floors: Variant = data.get("floors")
+	if raw_floors is Array:
+		for entry: Variant in raw_floors:
+			if entry is Dictionary:
+				stats.floors.append(FloorRecord.from_dict(entry as Dictionary))
+
+	var raw_items: Variant = data.get("items_collected")
+	if raw_items is Array:
+		for entry: Variant in raw_items:
+			if entry is String:
+				stats.items_collected.append(entry as String)
+
+	var raw_shots: Variant = data.get("shots_by_weapon")
+	if raw_shots is Dictionary:
+		for key: Variant in raw_shots as Dictionary:
+			var count: Variant = (raw_shots as Dictionary)[key]
+			if key is String and (count is float or count is int):
+				stats.shots_by_weapon[key as String] = int(count)
+
+	return stats
+
+
+## The readers every checkpoint field goes through, here rather than in each class that needs
+## them because there are three such classes and JSON has exactly one way of going wrong per
+## type. They answer with the type they promise or with that type's zero, and never with what
+## was actually in the file — a save is data from outside the program, and the one thing it must
+## not be able to do is put a string where a number is expected and reach gameplay.
+static func read_int(data: Dictionary, key: String) -> int:
+	var value: Variant = data.get(key)
+	if not (value is float or value is int):
+		return 0
+	# NAN and INF are both writable as JSON floats by a hand-edit, and `int(NAN)` is not a
+	# meaningful number in any direction.
+	var number := float(value)
+	return int(number) if is_finite(number) else 0
+
+
+static func read_float(data: Dictionary, key: String) -> float:
+	var value: Variant = data.get(key)
+	if not (value is float or value is int):
+		return 0.0
+	var number := float(value)
+	return number if is_finite(number) else 0.0
+
+
+static func read_text(data: Dictionary, key: String) -> String:
+	var value: Variant = data.get(key)
+	return value as String if value is String else ""
+
+
+## JSON has no StringName, so every id arrives as a string. Anything else is dropped rather than
+## coerced: a number where a floor id belongs is corruption, not an id.
+static func read_name(data: Dictionary, key: String) -> StringName:
+	return StringName(read_text(data, key))
+
+
 static func format_duration(seconds: float) -> String:
 	var whole := int(seconds)
 	return "%d:%02d" % [whole / 60, whole % 60]
