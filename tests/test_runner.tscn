@@ -1,4 +1,4 @@
-[gd_scene load_steps=24 format=3]
+[gd_scene load_steps=25 format=3]
 
 [ext_resource type="Script" path="res://tests/test_runner.gd" id="1_runner"]
 [ext_resource type="Script" path="res://tests/test_player_movement.gd" id="2_movement"]
@@ -19,6 +19,7 @@
 [ext_resource type="Script" path="res://tests/test_hud.gd" id="17_hud"]
 [ext_resource type="Script" path="res://tests/test_save.gd" id="11_save"]
 [ext_resource type="Script" path="res://tests/test_checkpoint.gd" id="23_checkpoint"]
+[ext_resource type="Script" path="res://tests/test_soak.gd" id="24_soak"]
 [ext_resource type="Script" path="res://tests/test_audio.gd" id="12_audio"]
 [ext_resource type="Script" path="res://tests/test_gamepad.gd" id="13_gamepad"]
 [ext_resource type="Script" path="res://tests/test_balance.gd" id="14_balance"]
@@ -89,6 +90,9 @@ script = ExtResource("22_performance")
 
 [node name="Balance" type="Node" parent="."]
 script = ExtResource("14_balance")
+
+[node name="Soak" type="Node" parent="."]
+script = ExtResource("24_soak")
 
 [node name="Menus" type="Node" parent="."]
 script = ExtResource("15_menus")

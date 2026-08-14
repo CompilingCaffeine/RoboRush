@@ -29,6 +29,18 @@ extends Node
 ## and nothing inside the process can catch that — only a timeout in whatever launched it.
 const SUITE_TIMEOUT_SECONDS := 60.0
 
+## Orphan nodes the suite is allowed to end with, in total.
+##
+## An orphan is a Node that exists and is in no tree: allocated with `Node.new()` and neither
+## added to anything nor freed. Godot reports them at exit as "N ObjectDB instances were leaked",
+## which is the least actionable diagnostic in the project — a number with no owner, no type, and
+## no way to tell a suite's litter from a real leak in the game.
+##
+## Zero is the target and the only defensible number. It is written as a constant rather than
+## asserted inline so that raising it is a visible decision in a diff, rather than something that
+## drifts upward one forgotten `Node.new()` at a time.
+const ORPHAN_ALLOWANCE := 0
+
 ## Set once the run has reported. Anything that ends the process before then is a failure,
 ## however cleanly it did it — see _exit_tree.
 var _finished := false
@@ -75,21 +87,41 @@ func _ready() -> void:
 
 	var total_checks := 0
 
+	var orphans_before_run := _orphan_count()
+
 	for suite: TestCase in suites:
+		var orphans_before := _orphan_count()
 		_running_suite = suite.name
 		_suite_deadline = Time.get_ticks_msec() + int(SUITE_TIMEOUT_SECONDS * 1000.0)
 		await suite.run()
 		_running_suite = ""
 		total_checks += suite.checks
 
+		# One frame before counting. `queue_free` is honoured at the end of a frame, so a suite that
+		# tidied up correctly still looks like it litters if it is measured the instant it returns.
+		await get_tree().process_frame
+		var orphaned := _orphan_count() - orphans_before
+
 		if suite.checks == 0:
 			failures.append("%s: ran no checks (did it crash before asserting?)" % suite.name)
 		for failure: String in suite.failures:
 			failures.append("%s: %s" % [suite.name, failure])
 
-		print("  %-22s %3d checks, %d failed" % [
+		print("  %-22s %3d checks, %d failed%s" % [
 			suite.name, suite.checks, suite.failures.size(),
+			", %+d orphans" % orphaned if orphaned != 0 else "",
 		])
+
+	# Counted across the whole run rather than summed from the per-suite deltas, so a suite that
+	# cleans up after a *previous* suite's mess cannot cancel it out in the total.
+	var orphaned_total := _orphan_count() - orphans_before_run
+	if orphaned_total > ORPHAN_ALLOWANCE:
+		failures.append(
+			("%d orphan nodes are left at the end of the run, over the allowance of %d. "
+			% [orphaned_total, ORPHAN_ALLOWANCE])
+			+ "The per-suite counts above say which suites made them; each is a `Node.new()` that "
+			+ "was neither added to a tree nor freed."
+		)
 
 	var elapsed := (Time.get_ticks_msec() - start) / 1000.0
 	_finished = true
@@ -117,6 +149,13 @@ func _process(_delta: float) -> void:
 		+ "usually awaiting a signal that no longer fires."
 	)
 	get_tree().quit(1)
+
+
+## Nodes that exist and are in no tree. The engine tracks this already; the suite's only job is to
+## read it at the right moments, which is what turns "125 instances were leaked" at exit into a
+## number beside the name of the suite that made them.
+func _orphan_count() -> int:
+	return int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 
 
 ## The usage line above is only useful to somebody reading this file. This is for everybody
