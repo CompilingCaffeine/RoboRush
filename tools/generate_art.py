@@ -58,6 +58,18 @@ PALETTE = {
     "z": (0x14, 0x15, 0x22, 255),  # dev floor base
     "Z": (0x25, 0x2A, 0x3E, 255),  # dev floor grid
     "t": (0x34, 0x3B, 0x56, 255),  # dev floor speck
+    # --- The Data Center. Cold steel, and deliberately narrow: this floor's throughput zones
+    # --- paint themselves teal when cold and red when hot (see ThermalZone), and a floor that
+    # --- carried either colour as decoration would make the one gradient the player's survival
+    # --- depends on reading into just another marking. Same call the Development floor's hazard
+    # --- tape makes about amber, one floor later and for the same reason.
+    "k": (0x0E, 0x14, 0x1B, 255),  # data floor base
+    "K": (0x1C, 0x27, 0x33, 255),  # data floor grid
+    "s": (0x2B, 0x39, 0x49, 255),  # data floor speck
+    "h": (0x20, 0x2C, 0x3A, 255),  # data chassis dark
+    "H": (0x39, 0x4C, 0x5F, 255),  # data chassis mid
+    "j": (0x5C, 0x76, 0x8D, 255),  # data chassis light
+    "i": (0xC2, 0xD8, 0xE6, 255),  # cold status light — ice, never cyan
 }
 
 
@@ -1574,6 +1586,131 @@ DEV_FLOOR_LAYOUT = [
 ]
 
 
+def _data_wall_base() -> list[list[str]]:
+    """The Data Center's bevel. Same lit-top/shaded-bottom read as the two floors before it, in
+    cold steel so a wall is still obviously a wall and obviously somewhere else."""
+    grid = _blank_panel("H")
+    for x in range(TILE):
+        grid[0][x] = "o"
+        grid[1][x] = "j"
+        grid[TILE - 2][x] = "h"
+        grid[TILE - 1][x] = "o"
+    for y in range(TILE):
+        grid[y][0] = "o"
+        grid[y][TILE - 1] = "o"
+    return grid
+
+
+def data_wall_panel(kind: str) -> list[list[str]]:
+    """One 16x16 Data Center wall panel."""
+    grid = _data_wall_base()
+
+    if kind == "bays":
+        # A full-height rack of drive bays, a few of them lit. The floor's signature marking:
+        # this is a room full of machines that are all working.
+        for y in range(3, 13):
+            for x in range(3, 13):
+                grid[y][x] = "h"
+        for y in range(3, 13, 2):
+            for x in range(4, 12):
+                grid[y][x] = "H"
+            grid[y][11] = "i" if y % 4 == 3 else "H"
+    elif kind == "blank":
+        # A blanking plate: the panel that fills an empty rack slot so the cold aisle stays
+        # cold. Quiet on purpose — most of a wall has to be.
+        for y in range(4, 12):
+            for x in range(3, 13):
+                grid[y][x] = "h"
+        for x in range(5, 11):
+            grid[7][x] = "H"
+            grid[8][x] = "H"
+    elif kind == "grille":
+        # A cooling intake. Louvres, and the one place on the wall that says which way the air
+        # is going — which is the floor's whole subject.
+        for y in range(3, 13):
+            for x in range(3, 13):
+                grid[y][x] = "h"
+        for y in range(4, 12, 2):
+            for x in range(4, 12):
+                grid[y][x] = "j"
+    elif kind == "spine":
+        # An overhead cable spine dropping into the rack below it.
+        for x in range(2, TILE - 2):
+            grid[4][x] = "h"
+            grid[5][x] = "j"
+        for y in range(5, TILE - 2):
+            grid[y][8] = "h"
+            grid[y][9] = "j"
+
+    return grid
+
+
+def data_floor_panel(kind: str) -> list[list[str]]:
+    """One 16x16 Data Center floor panel. A raised perforated floor, which is what a real server
+    hall stands on and also exactly the right texture for a floor that vents heat upward.
+
+    Darker and flatter than either floor before it, and with no colour in it at all beyond the
+    steel ramp — see the palette note. The zones are the only thing on this floor allowed to be
+    warm."""
+    grid = _blank_panel("k")
+    for x in range(TILE):
+        grid[0][x] = "K"
+    for y in range(TILE):
+        grid[y][0] = "K"
+
+    if kind == "perforated":
+        # The airflow tile: a grid of holes. Reads as texture at a glance and as function on a
+        # second look, which is the most a floor tile should ask for.
+        for y in range(3, 14, 3):
+            for x in range(3, 14, 3):
+                grid[y][x] = "K"
+                grid[y][x + 1] = "s"
+    elif kind == "seam":
+        # The join between two raised panels, with its lifting slot.
+        for x in range(1, TILE):
+            grid[8][x] = "K"
+        for x in range(6, 11):
+            grid[7][x] = "s"
+    elif kind == "grate":
+        # A full return-air grate: the strongest floor marking, kept rare by the layout below.
+        for y in range(2, 14):
+            for x in range(2, 14):
+                grid[y][x] = "K"
+        for y in range(3, 13, 2):
+            for x in range(3, 13):
+                grid[y][x] = "s"
+    elif kind == "bolts":
+        for x, y in ((3, 3), (12, 3), (3, 12), (12, 12)):
+            grid[y][x] = "s"
+
+    return grid
+
+
+## Quieter than Development's. That floor is a lab in use and should look inhabited; this one is a
+## machine hall, and its job is to be a flat, legible ground for the zones painted on top of it.
+DATA_WALL_LAYOUT = [
+    ["bays", "blank", "grille", "blank"],
+    ["blank", "spine", "blank", "bays"],
+    ["grille", "blank", "bays", "blank"],
+    ["blank", "bays", "blank", "spine"],
+]
+
+DATA_FLOOR_LAYOUT = [
+    ["perforated", "plain", "seam", "plain"],
+    ["plain", "bolts", "plain", "perforated"],
+    ["seam", "plain", "grate", "plain"],
+    ["plain", "perforated", "plain", "bolts"],
+]
+
+
+def data_wall_tile() -> list[str]:
+    return compose_sheet(DATA_WALL_LAYOUT, data_wall_panel)
+
+
+def data_floor_tile() -> list[str]:
+    return compose_sheet(DATA_FLOOR_LAYOUT, data_floor_panel)
+
+
 def dev_wall_tile() -> list[str]:
     return compose_sheet(DEV_WALL_LAYOUT, dev_wall_panel)
 
@@ -1685,6 +1822,8 @@ def main() -> int:
     write_png(os.path.join(root, "art/environments/door.png"), door_tile())
     write_png(os.path.join(root, "art/environments/floor.png"), floor_tile())
     write_png(os.path.join(root, "art/environments/dev_wall.png"), dev_wall_tile())
+    write_png(os.path.join(root, "art/environments/data_wall.png"), data_wall_tile())
+    write_png(os.path.join(root, "art/environments/data_floor.png"), data_floor_tile())
     write_png(os.path.join(root, "art/environments/dev_floor.png"), dev_floor_tile())
     return 0
 

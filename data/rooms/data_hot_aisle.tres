@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="1_template"]
+
+[resource]
+script = ExtResource("1_template")
+id = &"data_hot_aisle"
+type = 1
+obstacles = Array[Rect2i]([Rect2i(12, 0, 2, 3), Rect2i(12, 9, 2, 3)])
+enemy_spawns = Array[Vector2i]([Vector2i(4, 8), Vector2i(21, 3), Vector2i(21, 5)])
+; The variation: the same lesson with the safe ground moved. Two zones on opposite diagonals leave
+; a clear aisle through the middle, so the room can be fought without ever standing on a zone —
+; but only from a position the player has to find rather than the one they arrive in.
+;
+; The two blocks pinch the aisle at its centre, which is what stops the answer being "walk down the
+; middle and never think about it again": holding the aisle means holding one of two halves of it.
+thermal_zones = Array[Rect2i]([Rect2i(1, 1, 10, 4), Rect2i(15, 7, 10, 4)])
+reward_spawn = Vector2i(13, 6)
+difficulty = 2
+floor_tags = Array[StringName]([&"data_center"])
+min_floor = 3
+max_floor = 3

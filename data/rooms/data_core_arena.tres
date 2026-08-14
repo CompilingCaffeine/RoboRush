@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="1_template"]
+
+[resource]
+script = ExtResource("1_template")
+id = &"data_core_arena"
+type = 6
+obstacles = Array[Rect2i]([])
+enemy_spawns = Array[Vector2i]([])
+; The boss arena keeps the floor's rule and drops its furniture. Four zones at the corners leave
+; the centre cold, which inverts every combat room before it: the safe ground is now the middle of
+; the arena, where the boss is. A player who has learned to fight from the edges of this floor has
+; to unlearn it in the last room of it.
+thermal_zones = Array[Rect2i]([Rect2i(0, 0, 6, 4), Rect2i(20, 0, 6, 4), Rect2i(0, 8, 6, 4), Rect2i(20, 8, 6, 4)])
+reward_spawn = Vector2i(13, 9)
+difficulty = 4
+floor_tags = Array[StringName]([&"data_center"])
+min_floor = 3
+max_floor = 3

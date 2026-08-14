@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="1_template"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/ticket_bot.tscn" id="2_ticket_bot"]
+
+[resource]
+script = ExtResource("1_template")
+id = &"data_intake_row"
+type = 1
+obstacles = Array[Rect2i]([])
+enemy_spawns = Array[Vector2i]([Vector2i(21, 3), Vector2i(21, 8)])
+; The floor's teaching room, and it teaches by being boring to play wrong. One zone, sitting
+; exactly where a player entering from the left would stop and open fire, and nothing else in the
+; room to explain a mistake away: no cover to argue about, no enemy that closes the distance, no
+; second hazard. Stand and shoot and the floor warms under you and vents. Step off it and nothing
+; happens at all.
+;
+; The two enemies are the mildest on the roster and are placed at the far end, so the player has
+; time to notice the colour changing before anything punishes them for looking at it.
+forced_enemies = Array[PackedScene]([ExtResource("2_ticket_bot"), ExtResource("2_ticket_bot")])
+thermal_zones = Array[Rect2i]([Rect2i(7, 4, 11, 5)])
+reward_spawn = Vector2i(13, 6)
+difficulty = 1
+floor_tags = Array[StringName]([&"data_center"])
+min_floor = 3
+max_floor = 3

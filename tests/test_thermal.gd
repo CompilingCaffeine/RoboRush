@@ -25,6 +25,7 @@ func run() -> void:
 	await _test_a_zone_cools_when_left_alone()
 	await _test_a_template_builds_its_zones_inside_the_room()
 	await _test_zones_stop_with_the_room_they_are_in()
+	_test_the_data_center_templates_are_authored_sanely()
 
 
 ## The one thing that must heat a zone.
@@ -232,6 +233,83 @@ func _test_zones_stop_with_the_room_they_are_in() -> void:
 
 	room.queue_free()
 	await advance_physics(1)
+
+
+## The Data Center's own templates, checked as content rather than as code.
+##
+## A `.tres` with a typo in it does not fail to load — it loads with the mistyped property missing,
+## and the first symptom is a room that generates without the thing it was authored for. These are
+## the assertions that turn that into a failed check: the file parses, it is the type it claims, its
+## zones are inside the room, and the rooms that are supposed to teach the mechanic actually carry
+## it.
+func _test_the_data_center_templates_are_authored_sanely() -> void:
+	# id, expected type, and whether the room is meant to have zones in it.
+	var expected: Array = [
+		["data_cold_aisle", RoomTemplate.Type.START, false],
+		["data_intake_row", RoomTemplate.Type.COMBAT, true],
+		["data_hot_aisle", RoomTemplate.Type.COMBAT, true],
+		["data_chiller_bank", RoomTemplate.Type.COMBAT, true],
+		["data_grid_floor", RoomTemplate.Type.COMBAT, true],
+		["data_cache_vault", RoomTemplate.Type.TREASURE, true],
+		["data_core_arena", RoomTemplate.Type.BOSS, true],
+	]
+
+	var teaching_zones := 0
+	var mastery_zones := 0
+	for entry: Array in expected:
+		var id: String = entry[0]
+		var template := load("res://data/rooms/%s.tres" % id) as RoomTemplate
+		if not require(template, "%s loads as a RoomTemplate" % id):
+			continue
+
+		check(template.id == StringName(id), "%s carries its own id" % id)
+		check(template.type == entry[1], "%s is the room type it is used as" % id)
+		check(
+			(not template.thermal_zones.is_empty()) == bool(entry[2]),
+			"%s %s throughput zones" % [id, "has" if entry[2] else "has no"],
+		)
+		check(
+			template.min_floor == 3 and template.max_floor == 3,
+			"%s is eligible on floor 3 and nowhere else" % id,
+		)
+		check(
+			&"data_center" in template.floor_tags,
+			"%s is tagged for the floor that uses it" % id,
+		)
+
+		# Every zone has to describe real ground. `get_tile_block_rect` clamps at build time, so an
+		# off-edge zone is silently corrected in play — which is exactly why it is worth catching in
+		# the file, where it is still a mistake somebody can fix.
+		for zone: Rect2i in template.thermal_zones:
+			check(
+				zone.position.x >= 0 and zone.position.y >= 0
+					and zone.end.x <= Room.INTERIOR_TILES.x and zone.end.y <= Room.INTERIOR_TILES.y,
+				"%s's zone %v fits inside the room without being clamped" % [id, zone],
+			)
+
+		# No enemy may be authored standing inside a zone. The floor charges for a habit the player
+		# chooses; starting them mid-fight on hot ground would charge them for arriving.
+		for spawn: Vector2i in template.enemy_spawns:
+			for zone: Rect2i in template.thermal_zones:
+				check(
+					not zone.has_point(spawn),
+					"%s does not start an enemy inside a zone (%v)" % [id, spawn],
+				)
+
+		if id == "data_intake_row":
+			teaching_zones = template.thermal_zones.size()
+		elif id == "data_grid_floor":
+			mastery_zones = template.thermal_zones.size()
+
+	# The teaching order, asserted rather than assumed: the room that introduces the mechanic shows
+	# one zone, and the room that tests mastery shows several. A later edit that gave the teaching
+	# room three zones would be teaching two things at once, which is the failure this floor's room
+	# progression exists to avoid.
+	check(teaching_zones == 1, "the teaching room shows exactly one zone (%d)" % teaching_zones)
+	check(
+		mastery_zones > teaching_zones,
+		"and the mastery room shows more than it (%d)" % mastery_zones,
+	)
 
 
 # --- Harness --------------------------------------------------------------------

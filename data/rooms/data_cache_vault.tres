@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="1_template"]
+
+[resource]
+script = ExtResource("1_template")
+id = &"data_cache_vault"
+type = 3
+obstacles = Array[Rect2i]([Rect2i(2, 2, 2, 2), Rect2i(22, 2, 2, 2), Rect2i(2, 8, 2, 2), Rect2i(22, 8, 2, 2)])
+enemy_spawns = Array[Vector2i]([])
+; A ring of zones around the prize, with the prize itself standing on cold floor. Nothing here can
+; hurt a player who walks in, takes the item and leaves — the zones only bite somebody who stops in
+; one to shoot, and there is nothing in this room to shoot. It is a reward room that quietly
+; rehearses the floor's rule one more time.
+thermal_zones = Array[Rect2i]([Rect2i(8, 2, 4, 3), Rect2i(15, 2, 4, 3), Rect2i(8, 8, 4, 3), Rect2i(15, 8, 4, 3)])
+reward_spawn = Vector2i(13, 6)
+difficulty = 0
+floor_tags = Array[StringName]([&"data_center"])
+min_floor = 3
+max_floor = 3

@@ -62,6 +62,8 @@ const MUSIC_LIBRARY := {
 	&"boss": "res://audio/music/boss.wav",
 	&"dev_explore": "res://audio/music/dev_explore.wav",
 	&"dev_boss": "res://audio/music/dev_boss.wav",
+	&"data_explore": "res://audio/music/data_explore.wav",
+	&"data_boss": "res://audio/music/data_boss.wav",
 }
 
 ## Seconds to crossfade between tracks. Long enough not to read as a cut, short enough that

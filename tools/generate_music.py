@@ -398,12 +398,93 @@ def dev_boss_track(noise: random.Random) -> list[float]:
     ], 32, beat)
 
 
+def data_explore_track(noise: random.Random) -> list[float]:
+    """The Data Center's room-clearing loop. A machine hall at steady load.
+
+    Where Development never settles, this one settles *too much*, and that is the joke: the
+    bass is on the downbeat, the pattern repeats almost exactly, and a sixteenth-note hat runs
+    underneath like cooling fans that never change speed. It is the sound of a room that is
+    fine, in a floor whose whole mechanic is that standing still in it is not.
+
+    Still A minor. What makes it cold rather than merely calm is the lead sitting on bare
+    fifths and fourths instead of thirds — no third means no major or minor colour, which is
+    what a room full of machines with no opinion should sound like.
+    """
+    beat = 60.0 / 132.0
+
+    lead = [
+        ("A4", 2), ("E5", 2), ("A4", 1), ("D5", 1), ("E5", 2),
+        ("A4", 2), ("E5", 2), ("G4", 1), ("A4", 1), ("E5", 2),
+        ("D5", 2), ("A4", 2), ("E5", 1), ("D5", 1), ("A4", 2),
+        ("E4", 2), ("A4", 2), ("D5", 1), ("E5", 1), ("A4", 2),
+    ]
+    # On the downbeat, and holding. The room is not going anywhere.
+    bass = [
+        ("A2", 2), ("A2", 2), ("A2", 2), ("A2", 2),
+        ("G2", 2), ("G2", 2), ("D2", 2), ("D2", 2),
+        ("A2", 2), ("A2", 2), ("A2", 2), ("A2", 2),
+        ("F2", 2), ("F2", 2), ("E2", 2), ("E2", 2),
+    ]
+    # The fans: an unvarying sixteenth pulse on two notes a fifth apart.
+    arp = [("A5", 0.25), ("E5", 0.25)] * 64
+    drums = "k.h.h.h.k.h.h.h." * 8
+
+    return mix([
+        render_melodic(lead, beat, lead_voice),
+        render_melodic(bass, beat, bass_voice),
+        render_melodic(arp, beat, arp_voice),
+        render_drums(drums, beat, noise),
+    ], 32, beat)
+
+
+def data_boss_track(noise: random.Random) -> list[float]:
+    """Thermal runaway. The explore loop is a room holding steady; this is the same room losing
+    the argument with its own heat.
+
+    Built by taking that loop's calm and speeding it past the point where calm is possible: the
+    same bare fifths, now at 176, with the fan pulse doubled into thirty-second notes and a bass
+    that climbs instead of holding. Nothing about it is chromatic — this boss is not coming
+    apart the way Runtime Error does, it is running too hot, and heat is a rising line.
+    """
+    beat = 60.0 / 176.0
+
+    lead = [
+        ("A5", 0.5), ("E5", 0.5), ("A5", 0.5), ("E5", 0.5),
+        ("B5", 0.5), ("E5", 0.5), ("B5", 0.5), ("E5", 0.5),
+        ("C6", 0.5), ("G5", 0.5), ("C6", 0.5), ("G5", 0.5),
+        ("D6", 1), ("A5", 1),
+        ("E6", 0.5), ("B5", 0.5), ("E6", 0.5), ("B5", 0.5),
+        ("D6", 0.5), ("A5", 0.5), ("C6", 0.5), ("G5", 0.5),
+        ("B5", 1), ("E5", 1), ("A5", 2),
+    ]
+    # The climb: each bar starts a step higher than the last, and the last bar drops back to
+    # the bottom so the loop can do it again.
+    bass = [
+        ("A2", 0.5), ("A2", 0.5), ("A2", 0.5), ("E3", 0.5),
+        ("B2", 0.5), ("B2", 0.5), ("B2", 0.5), ("F#3", 0.5),
+        ("C3", 0.5), ("C3", 0.5), ("C3", 0.5), ("G3", 0.5),
+        ("D3", 0.5), ("D3", 0.5), ("A2", 0.5), ("A2", 0.5),
+    ] * 4
+    drums = "ksh.ksh.ksh.kshh" * 8
+
+    return mix([
+        # The climb runs twice, like Runtime Error's collapse does, so the loop is thirty-two
+        # beats and the rise happens twice rather than once at half the speed.
+        render_melodic(lead + lead, beat, lead_voice),
+        render_melodic(bass, beat, bass_voice),
+        render_melodic([("A6", 0.25), ("E6", 0.25)] * 64, beat, arp_voice),
+        render_drums(drums, beat, noise),
+    ], 32, beat)
+
+
 TRACKS = {
     "audio/music/menu.wav": menu_track,
     "audio/music/explore.wav": explore_track,
     "audio/music/boss.wav": boss_track,
     "audio/music/dev_explore.wav": dev_explore_track,
     "audio/music/dev_boss.wav": dev_boss_track,
+    "audio/music/data_explore.wav": data_explore_track,
+    "audio/music/data_boss.wav": data_boss_track,
 }
 
 

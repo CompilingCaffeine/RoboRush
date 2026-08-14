@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="1_template"]
+
+[resource]
+script = ExtResource("1_template")
+id = &"data_cold_aisle"
+type = 0
+obstacles = Array[Rect2i]([Rect2i(3, 1, 2, 1), Rect2i(21, 10, 2, 1)])
+enemy_spawns = Array[Vector2i]([])
+; The floor a player arrives on has no zones, and that is the introduction. The first Data Center
+; room they see is cold, so the first warm one reads as a change rather than as the way this floor
+; has always looked.
+thermal_zones = Array[Rect2i]([])
+reward_spawn = Vector2i(13, 6)
+difficulty = 0
+floor_tags = Array[StringName]([&"data_center"])
+min_floor = 3
+max_floor = 3

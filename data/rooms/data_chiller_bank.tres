@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="1_template"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/firewall_node.tscn" id="2_firewall"]
+
+[resource]
+script = ExtResource("1_template")
+id = &"data_chiller_bank"
+type = 1
+obstacles = Array[Rect2i]([Rect2i(11, 4, 4, 4)])
+enemy_spawns = Array[Vector2i]([Vector2i(2, 2), Vector2i(23, 2), Vector2i(2, 9), Vector2i(23, 9)])
+; The combination, and the first room where the floor's mechanic argues with an older one. A
+; Firewall Node's beams are answered by putting the central bank between you and it — and the only
+; ground with that line of sight is inside a zone. The room is asking which of two things the
+; player would rather take, which is the point at which a mechanic stops being a rule and starts
+; being a decision.
+forced_enemies = Array[PackedScene]([ExtResource("2_firewall")])
+thermal_zones = Array[Rect2i]([Rect2i(3, 3, 6, 6), Rect2i(17, 3, 6, 6)])
+reward_spawn = Vector2i(13, 1)
+difficulty = 3
+floor_tags = Array[StringName]([&"data_center"])
+min_floor = 3
+max_floor = 3
