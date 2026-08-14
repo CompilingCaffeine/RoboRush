@@ -163,6 +163,18 @@ func announce_floor(number: int) -> void:
 	_hide_boss_bar()
 	_show_banner("LEVEL %d" % number, BANNER_CLEAR)
 
+	# The strip along the bottom carries the floor's name, and this is the moment that name
+	# changes. It is pushed rather than polled (see `_ready`), and the only things that pushed it
+	# were scrap and cleared rooms — so the name went on saying `HELP DESK` after a descent until
+	# the player happened to pick up a coin on the floor below. Reported by a browser run of the
+	# resumed-game path, where the wrong name was the *default* one rather than merely the
+	# previous floor's, and so never corrected itself at all.
+	#
+	# Here rather than in `RunManager.begin_floor`, because this is called at every moment a floor
+	# begins — a run opening on one, a descent, and a resume — and by the time it runs the run
+	# already knows the new floor's name.
+	_refresh_top_label()
+
 
 func bind_player(player: Player) -> void:
 	_player = player

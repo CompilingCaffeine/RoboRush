@@ -326,6 +326,16 @@ func _test_the_game_scene_resumes_the_saved_run() -> void:
 	)
 	check(SaveManager.has_checkpoint(), "the checkpoint survives being resumed from")
 
+	# Reported by driving the Web build in a browser: the resumed run played floor 2 with `HELP
+	# DESK` written along the bottom of the screen. The strip is pushed rather than polled, and
+	# nothing pushed it when a floor began — so it kept whatever name it had, which on a resume is
+	# the default rather than the floor before.
+	var strip := (game.get_node("%CombatHUD") as CombatHUD).get_node("%TopLabel") as Label
+	check(
+		floor_node.config.display_name.to_upper() in strip.text,
+		"the HUD names the floor being resumed onto, not the one it defaults to (%s)" % strip.text,
+	)
+
 	# Opening the floor calls `RunManager.begin_floor` for a floor whose record the checkpoint
 	# already has open. A second record would mean the run reported seven floors for a six-floor
 	# campaign, and every per-floor duration after it would be wrong.
