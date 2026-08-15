@@ -53,6 +53,19 @@ func _ready() -> void:
 
 
 func open() -> void:
+	# Re-anchored on the way up, because the rect this was born with may be nothing at all.
+	#
+	# The browser build lays the menu out once before the canvas has told the engine how big it is,
+	# and a Control that is hidden when its parent later gets its real size does not re-anchor —
+	# visible siblings do, which is why the menu behind this card looks perfectly normal. Shown
+	# as-is, a full-screen modal is a zero-size box in the top-left corner with its panel spilling
+	# off two edges of the screen. That is what a first-time player in a browser saw: the one card
+	# the game asks them to read, half of it off-screen.
+	#
+	# No desktop build has ever done it, and no test could have caught it — a desktop window is the
+	# size it claims to be from the first frame, and a headless run has no canvas to wait for. It
+	# took a screenshot of the real export in a real browser.
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	visible = true
 	# See SettingsMenu.open: a focused button behind a modal panel still answers the d-pad.
 	get_viewport().gui_release_focus()
