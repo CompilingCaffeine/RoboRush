@@ -21,6 +21,13 @@ extends Node
 ## the spec's "runs are not saved" was written for a ten-room run that could be replayed in six
 ## minutes, and a sixty-room run cannot. See `RunCheckpoint` for what is stored and why the
 ## boundary is the only safe moment to store it.
+##
+## Loading is explicit rather than automatic: `initialize` does it, and until it has, this node
+## holds defaults and refuses to write. `_ready` used to load, which was fine while the only
+## source of a save was a local file that could be read synchronously. The browser build's save
+## arrives over the network, so *something* has to be allowed to take time before the game reads
+## a record — and a node that has already loaded defaults cannot be told to wait. The bootstrap
+## scene owns that decision now; see `scenes/ui/bootstrap.gd`.
 
 const SAVE_PATH := "user://save.json"
 
@@ -62,6 +69,11 @@ const SAVE_RETRY_SECONDS := 5.0
 
 signal settings_changed(settings: GameSettings)
 
+## Emitted once, when the persistent state below has been loaded and applied. Consumers that may
+## start either side of that moment must check `is_initialized()` first: a signal already emitted
+## is a signal that never arrives, and a menu awaiting it would hang on the second visit.
+signal initialized
+
 var settings := GameSettings.new()
 var best := BestRunStats.new()
 
@@ -98,6 +110,13 @@ var _writes_refused := false
 ## read from the primary. It costs the run in progress, and only the run — see `_read_checkpoint`.
 var _recovered := false
 
+## Whether the state above came from disk rather than from the defaults it was declared with.
+## Every write is refused while it is false — see `save_game`.
+var _initialized := false
+
+## So that refusing a write before initialization costs one log line rather than one per caller.
+var _warned_early_write := false
+
 var _dirty := false
 var _save_countdown := 0.0
 
@@ -119,9 +138,30 @@ func _ready() -> void:
 	# from the pause menu, and a volume slider that only worked while unpaused would look
 	# broken in the one place it is used.
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	load_game()
 	EventBus.item_collected.connect(_on_item_collected)
 	EventBus.boss_defeated.connect(_on_boss_defeated)
+
+
+## Loads the save and announces that it is safe to read. Called once, by the bootstrap scene,
+## after it has settled whatever it can about cloud state.
+##
+## Idempotent because the alternative is a second load discarding whatever the session has
+## changed since the first — a bootstrap that retried, or a second entry into the boot scene,
+## would silently roll the player back rather than fail visibly.
+##
+## `_initialized` is set *before* the load, not after: `load_game` writes back a save it had to
+## recover, and that write has to be allowed to happen.
+func initialize() -> void:
+	if _initialized:
+		return
+	_initialized = true
+	load_game()
+	initialized.emit()
+
+
+## Whether `initialize` has run. Read by anything that can start before the save exists.
+func is_initialized() -> bool:
+	return _initialized
 
 
 func _process(delta: float) -> void:
@@ -316,6 +356,18 @@ func save_game() -> void:
 	if not persistence_enabled:
 		# Not a failure. The suite runs with writes off, and there is nothing left pending.
 		_dirty = false
+		return
+
+	if not _initialized:
+		# Refused rather than left pending, and refused rather than queued. Before `initialize`
+		# every field this writes holds the default it was declared with, so the file this would
+		# produce is a *new* save — written over the real one, which is the exact way a slow cloud
+		# fetch turns into a wiped profile. Queuing would be worse than refusing: the write would
+		# land later carrying the same defaults, having overwritten what the load just brought in.
+		_dirty = false
+		if not _warned_early_write:
+			_warned_early_write = true
+			push_warning("SaveManager: refusing to save before initialize(); nothing is loaded yet.")
 		return
 
 	if _writes_refused:

@@ -47,6 +47,13 @@ func _ready() -> void:
 	# without passing through it, because this is the project's main scene.
 	GameManager.enter_main_menu()
 
+	# Everything below reads the save, and the manager no longer loads itself — the bootstrap
+	# scene does it, once it knows whether there is a cloud save to wait for. This is the floor
+	# under that: any way into the menu that skipped the bootstrap (the editor's "run current
+	# scene", a tool, a future entry point) gets a loaded manager rather than a menu full of
+	# defaults that also refuses to save. Idempotent, so the normal path pays nothing.
+	SaveManager.initialize()
+
 	UIPalette.style(_tagline, UIPalette.TEXT_DIM)
 	_tagline.text = "SHIFT ONE  //  HELP DESK  //  NO OVERTIME AUTHORISED"
 
