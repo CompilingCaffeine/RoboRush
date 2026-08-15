@@ -139,15 +139,33 @@ isolate_godot_data() {
 ## all, so an export there is always preceded by a full import; running it here as its own step
 ## means an import error is reported as an import error rather than as a mysteriously incomplete
 ## artifact twenty minutes later.
+##
+## Twice, when the first pass complains. A cold import has no order to work with: `theme.tres`
+## references `font_6x8.fnt`, and on the first pass through an empty .godot the theme is parsed
+## before the font has been imported, so it fails to load and says so. By the second pass the font
+## exists and the whole thing is silent. Failing on the first pass would mean no clean checkout
+## could ever build; ignoring the errors would mean a genuinely broken import ships. So the rule is
+## that the *second* pass must be clean, which is a statement about the project rather than about
+## the order Godot happened to walk it in.
 import_project() {
-  note "importing"
   local log="$WORK_DIR/import.log"
-  timeout "$IMPORT_TIMEOUT" "$GODOT" --headless --import >"$log" 2>&1 \
-    || die "the import failed or exceeded ${IMPORT_TIMEOUT}s. See $log"
+
+  note "importing"
+  _import_pass "$log"
+  grep -qE '^(SCRIPT )?ERROR:' "$log" || return 0
+
+  note "first pass reported errors on a cold cache; importing again"
+  _import_pass "$log"
   if grep -qE '^(SCRIPT )?ERROR:' "$log"; then
     cp "$log" "$ARTIFACT_DIR/import.log"
-    die "the import reported errors. See $ARTIFACT_DIR/import.log"
+    die "the import still reports errors after a second pass. See $ARTIFACT_DIR/import.log"
   fi
+}
+
+
+_import_pass() {
+  timeout "$IMPORT_TIMEOUT" "$GODOT" --headless --import >"$1" 2>&1 \
+    || die "the import failed or exceeded ${IMPORT_TIMEOUT}s. See $1"
 }
 
 ## The suite, judged the way the runner reports rather than by counting the word ERROR.
