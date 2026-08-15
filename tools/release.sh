@@ -31,21 +31,11 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-LOCK_FILE="tools/engine.lock"
-TEMPLATE_DIR="${GODOT_TEMPLATE_DIR:-$HOME/Library/Application Support/Godot/export_templates}"
-GODOT="${GODOT:-godot}"
-WAVEDASH_ADDON_DIR="addons/wavedash"
-
-# The vendored Wavedash SDK files, as copied from upstream. The .uid files are tracked but not
-# hashed: Godot regenerates them, so pinning them would fail on churn that changes no behaviour.
-WAVEDASH_SDK_FILES=(
-  "LICENSE"
-  "plugin.cfg"
-  "README.md"
-  "WavedashConstants.gd"
-  "WavedashPlugin.gd"
-  "WavedashSDK.gd"
-)
+# What "pinned" means, the lock file, and the hashing that checks it. Shared with the Web build so
+# that there is one definition of it rather than one per tool.
+TOOL_NAME="release"
+# shellcheck source=tools/ci/lib.sh
+source "$REPO_ROOT/tools/ci/lib.sh"
 
 # The presets, and the file each one produces. Names must match export_presets.cfg exactly —
 # `--export-release` takes the preset's name and fails loudly on a typo, which is the behaviour
@@ -62,37 +52,16 @@ TEMPLATES=(
   "web_nothreads_release.zip"
 )
 
-die() { printf '\nrelease: %s\n' "$1" >&2; exit 1; }
-note() { printf '  %s\n' "$1"; }
-
-sha256() { shasum -a 256 "$1" | cut -d' ' -f1; }
-
-
 # --- Engine and template pinning ---------------------------------------------------
-
-engine_version() {
-  "$GODOT" --version 2>/dev/null | head -1 | tr -d '\n'
-}
-
-## The add-on's own declared version, from the manifest Godot reads.
-wavedash_sdk_version() {
-  grep '^version=' "$WAVEDASH_ADDON_DIR/plugin.cfg" | cut -d= -f2- | tr -d '"'
-}
-
-## The Wavedash CLI that uploads builds. Recorded rather than enforced here — this script never
-## uploads — so CI has an approved version to compare against before it hands over a token.
-wavedash_cli_version() {
-  command -v wavedash >/dev/null 2>&1 || return 0
-  wavedash --version 2>/dev/null | head -1 | tr -d '\n'
-}
 
 ## Writes the lock file from whatever is installed now. Run deliberately, when the engine is
 ## upgraded on purpose, so that an upgrade is a reviewable diff rather than a silent change in
 ## what the next release is built with.
 relock() {
-  local version templates_version sdk_version sdk_commit cli_version
+  local version templates_version sdk_version sdk_commit cli_version template_dir
+  template_dir="$(template_root)"
   version="$(engine_version)"
-  templates_version="$(cat "$TEMPLATE_DIR"/*/version.txt 2>/dev/null | head -1)"
+  templates_version="$(cat "$template_dir"/*/version.txt 2>/dev/null | head -1)"
   [ -n "$version" ] || die "could not run '$GODOT --version'"
 
   sdk_version="$(wavedash_sdk_version)"
@@ -113,7 +82,7 @@ relock() {
     echo "engine_version=$version"
     echo "templates_version=$templates_version"
     for template in "${TEMPLATES[@]}"; do
-      local path="$TEMPLATE_DIR/$templates_version/$template"
+      local path="$template_dir/$templates_version/$template"
       [ -f "$path" ] || die "export template missing: $path"
       echo "template.$template=$(sha256 "$path")"
     done
@@ -136,54 +105,20 @@ relock() {
   sed 's/^/  /' "$LOCK_FILE"
 }
 
-## Fails unless the installed engine and templates are byte-for-byte the pinned ones.
+## Fails unless the installed engine, every export template and the vendored SDK are
+## byte-for-byte the pinned ones. A release builds all four platforms, so it verifies all four
+## templates; the Web build verifies only the one it uses.
 verify_engine() {
-  [ -f "$LOCK_FILE" ] || die "$LOCK_FILE is missing. Run: tools/release.sh --relock"
+  verify_engine_version
 
-  local pinned_engine pinned_templates actual
-  pinned_engine="$(grep '^engine_version=' "$LOCK_FILE" | cut -d= -f2-)"
-  pinned_templates="$(grep '^templates_version=' "$LOCK_FILE" | cut -d= -f2-)"
-  actual="$(engine_version)"
-
-  [ "$actual" = "$pinned_engine" ] || die \
-    "engine is '$actual', pinned is '$pinned_engine'. Upgrade deliberately: tools/release.sh --relock"
-  note "engine $actual"
-
+  local templates_version template
+  templates_version="$(lock_value templates_version)"
   for template in "${TEMPLATES[@]}"; do
-    local path="$TEMPLATE_DIR/$pinned_templates/$template"
-    [ -f "$path" ] || die "export template missing: $path (see export_presets.cfg for how to install)"
-    local expected got
-    expected="$(grep "^template\.$template=" "$LOCK_FILE" | cut -d= -f2-)"
-    got="$(sha256 "$path")"
-    [ "$expected" = "$got" ] || die "export template $template does not match the pinned hash"
+    verify_template "$template"
   done
-  note "export templates $pinned_templates verified (${#TEMPLATES[@]} hashes)"
+  note "export templates $templates_version verified (${#TEMPLATES[@]} hashes)"
 
   verify_wavedash_sdk
-}
-
-## Fails unless the vendored SDK is byte-for-byte the pinned one. Vendoring already keeps the
-## add-on out of the AssetStore's reach, so this catches the other way it drifts: an in-tree edit
-## nobody meant to ship, or a copy-in that skipped the lock file.
-verify_wavedash_sdk() {
-  local pinned_version actual_version
-  pinned_version="$(grep '^wavedash_sdk_version=' "$LOCK_FILE" | cut -d= -f2-)"
-  [ -n "$pinned_version" ] || die \
-    "no wavedash_sdk_version in $LOCK_FILE. Run: tools/release.sh --relock"
-  actual_version="$(wavedash_sdk_version)"
-
-  [ "$actual_version" = "$pinned_version" ] || die \
-    "Wavedash SDK is '$actual_version', pinned is '$pinned_version'. Upgrade deliberately: WAVEDASH_SDK_COMMIT=<sha> tools/release.sh --relock"
-
-  for file in "${WAVEDASH_SDK_FILES[@]}"; do
-    local addon_path="$WAVEDASH_ADDON_DIR/$file"
-    [ -f "$addon_path" ] || die "Wavedash SDK file missing: $addon_path"
-    local expected got
-    expected="$(grep "^wavedash_sdk\.$file=" "$LOCK_FILE" | cut -d= -f2-)"
-    got="$(sha256 "$addon_path")"
-    [ "$expected" = "$got" ] || die "Wavedash SDK file $file does not match the pinned hash"
-  done
-  note "Wavedash SDK $pinned_version verified (${#WAVEDASH_SDK_FILES[@]} hashes)"
 }
 
 

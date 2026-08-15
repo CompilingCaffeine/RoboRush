@@ -41,6 +41,7 @@ const FOCUS_PADDING := "  "
 @onready var _settings: SettingsMenu = %SettingsMenu
 @onready var _controls: ControlsCard = %ControlsCard
 @onready var _cloud_status: Label = %CloudStatus
+@onready var _build_id: Label = %BuildId
 
 
 func _ready() -> void:
@@ -65,6 +66,7 @@ func _ready() -> void:
 
 	CloudSaveCoordinator.status_changed.connect(_on_cloud_status_changed)
 	_refresh_cloud_status()
+	_show_build_id()
 
 	_settings.closed.connect(_on_panel_closed)
 	_controls.closed.connect(_on_panel_closed)
@@ -162,6 +164,25 @@ func _refresh_cloud_status() -> void:
 		return
 	UIPalette.style(_cloud_status, UIPalette.TEXT_FAINT)
 	_cloud_status.text = CloudSaveCoordinator.status_text()
+
+
+## Which build this is, in the corner, for builds that have one.
+##
+## A hosted playtest is a URL, and a URL says nothing about what is behind it. Without this, a
+## tester reporting "the checkpoint did not come back" is reporting it against a build nobody can
+## identify afterwards — and the Build A to Build B save qualification, which is the whole point of
+## the browser release, comes down to somebody being sure they are looking at Build B.
+##
+## Written into the project settings by tools/ci/build_web.sh at export time, so a build run from
+## the editor has none and shows nothing. An empty label is the honest answer there: a source tree
+## has no build id, and inventing one would make the field untrustworthy in the builds that do.
+func _show_build_id() -> void:
+	var id := str(ProjectSettings.get_setting("application/config/version", ""))
+	_build_id.visible = not id.is_empty()
+	if not _build_id.visible:
+		return
+	UIPalette.style(_build_id, UIPalette.TEXT_FAINT)
+	_build_id.text = "BUILD %s" % id
 
 
 ## Focus is returned deliberately when a panel closes. A menu whose keyboard focus is nowhere

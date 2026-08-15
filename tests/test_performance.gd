@@ -45,7 +45,13 @@ const DORMANT_TOLERANCE := 0.10
 ## How much faster the registry must be than the group walk it replaced, on a scene with a floor's
 ## worth of sleeping enemies. Far below what was measured, so this fails on a regression rather than
 ## on a slow morning.
-const MINIMUM_SPEEDUP := 4
+##
+## Lowered from four when the Web build started running the suite on a second machine, where the
+## ratio sits at 4.0-4.1 and had already failed once at 3.99. A tripwire that trips on the hardware
+## rather than on the code is not a tripwire — and what it is there to catch, a change that
+## reintroduces a scan over dormant enemies, collapses this to roughly one. The observed figure is
+## printed on every run, which is the number worth reading; this is only the floor under it.
+const MINIMUM_SPEEDUP := 3
 
 ## Query radius used by every measurement here, wide enough to reach the awake enemies and nowhere
 ## near the sleeping ones — the point being that distance is not what excludes them.
