@@ -1,0 +1,53 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scenes/enemies/stale_replica.gd" id="1_script"]
+[ext_resource type="Resource" path="res://data/enemies/stale_replica.tres" id="2_config"]
+[ext_resource type="Texture2D" path="res://art/enemies/stale_replica.png" id="3_tex"]
+[ext_resource type="Script" path="res://scripts/components/health_component.gd" id="4_health"]
+[ext_resource type="Script" path="res://scripts/components/hurt_flash.gd" id="5_flash"]
+[ext_resource type="Script" path="res://scripts/components/status_effect_controller.gd" id="99_status"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_body"]
+radius = 6.0
+
+[node name="StaleReplica" type="CharacterBody2D" groups=["enemy"]]
+collision_layer = 4
+collision_mask = 1
+motion_mode = 1
+script = ExtResource("1_script")
+config = ExtResource("2_config")
+
+[node name="Shape" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_body")
+
+[node name="Trail" type="Line2D" parent="."]
+unique_name_in_owner = true
+; The route it is about to walk, which is the route the player just walked. Points are rewritten
+; from the script every frame — they are a recording of a moving target and there is nothing to
+; author here — and the width and colour come from the config for the same reason Deadlock's
+; tether does: the one place the enemy is tuned should be the one place it is tuned.
+;
+; Behind the sprite, like Deadlock's tether and Firewall Node's beams, so the body stays readable
+; as the thing to shoot rather than being crossed out by its own telegraph.
+z_index = -1
+antialiased = false
+points = PackedVector2Array()
+
+[node name="Sprite" type="Sprite2D" parent="."]
+unique_name_in_owner = true
+texture = ExtResource("3_tex")
+
+[node name="Health" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("4_health")
+invulnerability_seconds = 0.0
+
+[node name="HurtFlash" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("5_flash")
+target_path = NodePath("../Sprite")
+
+[node name="Status" type="Node2D" parent="."]
+unique_name_in_owner = true
+script = ExtResource("99_status")
+indicator_radius = 10.0

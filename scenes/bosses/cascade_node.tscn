@@ -1,0 +1,59 @@
+[gd_scene load_steps=6 format=3]
+
+; One of Cascade Failure's four nodes. The same `boss_part.gd` as both bosses before it — a part is
+; a damage receiver that forwards its hits to the controller, and that job does not change between
+; fights — with its own texture and its own hitbox, which do.
+;
+; A third scene rather than a `configure(texture, radius)` call on the shared one, for the reason
+; `runtime_error_part.tscn` gives: the CircleShape2D below is a sub-resource, and sub-resources are
+; shared between every instance a PackedScene produces. Resizing one at runtime would quietly
+; resize the other two bosses' hitboxes with it.
+
+[ext_resource type="Script" path="res://scenes/bosses/boss_part.gd" id="1_part"]
+[ext_resource type="Texture2D" path="res://art/bosses/cascade_node.png" id="2_tex"]
+[ext_resource type="Script" path="res://scripts/components/health_component.gd" id="3_health"]
+[ext_resource type="Script" path="res://scripts/components/hurt_flash.gd" id="4_flash"]
+[ext_resource type="Script" path="res://scripts/components/status_effect_controller.gd" id="99_status"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_cascade_node"]
+; Eight, against Runtime Error's seven and The Scrap King's fourteen — matched to the 20x20
+; sprite's 16-pixel-wide face, so the circle covers the unit the player can see and nothing
+; further. Four of these are on screen at once and each is a target the player is expected to pick
+; deliberately, so unlike Runtime Error's body this one is not meant to be hard to hit: the fight
+; is about which node you push and where you stand to do it, not about landing the shot.
+radius = 8.0
+
+[node name="CascadeNode" type="CharacterBody2D"]
+collision_layer = 4
+collision_mask = 1
+motion_mode = 1
+script = ExtResource("1_part")
+
+[node name="Shape" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_cascade_node")
+
+[node name="Sprite" type="Sprite2D" parent="."]
+unique_name_in_owner = true
+texture = ExtResource("2_tex")
+
+[node name="Health" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("3_health")
+invulnerability_seconds = 0.0
+
+[node name="HurtFlash" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("4_flash")
+target_path = NodePath("../Sprite")
+
+[node name="Status" type="Node2D" parent="."]
+unique_name_in_owner = true
+; Resistant, not immune, at the same 0.65 both earlier bosses use — a freeze that lasts 0.8s on an
+; enemy lasts 0.28s here. What a status does to *this* boss is unusually visible: a node moves
+; toward its slot at a capped speed scaled by this controller, so a chilled node falls out of the
+; rack's formation and drags the lines it carries with it. Burn is deliberately not resisted, for
+; the reason it is not on the others: a part forwards every hit to the controller, so damage over
+; time reaches the shared pool exactly as a rivet does.
+script = ExtResource("99_status")
+indicator_radius = 12.0
+control_resistance = 0.65

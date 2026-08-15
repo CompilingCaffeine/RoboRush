@@ -25,6 +25,9 @@ func run() -> void:
 	await _test_a_zone_cools_when_left_alone()
 	await _test_a_template_builds_its_zones_inside_the_room()
 	await _test_zones_stop_with_the_room_they_are_in()
+	await _test_a_driven_zone_fills_on_its_own_clock()
+	await _test_a_driven_zone_vents_once_and_goes()
+	await _test_driving_changes_the_cause_and_not_the_language()
 	_test_the_data_center_templates_are_authored_sanely()
 
 
@@ -284,7 +287,10 @@ func _test_the_data_center_templates_are_authored_sanely() -> void:
 			check(
 				zone.position.x >= 0 and zone.position.y >= 0
 					and zone.end.x <= Room.INTERIOR_TILES.x and zone.end.y <= Room.INTERIOR_TILES.y,
-				"%s's zone %v fits inside the room without being clamped" % [id, zone],
+				# `%s` rather than `%v`: `%v` takes vector types only, and a `Rect2i` is not one of
+				# them. The message is built whether or not the check fails, so the wrong verb here
+				# was eighteen engine errors in every green run — one per zone on the floor.
+				"%s's zone %s fits inside the room without being clamped" % [id, zone],
 			)
 
 		# No enemy may be authored standing inside a zone. The floor charges for a habit the player
@@ -312,7 +318,132 @@ func _test_the_data_center_templates_are_authored_sanely() -> void:
 	)
 
 
+# --- Driven zones ----------------------------------------------------------------
+#
+# The Cascade Failure boss puts zones on the floor that heat by themselves. Everything above this
+# line is about the floor's own zones, where the player is the cause; everything below is about the
+# one place in the game where they are not — and about the fact that nothing else changes.
+
+
+## A driven zone ignores the player entirely: it fills whether they are there or not, whether they
+## are firing or not, and whether they are moving or not.
+##
+## Three separate assertions rather than one, because "ignores the player" is three of the rules the
+## room's zones live by, and a build that accidentally kept one of them would produce a boss whose
+## hazards sometimes did not happen.
+func _test_a_driven_zone_fills_on_its_own_clock() -> void:
+	var arena := _open_session_arena()
+	var player: Player = PLAYER_SCENE.instantiate()
+	arena.add_child(player)
+	# Nowhere near it, and not firing.
+	player.global_position = Vector2(-500.0, -500.0)
+
+	var zone := ThermalZone.spawn_vent(arena, Rect2(Vector2(400.0, 400.0), ZONE_SIZE), 0.5)
+	if not require(zone, "a driven zone spawns"):
+		arena.queue_free()
+		await advance_physics(1)
+		return
+
+	check(zone.is_driven(), "and says it is driven")
+	check(is_zero_approx(zone.get_heat()), "starting cold, so it can be walked out of")
+
+	await advance_physics(15)
+	check(
+		zone.get_heat() > 0.3,
+		"it heats with nobody in it and nobody firing (%.2f)" % zone.get_heat(),
+	)
+
+	arena.queue_free()
+	await advance_physics(1)
+
+
+## It vents once, costs what any vent costs, and frees itself — which is what stops the boss paving
+## the arena, and is checked as a fact about the node rather than as a number in the boss's config.
+func _test_a_driven_zone_vents_once_and_goes() -> void:
+	var arena := _open_session_arena()
+	var player: Player = PLAYER_SCENE.instantiate()
+	arena.add_child(player)
+
+	var rect := Rect2(Vector2(400.0, 400.0), ZONE_SIZE)
+	var zone := ThermalZone.spawn_vent(arena, rect, 0.3)
+	if not require(zone, "a driven zone spawns"):
+		arena.queue_free()
+		await advance_physics(1)
+		return
+
+	player.global_position = rect.position + rect.size * 0.5
+	var health := player.get_health_component()
+	var before := health.current
+
+	var vents: Array[Rect2] = []
+	var probe := func(vented: Rect2) -> void: vents.append(vented)
+	EventBus.thermal_zone_vented.connect(probe)
+
+	for _frame: int in 60:
+		player.velocity = Vector2.ZERO
+		player.global_position = rect.position + rect.size * 0.5
+		await get_tree().physics_frame
+
+	EventBus.thermal_zone_vented.disconnect(probe)
+
+	check(vents.size() == 1, "a driven zone vents exactly once (%d)" % vents.size())
+	check_near(
+		before - health.current, ThermalZone.VENT_DAMAGE,
+		"and costs one vent's worth of integrity, the same as any other", 0.01
+	)
+	check(not is_instance_valid(zone), "then frees itself, so the arena recovers on its own")
+
+	arena.queue_free()
+	await advance_physics(1)
+
+
+## The claim the boss is built on: the colour means the same thing in its arena as it does in every
+## room before it. Only the cause differs.
+##
+## Measured as the heat both kinds of zone are showing at the same fraction of their fill, which is
+## the only thing the player can actually see. A driven zone that raced through the amber part of
+## the ramp would be a hazard whose warning the floor had spent nine rooms teaching them to misread.
+func _test_driving_changes_the_cause_and_not_the_language() -> void:
+	var arena := _open_session_arena()
+	var driven := ThermalZone.spawn_vent(arena, Rect2(Vector2.ZERO, ZONE_SIZE), 1.0)
+	if not require(driven, "a driven zone spawns"):
+		arena.queue_free()
+		await advance_physics(1)
+		return
+
+	# Half of its one-second fill.
+	await advance_physics(30)
+	check(
+		absf(driven.get_heat() - 0.5) < 0.1,
+		"a driven zone is halfway up the ramp halfway through its fill (%.2f)" % driven.get_heat(),
+	)
+	check(
+		driven.get_rect() == Rect2(Vector2.ZERO, ZONE_SIZE),
+		"and covers exactly the ground it was given",
+	)
+
+	arena.queue_free()
+	await advance_physics(1)
+
+
 # --- Harness --------------------------------------------------------------------
+
+
+## An arena that owns its own projectile container.
+##
+## `spawn_vent` parents into that container the way `CompileLane` does, so a hazard already climbing
+## outlives the boss that started it — and falls back to the *current scene* where there is none.
+## In a suite the current scene is the test runner, so an arena without a container does not take
+## its zones with it when it is freed: they go on heating into the next check and vent there. Which
+## is exactly what happened, and is the reason this helper exists rather than three plain Node2Ds.
+func _open_session_arena() -> Node2D:
+	var arena := Node2D.new()
+	var container := Node2D.new()
+	container.name = "Projectiles"
+	container.add_to_group(ProjectileFactory.CONTAINER_GROUP)
+	arena.add_child(container)
+	add_child(arena)
+	return arena
 
 
 ## A bare zone and a player, with no room around either. The mechanic is about a rectangle and a

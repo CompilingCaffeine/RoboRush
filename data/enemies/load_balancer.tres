@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="LoadBalancerConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/load_balancer_config.gd" id="1_config"]
+
+[resource]
+script = ExtResource("1_config")
+display_name = "Load Balancer"
+max_health = 9.0
+knockback_resistance = 0.75
+move_speed = 42.0
+acceleration = 240.0
+deceleration = 380.0
+preferred_range = 0.0
+range_tolerance = 0.0
+contact_damage = 1.0
+contact_radius = 13.0
+contact_interval = 0.9
+contact_knockback = 170.0
+telegraph_seconds = 0.0
+plate_arc_degrees = 150.0
+plate_turn_speed = 1.5
+plate_radius = 11.0
+plate_thickness = 3.0
+plate_color = Color(0.76, 0.85, 0.9, 0.95)
+plate_flash_color = Color(1, 1, 1, 1)
+plate_flash_seconds = 0.14

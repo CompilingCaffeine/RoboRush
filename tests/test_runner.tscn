@@ -16,6 +16,8 @@
 [ext_resource type="Script" path="res://tests/test_shop.gd" id="9_shop"]
 [ext_resource type="Script" path="res://tests/test_boss.gd" id="10_boss"]
 [ext_resource type="Script" path="res://tests/test_runtime_error.gd" id="16_runtime_error"]
+[ext_resource type="Script" path="res://tests/test_cascade_failure.gd" id="26_cascade"]
+[ext_resource type="Script" path="res://tests/test_gate.gd" id="27_gate"]
 [ext_resource type="Script" path="res://tests/test_hud.gd" id="17_hud"]
 [ext_resource type="Script" path="res://tests/test_save.gd" id="11_save"]
 [ext_resource type="Script" path="res://tests/test_checkpoint.gd" id="23_checkpoint"]
@@ -68,6 +70,9 @@ script = ExtResource("10_boss")
 [node name="RuntimeError" type="Node" parent="."]
 script = ExtResource("16_runtime_error")
 
+[node name="CascadeFailure" type="Node" parent="."]
+script = ExtResource("26_cascade")
+
 [node name="PostBoss" type="Node" parent="."]
 script = ExtResource("19_post_boss")
 
@@ -94,6 +99,9 @@ script = ExtResource("14_balance")
 
 [node name="Thermal" type="Node" parent="."]
 script = ExtResource("25_thermal")
+
+[node name="Gate" type="Node" parent="."]
+script = ExtResource("27_gate")
 
 [node name="Soak" type="Node" parent="."]
 script = ExtResource("24_soak")

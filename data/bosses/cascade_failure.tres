@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="CascadeFailureConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/cascade_failure_config.gd" id="1_boss"]
+
+[resource]
+script = ExtResource("1_boss")
+id = &"cascade_failure"
+display_name = "Cascade Failure"
+max_health = 144.0
+node_count = 4
+ring_radius = Vector2(150, 62)
+ring_inhale = 0.35
+ring_breath_speed = 0.9
+ring_spin_speed = 0.45
+slot_track_speed = 400.0
+runaway_speed = 105.0
+vent_interval = 3.0
+vent_seconds = 1.6
+vent_tiles = Vector2i(3, 3)
+packet_speed = 150.0
+packet_damage = 1.0
+packet_radius = 4.0
+packet_interval = 0.9
+line_color = Color(0.42, 0.52, 0.6, 0.55)
+packet_color = Color(0.94, 0.97, 1, 0.95)

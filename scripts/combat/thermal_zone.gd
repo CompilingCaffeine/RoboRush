@@ -30,9 +30,17 @@ extends Node2D
 ##
 ## Follows `CompileLane`'s conventions throughout — physics-timed because it decides real damage,
 ## the player found directly rather than through `Targeting`, the player's radius grown onto the
-## rect so a body and not a centre point decides who is inside. What it does *not* share is
-## lifetime: a lane is spawned into the session and outlives the enemy that painted it, while a
-## zone is part of a room's furniture and is built with it.
+## rect so a body and not a centre point decides who is inside.
+##
+## **Two lifetimes, and two causes.** A room's zones are furniture: built with the room, switched
+## off with it, and heated by nothing but the player's own stationary fire. A *driven* zone — see
+## `spawn_vent` — is a hazard the Cascade Failure boss puts on the floor, on its own clock, and it
+## follows `CompileLane`'s lifetime instead: parented into the session so a vent already climbing
+## still costs something after the thing that started it is dead.
+##
+## What does not differ between them is the only thing the player reads. The colour means how close
+## this ground is to venting, in a room's zone and in a boss's alike. Nine rooms of the Data Center
+## teach that ramp with the player as its cause; the boss keeps the sentence and changes the subject.
 
 ## Seconds of stationary firing inside a zone before it vents.
 ##
@@ -83,6 +91,16 @@ var _heat := 0.0
 var _vent_flash_left := 0.0
 var _cooldown_left := 0.0
 
+## Seconds this zone takes to fill on its own, ignoring the player entirely. Zero for a room's own
+## zones, which is every zone on the floor: those fill only under stationary fire, and a floor whose
+## furniture heated by itself would be charging the player for arriving rather than for a habit.
+## Positive only for a zone from `spawn_vent`.
+var _drive_seconds := 0.0
+
+## Set once a driven zone has spent its one vent. It frees itself as soon as the flash is finished,
+## so the arena recovers on its own and the boss cannot pave it.
+var _spent := false
+
 ## Seconds since the player last fired, counted from `EventBus.shot_fired` rather than read off the
 ## weapon. The zone has no business knowing what a weapon is, and the bus already says.
 var _since_shot := FIRING_MEMORY
@@ -98,8 +116,38 @@ static func spawn(parent: Node, rect: Rect2) -> ThermalZone:
 	return zone
 
 
+## Spawns a zone that fills on its own clock over `seconds`, vents once, and frees itself.
+##
+## Parented the way `CompileLane` parents itself and for its reason, not the way a room's zone is:
+## into the floor's session, so a vent already climbing when the boss that started it dies goes on
+## to fill and to cost the player a point in an arena they have apparently just won. A warning
+## already given should still be worth reading. `tests/test_post_boss.gd` asserts that outcome
+## rather than this parenting, so the promise survives somebody tidying the mechanism.
+##
+## `spawner` is used only to find the container, and falls back to the current scene when there is
+## none — the same fallback `CompileLane` and `ProjectileFactory` both make, so a test arena with no
+## floor in it still works.
+static func spawn_vent(spawner: Node, rect: Rect2, seconds: float) -> ThermalZone:
+	if not spawner.is_inside_tree():
+		return null
+	var tree := spawner.get_tree()
+	var container := tree.get_first_node_in_group(ProjectileFactory.CONTAINER_GROUP)
+	if container == null:
+		container = tree.current_scene
+
+	var zone := ThermalZone.new()
+	zone.global_position = rect.position
+	zone._size = rect.size
+	zone._drive_seconds = maxf(seconds, 0.001)
+	container.add_child(zone)
+	return zone
+
+
 func _ready() -> void:
-	EventBus.shot_fired.connect(_on_shot_fired)
+	# A driven zone has no interest in who is shooting: its clock is its own. Skipped rather than
+	# connected and ignored, because a boss puts a great many of these on the floor over one fight.
+	if not is_driven():
+		EventBus.shot_fired.connect(_on_shot_fired)
 
 
 ## How hot the zone is, zero to one. For the suite and for a debug overlay; nothing in the game
@@ -112,6 +160,19 @@ func is_venting() -> bool:
 	return _vent_flash_left > 0.0
 
 
+## The ground this zone covers, in global coordinates — the same rect `thermal_zone_vented` carries
+## and the same one `_contains` measures against, so nothing has to reconstruct it from a position
+## and a size that are not both public.
+func get_rect() -> Rect2:
+	return Rect2(global_position, _size)
+
+
+## Whether this zone fills on its own clock rather than under the player's fire. False for every
+## zone a room builds.
+func is_driven() -> bool:
+	return _drive_seconds > 0.0
+
+
 func _on_shot_fired(team: int, _muzzle: Vector2, _direction: Vector2) -> void:
 	if team == Teams.Id.PLAYER:
 		_since_shot = 0.0
@@ -121,6 +182,10 @@ func _physics_process(delta: float) -> void:
 	_since_shot += delta
 	_vent_flash_left = maxf(_vent_flash_left - delta, 0.0)
 	_cooldown_left = maxf(_cooldown_left - delta, 0.0)
+
+	if is_driven():
+		_step_driven(delta)
+		return
 
 	var previous := _heat
 	if _is_being_loaded():
@@ -148,6 +213,25 @@ func _is_being_loaded() -> bool:
 	if player == null or not _contains(player.global_position):
 		return false
 	return player.velocity.length() <= Player.STILLNESS_SPEED
+
+
+## A driven zone's whole life: climb, vent once, and go. It never cools, because nothing the player
+## does is what filled it — there is no habit to stop, only ground to leave.
+##
+## The heat is *not* clamped short of one and left there: it reaches full and vents on the same frame
+## the colour finishes, so the ramp the player has been reading all floor means exactly what it meant
+## in every room before this one.
+func _step_driven(delta: float) -> void:
+	if _spent:
+		if _vent_flash_left <= 0.0:
+			queue_free()
+		return
+
+	_heat = minf(_heat + delta / _drive_seconds, 1.0)
+	queue_redraw()
+	if _heat >= 1.0:
+		_spent = true
+		_vent()
 
 
 func _vent() -> void:

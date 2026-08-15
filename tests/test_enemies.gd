@@ -1,6 +1,6 @@
 extends TestCase
-## Checks for the enemy roster: spec section 15's original four, and the five Development
-## added on top of them.
+## Checks for the enemy roster: spec section 15's original four, the five Development added on top
+## of them, and the two the Data Center brought.
 ##
 ## Each enemy exists to pose one movement problem, so each check here asks whether that
 ## problem is actually being posed — not whether the script ran. The Pop Up Drone must
@@ -23,6 +23,8 @@ const COMPILER_SCENE := preload("res://scenes/enemies/compiler.tscn")
 const NULL_POINTER_SCENE := preload("res://scenes/enemies/null_pointer.tscn")
 const DEADLOCK_SCENE := preload("res://scenes/enemies/deadlock.tscn")
 const RECURSION_SCENE := preload("res://scenes/enemies/recursion.tscn")
+const LOAD_BALANCER_SCENE := preload("res://scenes/enemies/load_balancer.tscn")
+const STALE_REPLICA_SCENE := preload("res://scenes/enemies/stale_replica.tscn")
 const WALL_BLOCK_SCENE := preload("res://scenes/rooms/wall_block.tscn")
 const ROOM_SCENE := preload("res://scenes/rooms/room.tscn")
 
@@ -34,11 +36,18 @@ const COMPILER_CONFIG := "res://data/enemies/compiler.tres"
 const NULL_POINTER_CONFIG := "res://data/enemies/null_pointer.tres"
 const DEADLOCK_CONFIG := "res://data/enemies/deadlock.tres"
 const RECURSION_CONFIG := "res://data/enemies/recursion.tres"
+const LOAD_BALANCER_CONFIG := "res://data/enemies/load_balancer.tres"
+const STALE_REPLICA_CONFIG := "res://data/enemies/stale_replica.tres"
+
+## The robot's top speed, from player_config.tres. Both Data Center enemies are built against it —
+## one is beaten by out-turning it, the other by outrunning it — so the number they are measured
+## against here has to be the one the player actually has.
+const PLAYER_TOP_SPEED := 160.0
 
 
 func run() -> void:
 	_test_configs_load_as_their_own_types()
-	_test_the_roster_is_nine_distinct_problems()
+	_test_the_roster_is_eleven_distinct_problems()
 
 	await _test_every_enemy_shares_the_lifecycle()
 	await _test_ticket_bot_keeps_its_range()
@@ -60,6 +69,14 @@ func run() -> void:
 	await _test_recursion_splits_into_fragments()
 	await _test_recursion_fragments_do_not_split_again()
 	await _test_a_room_is_not_clear_while_fragments_live()
+	await _test_load_balancer_keeps_its_plate_on_the_player()
+	await _test_load_balancer_swallows_what_arrives_through_the_plate()
+	await _test_load_balancer_only_rams_with_its_plate()
+	await _test_out_turning_the_plate_is_the_answer_to_it()
+	await _test_replica_walks_to_where_the_player_was()
+	await _test_replica_only_ever_walks_where_the_player_has_been()
+	await _test_a_moving_player_is_never_caught_by_its_replica()
+	await _test_a_player_who_stops_is()
 	await _test_every_hurt_flash_is_actually_wired()
 	await _test_a_tinted_enemy_keeps_its_colour()
 	await _test_knockback_decays_instead_of_growing()
@@ -114,6 +131,47 @@ func _test_configs_load_as_their_own_types() -> void:
 			"it never touches the player — the patch is its whole attack",
 		)
 
+	var balancer := load(LOAD_BALANCER_CONFIG) as LoadBalancerConfig
+	if require(balancer, "load_balancer.tres loads as a LoadBalancerConfig"):
+		check(
+			balancer.plate_arc_degrees > 0.0 and balancer.plate_arc_degrees < 360.0,
+			"the plate leaves a back to get behind (%.0f degrees)" % balancer.plate_arc_degrees,
+		)
+		check(balancer.plate_turn_speed > 0.0, "and it tracks rather than pointing one way forever")
+		check(
+			balancer.contact_damage > 0.0,
+			"its plate is a ram as well as armour — the same object does both",
+		)
+		# The whole fight is `v / r` against this number. At the robot's top speed the radius at
+		# which the two are equal is `PLAYER_TOP_SPEED / plate_turn_speed`, and out-turning it has
+		# to be possible from *inside* an arena rather than only in theory: a turn speed that put
+		# that radius under the robot's own body would be a plate nobody can get behind.
+		var breakeven := PLAYER_TOP_SPEED / balancer.plate_turn_speed
+		check(
+			breakeven > 40.0 and breakeven < Room.INTERIOR_SIZE.y,
+			"a player can out-turn it inside the room (breakeven radius %.0f px)" % breakeven,
+		)
+		check(balancer.weapon == null, "it has no weapon — where you stand is its whole attack")
+
+	var replica := load(STALE_REPLICA_CONFIG) as StaleReplicaConfig
+	if require(replica, "stale_replica.tres loads as a StaleReplicaConfig"):
+		check(replica.delay_seconds > 0.0, "the replica runs behind by a real duration")
+		check(
+			replica.move_speed >= PLAYER_TOP_SPEED,
+			"and can keep up with the path it is retracing (%.0f against %.0f)"
+				% [replica.move_speed, PLAYER_TOP_SPEED],
+		)
+		check(replica.contact_damage > 0.0, "touching it hurts — it has nothing else")
+		check(replica.weapon == null, "and no weapon, for the same reason")
+		# A second of lag at the robot's top speed is 160 pixels, most of a room's half. Much less
+		# and the enemy reads as an ordinary chaser that steers badly rather than as one that is
+		# somewhere the player used to be.
+		check(
+			replica.delay_seconds * PLAYER_TOP_SPEED > Room.INTERIOR_SIZE.x * 0.25,
+			"the lag is a distance rather than a stutter (%.0f px at top speed)"
+				% (replica.delay_seconds * PLAYER_TOP_SPEED),
+		)
+
 	var deadlock := load(DEADLOCK_CONFIG) as DeadlockConfig
 	if require(deadlock, "deadlock.tres loads as a DeadlockConfig"):
 		check(deadlock.acquire_seconds > 0.0, "the tether is harmless for a readable window first")
@@ -149,9 +207,9 @@ func _test_configs_load_as_their_own_types() -> void:
 		)
 
 
-## Spec section 15 asks for enemies that each create a *different* movement problem. Nine
+## Spec section 15 asks for enemies that each create a *different* movement problem. Eleven
 ## enemies with the same statistics would technically satisfy the count.
-func _test_the_roster_is_nine_distinct_problems() -> void:
+func _test_the_roster_is_eleven_distinct_problems() -> void:
 	var configs: Array[EnemyConfig] = [
 		load("res://data/enemies/ticket_bot.tres") as EnemyConfig,
 		load(DRONE_CONFIG) as EnemyConfig,
@@ -162,6 +220,8 @@ func _test_the_roster_is_nine_distinct_problems() -> void:
 		load(NULL_POINTER_CONFIG) as EnemyConfig,
 		load(DEADLOCK_CONFIG) as EnemyConfig,
 		load(RECURSION_CONFIG) as EnemyConfig,
+		load(LOAD_BALANCER_CONFIG) as EnemyConfig,
+		load(STALE_REPLICA_CONFIG) as EnemyConfig,
 	]
 
 	var names: Dictionary[String, bool] = {}
@@ -173,10 +233,10 @@ func _test_the_roster_is_nine_distinct_problems() -> void:
 		names[config.display_name] = true
 		healths[config.max_health] = true
 
-	check(names.size() == configs.size(), "all nine enemies are named distinctly")
+	check(names.size() == configs.size(), "all eleven enemies are named distinctly")
 	check(
 		healths.size() == configs.size(),
-		"all nine have different durability (%d distinct values across %d enemies)"
+		"all eleven have different durability (%d distinct values across %d enemies)"
 			% [healths.size(), configs.size()],
 	)
 
@@ -205,6 +265,7 @@ func _test_every_enemy_shares_the_lifecycle() -> void:
 	for scene: PackedScene in [
 		TICKET_BOT_SCENE, POP_UP_DRONE_SCENE, MEMORY_LEECH_SCENE, FIREWALL_NODE_SCENE,
 		CODE_RUNNER_SCENE, COMPILER_SCENE, NULL_POINTER_SCENE, DEADLOCK_SCENE, RECURSION_SCENE,
+		LOAD_BALANCER_SCENE, STALE_REPLICA_SCENE,
 	]:
 		var arena := _make_arena()
 		var enemy := _add_enemy(arena, scene, Vector2(60.0, 0.0))
@@ -847,6 +908,255 @@ func _test_a_room_is_not_clear_while_fragments_live() -> void:
 	await _teardown(arena)
 
 
+# --- Load Balancer ----------------------------------------------------------------
+
+
+func _test_load_balancer_keeps_its_plate_on_the_player() -> void:
+	var arena := _make_arena()
+	var target := _add_target(arena, Vector2.ZERO)
+	var balancer := _add_enemy(arena, LOAD_BALANCER_SCENE, Vector2(140.0, 0.0)) as LoadBalancer
+	await advance_physics(2)
+
+	# Long enough for the plate to come round from wherever it started, which is random by design.
+	await advance_physics(180)
+
+	var toward_player := target.global_position - balancer.global_position
+	check(balancer.plate_covers(toward_player), "the plate comes round to face the player")
+	check(
+		not balancer.plate_covers(-toward_player),
+		"and the far side of it is open, or there is nowhere to get behind",
+	)
+	await _teardown(arena)
+
+
+## The rule the enemy is: what arrives through the plate does nothing, what arrives anywhere else
+## is an ordinary hit.
+##
+## Driven with a plate held still rather than a tracking one, because the question here is what the
+## plate does with a hit and not whether it can find the player — and a plate that is turning is a
+## plate whose answer changes between the frame the check sets up and the frame it asserts.
+func _test_load_balancer_swallows_what_arrives_through_the_plate() -> void:
+	var arena := _make_arena()
+	_add_target(arena, Vector2(-100.0, 0.0))
+	var balancer := _add_enemy(
+		arena, LOAD_BALANCER_SCENE, Vector2.ZERO, _pinned_balancer()
+	) as LoadBalancer
+	await advance_physics(2)
+	balancer._facing = PI
+
+	var health := balancer.get_health_component()
+	var full := health.current
+
+	# Travelling right, which is what a shot from the player on the left is doing when it arrives.
+	health.apply_damage(DamageInfo.new(2.0, null, Vector2.RIGHT))
+	check_near(health.current, full, "a shot into the plate costs it nothing")
+
+	# Travelling left: a shot that came from behind it, which is where a Ricochet Driver rebound
+	# arrives from and is the one thing in the pool that answers this enemy without moving.
+	health.apply_damage(DamageInfo.new(2.0, null, Vector2.LEFT))
+	check_near(health.current, full - 2.0, "a shot into its back lands in full")
+
+	# Burn, and the blast the player set off around it: damage that did not come from anywhere, so
+	# the plate cannot be in front of it.
+	health.apply_damage(DamageInfo.new(1.0, null, Vector2.ZERO))
+	check_near(health.current, full - 3.0, "and damage with no direction is never blocked")
+
+	await _teardown(arena)
+
+
+## Its plate is its ram: touching the front hurts and touching the back does not. One rule, and the
+## player reads it off the same arc that tells them where to shoot.
+func _test_load_balancer_only_rams_with_its_plate() -> void:
+	for facing_player: bool in [true, false]:
+		var arena := _make_arena()
+		var target := _add_target(arena, Vector2(-12.0, 0.0))
+		var balancer := _add_enemy(
+			arena, LOAD_BALANCER_SCENE, Vector2.ZERO, _pinned_balancer()
+		) as LoadBalancer
+		# Pointed before it has run a single frame, and the reading taken before one too. A
+		# balancer wakes facing a random direction, so a frame spent settling is a frame in which
+		# the front case may already have landed its hit — and its contact cooldown is longer than
+		# this check, so the second reading would find nothing left to change.
+		balancer._facing = PI if facing_player else 0.0
+
+		var health := HealthComponent.find_on(target)
+		var before := health.current
+		await advance_physics(20)
+
+		if facing_player:
+			check(health.current < before, "walking into the plate hurts")
+		else:
+			check_near(health.current, before, "and walking into its back does not")
+		await _teardown(arena)
+
+
+## The fight, in one check. The plate tracks at a fixed angular rate, so whether the player can hurt
+## it at all is their own angular speed — `v / r` — against that rate. Close in and you out-turn it;
+## stand off and you never will.
+##
+## This is the check that would fail the day somebody "fixed" the plate by making it snap to the
+## player, which would look like a bug fix and would leave an enemy with no answer at all.
+func _test_out_turning_the_plate_is_the_answer_to_it() -> void:
+	var tuning := load(LOAD_BALANCER_CONFIG) as LoadBalancerConfig
+	if not require(tuning, "the balancer's config loads"):
+		return
+
+	# Inside and outside the radius at which the robot's own angular speed matches the plate's.
+	var breakeven := PLAYER_TOP_SPEED / tuning.plate_turn_speed
+	var exposed := {}
+	for radius: float in [breakeven * 0.45, breakeven * 2.0]:
+		var arena := _make_arena()
+		var balancer := _add_enemy(arena, LOAD_BALANCER_SCENE, Vector2.ZERO) as LoadBalancer
+		var target := _add_target(arena, Vector2(radius, 0.0))
+		await advance_physics(2)
+
+		# A full second of the plate settling onto a player standing still, so neither orbit starts
+		# with a head start the other did not get.
+		await advance_physics(60)
+
+		var angle := 0.0
+		var uncovered := 0
+		var frames := 120
+		for _frame: int in frames:
+			angle += (PLAYER_TOP_SPEED / radius) / 60.0
+			target.global_position = balancer.global_position + Vector2(radius, 0.0).rotated(angle)
+			await advance_physics(1)
+			if not balancer.plate_covers(target.global_position - balancer.global_position):
+				uncovered += 1
+		exposed[radius] = float(uncovered) / float(frames)
+		await _teardown(arena)
+
+	var inside: float = exposed[breakeven * 0.45]
+	var outside: float = exposed[breakeven * 2.0]
+	check(
+		inside > 0.5,
+		"circling inside the breakeven radius gets behind the plate (%.0f%% of frames)"
+			% (inside * 100.0),
+	)
+	check(
+		outside < 0.1,
+		"and circling outside it does not — the plate keeps up (%.0f%%)" % (outside * 100.0),
+	)
+
+
+# --- Stale Replica ----------------------------------------------------------------
+
+
+## Its target is the player's past, and the difference between that and an ordinary chaser is the
+## whole enemy. Checked by moving the player somewhere it cannot possibly follow to.
+func _test_replica_walks_to_where_the_player_was() -> void:
+	var arena := _make_arena()
+	var target := _add_target(arena, Vector2.ZERO)
+	var replica := _add_enemy(
+		arena, STALE_REPLICA_SCENE, Vector2(0.0, 150.0)
+	) as StaleReplica
+	await advance_physics(2)
+
+	var tuning := replica.config as StaleReplicaConfig
+	# Long enough for the buffer to be full of the position the player is standing in.
+	await advance_physics(int(tuning.delay_seconds * 60.0) + 10)
+
+	var was := target.global_position
+	target.global_position = Vector2(400.0, 0.0)
+	await advance_physics(2)
+
+	check(
+		replica.get_target().distance_to(was) < 8.0,
+		"it is still walking to where the player was (%.0f px from it)"
+			% replica.get_target().distance_to(was),
+	)
+
+	var toward_old := replica.global_position.distance_to(was)
+	await advance_physics(30)
+	check(
+		replica.global_position.distance_to(was) < toward_old,
+		"and it goes there rather than to where the player now is",
+	)
+	await _teardown(arena)
+
+
+## The property that means it needs no navigation of any kind: every point it walks to is a point
+## the player stood on, so its route is clear of walls and inside the room by construction.
+##
+## A build that started interpolating, smoothing, or short-cutting the path would still chase, still
+## lag, and would quietly begin steering into the racks this floor's rooms are full of.
+func _test_replica_only_ever_walks_where_the_player_has_been() -> void:
+	var arena := _make_arena()
+	var target := _add_target(arena, Vector2.ZERO)
+	var replica := _add_enemy(arena, STALE_REPLICA_SCENE, Vector2(0.0, 120.0)) as StaleReplica
+	await advance_physics(2)
+
+	# Seeded with where the player has been standing while the arena settled. The replica has
+	# already recorded that spot several times over, and the trail holds `delay_seconds` of history
+	# — so a route that began at the first frame of the loop would call the enemy's oldest and most
+	# correct samples strays for exactly as long as they took to age out.
+	var visited: Array[Vector2] = [target.global_position]
+	var strays := 0
+	var angle := 0.0
+	for _frame: int in 240:
+		# A wandering route rather than a straight line, so "somewhere the player has been" is a
+		# real constraint rather than one satisfied by any point on an axis.
+		angle += 0.05
+		target.global_position = Vector2(90.0, 0.0).rotated(angle) + Vector2(0.0, 30.0 * sin(angle * 3.0))
+		visited.append(target.global_position)
+		await advance_physics(1)
+
+		if not replica.has_target():
+			continue
+		var nearest := INF
+		for point: Vector2 in visited:
+			nearest = minf(nearest, point.distance_to(replica.get_target()))
+		if nearest > 1.0:
+			strays += 1
+
+	check(visited.size() > 0, "the player left a route to follow")
+	check(strays == 0, "every point it walks to is one the player stood on (%d were not)" % strays)
+	await _teardown(arena)
+
+
+## The promise the enemy makes to a player who keeps going: it never arrives.
+##
+## Driven at exactly the robot's top speed, which is the honest worst case — a replica that has been
+## given a speed advantage large enough to close the lag would catch a player who did everything
+## right, and that is precisely the failure this checks for.
+func _test_a_moving_player_is_never_caught_by_its_replica() -> void:
+	var arena := _make_arena()
+	var target := _add_target(arena, Vector2.ZERO)
+	var replica := _add_enemy(arena, STALE_REPLICA_SCENE, Vector2(-60.0, 0.0)) as StaleReplica
+	await advance_physics(2)
+
+	var health := HealthComponent.find_on(target)
+	var before := health.current
+	var closest := INF
+	for frame: int in 240:
+		target.global_position = Vector2(PLAYER_TOP_SPEED * float(frame) / 60.0, 0.0)
+		await advance_physics(1)
+		closest = minf(closest, replica.global_position.distance_to(target.global_position))
+
+	check_near(health.current, before, "a player who keeps moving is never touched")
+	check(
+		closest > replica.config.contact_radius,
+		"and is never even reached (closest %.0f px, contact at %.0f)"
+			% [closest, replica.config.contact_radius],
+	)
+	await _teardown(arena)
+
+
+## And the other half of it, which is what makes the first half a decision rather than a free pass.
+func _test_a_player_who_stops_is() -> void:
+	var arena := _make_arena()
+	var target := _add_target(arena, Vector2.ZERO)
+	var replica := _add_enemy(arena, STALE_REPLICA_SCENE, Vector2(80.0, 0.0)) as StaleReplica
+	await advance_physics(2)
+
+	var health := HealthComponent.find_on(target)
+	var before := health.current
+	await advance_physics(180)
+
+	check(health.current < before, "a player who stands still is caught by their own replica")
+	await _teardown(arena)
+
+
 # --- Presentation -----------------------------------------------------------------
 
 
@@ -863,6 +1173,7 @@ func _test_every_hurt_flash_is_actually_wired() -> void:
 	for scene: PackedScene in [
 		TICKET_BOT_SCENE, POP_UP_DRONE_SCENE, MEMORY_LEECH_SCENE, FIREWALL_NODE_SCENE,
 		CODE_RUNNER_SCENE, COMPILER_SCENE, NULL_POINTER_SCENE, DEADLOCK_SCENE, RECURSION_SCENE,
+		LOAD_BALANCER_SCENE, STALE_REPLICA_SCENE,
 	]:
 		var arena := _make_arena()
 		var enemy := _add_enemy(arena, scene, Vector2(60.0, 0.0))
@@ -991,6 +1302,21 @@ func _quick_drone() -> PopUpDroneConfig:
 	tuning.teleport_interval = 0.12
 	tuning.arrival_fade = 0.04
 	tuning.arrival_pause = 0.1
+	return tuning
+
+
+## A Load Balancer that neither turns nor walks, so a check can point it somewhere and know it is
+## still pointing there several frames later. The arc, the ram and the absorption are the shipped
+## ones, because those are what is being measured.
+##
+## Freezing the *walk* as well as the plate is not tidiness. The stand-in player has no collision
+## body, so a balancer closing on one walks straight through it — and a check that placed a target
+## behind the plate and then waited would find the enemy on the other side of it, with the target
+## in front, reporting a contact hit that the rule it was testing entirely permits.
+func _pinned_balancer() -> LoadBalancerConfig:
+	var tuning := (load(LOAD_BALANCER_CONFIG) as LoadBalancerConfig).duplicate() as LoadBalancerConfig
+	tuning.plate_turn_speed = 0.0
+	tuning.move_speed = 0.0
 	return tuning
 
 

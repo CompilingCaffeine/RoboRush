@@ -20,6 +20,62 @@ extends Node
 ## the node that knows when a run actually starts — `GameManager.start_run` is also called by
 ## a restart, one scene reload before the run it is restarting into.
 
+## This node's own state, split by what a floor boundary does to it.
+##
+## Written down rather than left to be inferred, because the field nobody classified is exactly the
+## one that breaks. A descent has to leave one set alone and replace the other, and getting it the
+## wrong way round produces symptoms that look like anything but a missing decision: a run that
+## keeps the previous floor's name on the HUD, or one that loses its scrap on the third descent, or
+## a floor generated from a seed the manifest does not agree with.
+##
+## The three lists are checked against `get_property_list` in `tests/test_gate.gd`, so *every*
+## script variable here has to appear in exactly one of them. Adding a field without deciding which
+## it is fails the suite rather than the player, which is the whole reason to declare them at all.
+##
+## Everything a descent must leave exactly as it found it. Run-wide is not the same as permanent —
+## these change constantly while a floor is being played. What they must never do is change
+## *because* the player went downstairs.
+const RUN_WIDE_FIELDS: Array[StringName] = [
+	&"scrap",
+	&"rooms_cleared",
+	&"_run_seed",
+	&"_campaign_id",
+	&"_content_version",
+	&"enemy_health_scale",
+	&"max_integrity_penalty",
+	&"death_saves_spent",
+	&"stats",
+	&"records_beaten",
+	&"_is_timing",
+	&"_is_finished",
+]
+
+## Run-wide as well, and preserved in the sense that a ledger is preserved: a descent may **append**
+## to these and must never lose an entry.
+##
+## Kept apart from the list above rather than folded into it, because the two are different promises
+## and only one of them is "unchanged". Opening a floor genuinely writes to both of these before the
+## player has done anything: `FloorController.build` draws the floor's boss, and stocking its offers
+## reserves the items they will be. A rule that demanded these come out of a boundary untouched
+## would be a rule the game has to break on every descent, and a rule that is broken on purpose
+## stops being checked.
+##
+## Losing an entry, on the other hand, is the failure worth catching, and it is silent: a run that
+## forgot which bosses it had fought would repeat one, and a run that forgot which items it had
+## offered would hand the player a second copy of something it had already spent.
+const RUN_LEDGER_FIELDS: Array[StringName] = [
+	&"offered_item_ids",
+	&"fought_boss_ids",
+]
+
+## Everything a descent must replace with the floor being entered. All three are written in one
+## place, by `begin_floor`, for the reason that method's own doc gives.
+const FLOOR_LOCAL_FIELDS: Array[StringName] = [
+	&"floor_number",
+	&"floor_name",
+	&"floor_seed",
+]
+
 ## Emitted when scrap changes, so the HUD does not have to poll a number that rarely moves.
 signal scrap_changed(total: int)
 

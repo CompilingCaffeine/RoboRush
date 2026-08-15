@@ -13,11 +13,16 @@ script = ExtResource("2_entry")
 id = &"development"
 config_path = "res://data/floors/floor_2_development.tres"
 
+[sub_resource type="Resource" id="Resource_floor_3"]
+script = ExtResource("2_entry")
+id = &"data_center"
+config_path = "res://data/floors/floor_3_data_center.tres"
+
 [resource]
 script = ExtResource("1_run")
 id = &"main_campaign"
 display_name = "RoboRush"
 content_version = 1
-floors = Array[FloorEntry]([SubResource("Resource_floor_1"), SubResource("Resource_floor_2")])
+floors = Array[FloorEntry]([SubResource("Resource_floor_1"), SubResource("Resource_floor_2"), SubResource("Resource_floor_3")])
 target_floor_count = 6
 require_complete = false

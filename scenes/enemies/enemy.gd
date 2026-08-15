@@ -118,6 +118,19 @@ func _act(_delta: float) -> Vector2:
 	return Vector2.ZERO
 
 
+## Whether touching this enemy hurts *right now*. True by default, which is every enemy that
+## has ever had `contact_damage`: a body that hurts on contact hurts on all of it.
+##
+## The Load Balancer is the one that needs to say otherwise, because its plate is both its
+## armour and its ram — the front hurts and the back does not, and that is one rule the player
+## reads off one visible thing. Answering it here rather than resolving contact damage itself
+## keeps the cooldown, the radius, the knockback and the `HealthComponent` lookup in the one
+## place every other enemy already shares, so a second enemy with a vulnerable side inherits all
+## of that and writes only the sentence that makes it different.
+func _may_deal_contact_damage() -> bool:
+	return true
+
+
 # --- Shared services for subclasses -------------------------------------------
 
 
@@ -212,6 +225,10 @@ func _step_contact_damage(delta: float) -> void:
 
 	var offset := _player.global_position - global_position
 	if offset.length() > config.contact_radius:
+		return
+	# Asked after the range check rather than before it, so an enemy whose answer costs something
+	# to work out — an angle, a raycast — only pays for it when the player is actually touching it.
+	if not _may_deal_contact_damage():
 		return
 
 	var health := HealthComponent.find_on(_player)

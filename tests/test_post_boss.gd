@@ -26,9 +26,11 @@ const FLOOR_SCENE := preload("res://scenes/floors/floor.tscn")
 const PLAYER_SCENE := preload("res://scenes/player/player.tscn")
 const MERGE_CONFLICT_SCENE := preload("res://scenes/bosses/merge_conflict.tscn")
 const RUNTIME_ERROR_SCENE := preload("res://scenes/bosses/runtime_error.tscn")
+const CASCADE_FAILURE_SCENE := preload("res://scenes/bosses/cascade_failure.tscn")
 
 const MERGE_CONFLICT_CONFIG := "res://data/bosses/merge_conflict.tres"
 const RUNTIME_ERROR_CONFIG := "res://data/bosses/runtime_error.tres"
+const CASCADE_FAILURE_CONFIG := "res://data/bosses/cascade_failure.tres"
 const RIVET_CONFIG := "res://data/projectiles/rivet.tres"
 
 ## A bare arena for the two boss checks, matching the one their own suites fight in.
@@ -41,6 +43,12 @@ const FAST_WINDUP := 0.1
 const FAST_LANE_TELEGRAPH := 0.2
 const FAST_LANE_STRIKE := 0.05
 const FAST_LANE_STAGGER := 0.15
+
+## The Data Center boss's two clocks. Its hazard is a patch of floor rather than a lane, so it has
+## its own pair of names — and `_hastened` shortens whichever of the seven a given boss happens to
+## have, which is why one helper serves three fights that share no tuning field at all.
+const FAST_VENT_INTERVAL := 0.3
+const FAST_VENT_SECONDS := 0.2
 
 ## Long enough that a boss with a 0.3s clock would have attacked several times over.
 const FRAMES_AFTER_DEATH := 90
@@ -57,8 +65,12 @@ var _player: Player
 func run() -> void:
 	await _test_a_shot_fired_before_death_still_hits()
 	await _test_a_lane_painted_before_death_still_strikes()
+	await _test_a_vent_climbing_before_death_still_vents()
 	await _test_a_dead_boss_starts_nothing_new(MERGE_CONFLICT_SCENE, MERGE_CONFLICT_CONFIG, "The Scrap King")
 	await _test_a_dead_boss_starts_nothing_new(RUNTIME_ERROR_SCENE, RUNTIME_ERROR_CONFIG, "Runtime Error")
+	await _test_a_dead_boss_starts_nothing_new(
+		CASCADE_FAILURE_SCENE, CASCADE_FAILURE_CONFIG, "Cascade Failure"
+	)
 	await _test_a_post_boss_death_beats_the_reward()
 	await _test_surviving_the_hazard_still_progresses()
 	await _test_no_live_hazard_crosses_the_boundary()
@@ -120,13 +132,51 @@ func _test_a_lane_painted_before_death_still_strikes() -> void:
 	await _close()
 
 
+## And the third kind of hazard, which the Data Center brought: a patch of floor already climbing
+## toward its vent when the rack that started it dies.
+##
+## The same claim as the lane above it, and it needs asserting separately for a reason that is not
+## obvious — a driven zone reaches the arena by a different road. `CompileLane` has always parented
+## itself into the session; `ThermalZone` did not, because until this floor every zone was a room's
+## furniture and had no business outliving the room. `spawn_vent` is the one that parents like a
+## lane, and this is the check that says so in terms of what the player feels rather than in terms
+## of which node it was added to.
+func _test_a_vent_climbing_before_death_still_vents() -> void:
+	if not await _open_boss_room(1969):
+		return
+
+	var before := _player.get_health_component().current
+	var size := Vector2(48.0, 48.0)
+	var zone := ThermalZone.spawn_vent(
+		_floor, Rect2(_player.global_position - size * 0.5, size), 0.3
+	)
+	if not require(zone, "a vent can be put on the floor of a boss arena"):
+		await _close()
+		return
+
+	_defeat_the_boss()
+	await advance_physics(1)
+
+	check(is_instance_valid(zone), "a vent already climbing survives the boss that started it")
+
+	# Past the fill and into the vent.
+	await advance_physics(30)
+	check(
+		_player.get_health_component().current < before,
+		"and still costs the player integrity afterwards (%.1f -> %.1f)"
+			% [before, _player.get_health_component().current],
+	)
+
+	await _close()
+
+
 ## The other half of the rule, for each boss in the game. A corpse announces nothing.
 ##
 ## Asserted against a *measured* attack rather than against silence: the check first waits for the
 ## boss to produce a hazard, so "nothing appeared after it died" cannot pass because the boss was
 ## never attacking in the first place.
 ##
-## It asserts the outcome, not the mechanism, and that is deliberate — both bosses currently stop
+## It asserts the outcome, not the mechanism, and that is deliberate — every boss currently stops
 ## twice over. `_is_dead` short-circuits `_physics_process`, and freeing the body makes the attack
 ## clock return on its own. Removing either one alone leaves this suite green, which was measured
 ## rather than assumed; removing both makes it fail loudly (ten hazards over ninety frames, when it
@@ -376,11 +426,14 @@ func _boss_room() -> Room:
 	return null
 
 
-## Projectiles and lanes, which is what "a hazard" means for the purposes of this suite.
+## Projectiles, lanes, and the Data Center boss's driven vents: everything a boss can leave on the
+## floor of an arena. Three kinds because there are three bosses and each puts down its own; the
+## list is what "a hazard" means for the purposes of this suite, and it has to grow with the bosses
+## or a new one's attacks would count as silence.
 func _hazards_in(container: Node) -> int:
 	var found := 0
 	for child: Node in container.get_children():
-		if child is Projectile or child is CompileLane:
+		if child is Projectile or child is CompileLane or child is ThermalZone:
 			found += 1
 	return found
 
@@ -398,6 +451,8 @@ func _hastened(source: Resource) -> Resource:
 		["lane_telegraph_seconds", FAST_LANE_TELEGRAPH],
 		["lane_strike_seconds", FAST_LANE_STRIKE],
 		["lane_stagger_seconds", FAST_LANE_STAGGER],
+		["vent_interval", FAST_VENT_INTERVAL],
+		["vent_seconds", FAST_VENT_SECONDS],
 	]:
 		if pair[0] in fast:
 			fast.set(pair[0], pair[1])
@@ -411,8 +466,8 @@ func _kill(boss: Boss) -> void:
 		part.took_damage.emit(DamageInfo.new(9999.0))
 
 
-## Both bosses expose their bodies, under different names: The Scrap King can have two, Runtime
-## Error only ever has one.
+## The bosses expose their bodies under two names: The Scrap King and Cascade Failure can each have
+## several, Runtime Error only ever has one.
 func _parts_of(boss: Boss) -> Array[BossPart]:
 	if boss.has_method("get_parts"):
 		return boss.get_parts()

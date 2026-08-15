@@ -347,6 +347,63 @@ RECURSION = [
     "................",
 ]
 
+# --- Load Balancer: a wide banded slab. The only enemy silhouette that is markedly wider
+# --- than it is tall, which is what a rack of blades looks like end-on and, more usefully,
+# --- what nothing else in the roster looks like. The bright band across the middle is the
+# --- part that reads at a glance; the plate that actually decides the fight is not drawn
+# --- here at all, because it turns (see LoadBalancer._draw), and a plate baked into the
+# --- sprite would be a plate pointing the wrong way for most of the fight.
+# ---
+# --- Data Center chassis greys throughout, with the cold status light for the band. No
+# --- teal and no red: this floor's throughput zones own that gradient and an enemy glowing
+# --- somewhere along it would be a second thing on screen claiming to mean heat.
+LOAD_BALANCER = [
+    "................",
+    "................",
+    "................",
+    "...oooooooooo...",
+    ".ooHHHHHHHHHHoo.",
+    ".oHjjjjjjjjjjHo.",
+    ".oHjiiiiiiiijHo.",
+    ".oHjoooooooojHo.",
+    ".oHjoooooooojHo.",
+    ".oHjiiiiiiiijHo.",
+    ".oHjjjjjjjjjjHo.",
+    ".ooHHHHHHHHHHoo.",
+    "...oooooooooo...",
+    "................",
+    "................",
+    "................",
+]
+
+# --- Stale Replica: the same body twice, once as an outline that has not caught up. The
+# --- ghost is up and to the left of the solid one and is clipped by it, so what survives is
+# --- an L of afterimage — the cheapest way for a silhouette to say "this is a copy running
+# --- late", which is the whole enemy. A player who has never seen one can still tell that
+# --- the thing chasing them is behind in more than one sense.
+# ---
+# --- The ghost is chassis mid rather than a dimmer copy of the body's own colours: it has to
+# --- read against a dark floor at 1:1 with no scaling, and a faint outline would simply be
+# --- absent on the CRT filter.
+STALE_REPLICA = [
+    "................",
+    "................",
+    "...HHHHHHH......",
+    "..HH.....HH.....",
+    "..H.......H.....",
+    "..H...ooooooo...",
+    "..H..oojjjjjoo..",
+    "..HH.ojjiiijjo..",
+    "..HH.ojiiiiijo..",
+    "...HHojiiiiijo..",
+    ".....ojjiiijjo..",
+    ".....oojjjjjoo..",
+    "......ooooooo...",
+    "................",
+    "................",
+    "................",
+]
+
 # --- Pop Up Drone's spread shot. Smaller and faster-reading than a ticket.
 DRONE_SHOT = [
     "..oo..",
@@ -556,6 +613,65 @@ def runtime_error_sprite() -> list[str]:
 
 
 RUNTIME_ERROR = runtime_error_sprite()
+
+
+def cascade_node_sprite() -> list[str]:
+    """One of Cascade Failure's four nodes, 20x20 — a rack unit, and nothing else is one.
+
+    The two bosses before it are a machine built out of salvage and a process that got loose,
+    so both are irregular: feet, antennae, a diamond, shards. This is the opposite of both and
+    for a reason the player can act on — it is *infrastructure*. Hard right angles, bilateral
+    symmetry, and a stack of vent slots, because the thing they are fighting on this floor is
+    the room's own equipment running too hot.
+
+    Four of them are on screen at once, which drives every choice here. It is drawn at 20x20
+    rather than the King's 32 so four of them do not fill the arena; the vent slots run across
+    rather than down so the four read as a set at a glance; and the outline is unbroken, so a
+    node against a busy floor of heat patches still has an edge.
+
+    Neutral greys, for the reason both earlier bosses are: `CascadeFailure` tints a node by how
+    much load it is carrying, and `modulate` multiplies. A colour baked in here would fight the
+    one thing the tint has to say.
+    """
+    size = 20
+    grid = [["."] * size for _ in range(size)]
+
+    left, right = 2, 17
+    top, bottom = 3, 16
+
+    def band(y: int, row: str) -> None:
+        for offset, char in enumerate(row):
+            grid[y][left + offset] = char
+
+    width = right - left + 1
+    band(top, "o" * width)
+    band(top + 1, "o" + "d" * (width - 2) + "o")
+    band(bottom - 1, "o" + "d" * (width - 2) + "o")
+    band(bottom, "o" * width)
+
+    # The body between the caps: a dark-to-light ramp inward, so the unit reads as recessed
+    # into a rack rather than as a flat tile.
+    for y in range(top + 2, bottom - 1):
+        band(y, "od" + "m" * (width - 4) + "do")
+
+    # Four vent slots, evenly spaced down the face. These are the whole silhouette: a plain
+    # box at this size is a crate, and a box with slots in it is a machine.
+    for y in range(top + 3, bottom - 2, 3):
+        for x in range(left + 4, right - 3):
+            grid[y][x] = "o"
+        for x in range(left + 5, right - 4):
+            grid[y + 1][x] = "l"
+
+    # The status light: one bright pixel pair at the centre of the face. The brightest thing on
+    # the node and the point the whole fight orbits, which is also exactly where its hitbox is.
+    centre = (top + bottom) // 2
+    grid[centre][9] = "Y"
+    grid[centre][10] = "Y"
+
+    return ["".join(row) for row in grid]
+
+
+CASCADE_NODE = cascade_node_sprite()
 
 # --- Synchronization terminal: a squat server box with a status light.
 BOSS_TERMINAL = [
@@ -1795,10 +1911,13 @@ SPRITES = {
     "art/enemies/null_pointer.png": NULL_POINTER,
     "art/enemies/deadlock.png": DEADLOCK,
     "art/enemies/recursion.png": RECURSION,
+    "art/enemies/load_balancer.png": LOAD_BALANCER,
+    "art/enemies/stale_replica.png": STALE_REPLICA,
     "art/effects/projectile_drone.png": DRONE_SHOT,
     "art/environments/shop_stand.png": SHOP_STAND,
     "art/bosses/merge_conflict.png": MERGE_CONFLICT,
     "art/bosses/runtime_error.png": RUNTIME_ERROR,
+    "art/bosses/cascade_node.png": CASCADE_NODE,
     "art/bosses/boss_terminal.png": BOSS_TERMINAL,
     "art/effects/projectile_boss_red.png": BOSS_RED,
     "art/effects/projectile_boss_green.png": BOSS_GREEN,

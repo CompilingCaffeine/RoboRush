@@ -1,0 +1,67 @@
+[gd_resource type="Resource" script_class="FloorConfig" load_steps=19 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/floor_config.gd" id="1_floor"]
+[ext_resource type="Resource" path="res://data/rooms/data_cold_aisle.tres" id="2_start"]
+[ext_resource type="Resource" path="res://data/rooms/data_intake_row.tres" id="3_intake"]
+[ext_resource type="Resource" path="res://data/rooms/data_hot_aisle.tres" id="4_hot_aisle"]
+[ext_resource type="Resource" path="res://data/rooms/data_chiller_bank.tres" id="5_chiller"]
+[ext_resource type="Resource" path="res://data/rooms/data_grid_floor.tres" id="6_grid"]
+[ext_resource type="Resource" path="res://data/rooms/data_cache_vault.tres" id="7_treasure"]
+[ext_resource type="Resource" path="res://data/rooms/shop_bay.tres" id="8_shop"]
+[ext_resource type="Resource" path="res://data/rooms/data_core_arena.tres" id="9_boss_room"]
+[ext_resource type="Resource" path="res://data/settings/shop_config.tres" id="10_shop_cfg"]
+[ext_resource type="Resource" path="res://data/spawns/ticket_bot.tres" id="11_ticket_bot"]
+[ext_resource type="Resource" path="res://data/spawns/firewall_node.tres" id="12_firewall_node"]
+[ext_resource type="Resource" path="res://data/spawns/code_runner.tres" id="13_code_runner"]
+[ext_resource type="Resource" path="res://data/spawns/null_pointer.tres" id="14_null_pointer"]
+[ext_resource type="Resource" path="res://data/spawns/load_balancer.tres" id="15_load_balancer"]
+[ext_resource type="Resource" path="res://data/spawns/stale_replica.tres" id="16_stale_replica"]
+[ext_resource type="Resource" path="res://data/floors/data_center_theme.tres" id="40_theme"]
+[ext_resource type="Resource" path="res://data/pools/run_item_pool.tres" id="91_pool"]
+[ext_resource type="Resource" path="res://data/bosses/cascade_failure_encounter.tres" id="92_cascade"]
+
+[resource]
+script = ExtResource("1_floor")
+id = &"data_center"
+display_name = "Data Center"
+floor_number = 3
+theme = ExtResource("40_theme")
+floor_tags = Array[StringName]([&"data_center"])
+room_count = 10
+start_templates = Array[RoomTemplate]([ExtResource("2_start")])
+combat_templates = Array[RoomTemplate]([ExtResource("3_intake"), ExtResource("4_hot_aisle"), ExtResource("5_chiller"), ExtResource("6_grid")])
+treasure_templates = Array[RoomTemplate]([ExtResource("7_treasure")])
+shop_templates = Array[RoomTemplate]([ExtResource("8_shop")])
+boss_templates = Array[RoomTemplate]([ExtResource("9_boss_room")])
+; A curated roster, which is what this floor is for: six entries against Development's seven, and
+; every one of them chosen because it asks a question about *where the player is standing*. Ticket
+; Bot for baseline pressure and because the teaching room needs something mild at difficulty one.
+; Firewall Node and Null Pointer because both already charge for holding a position, which is the
+; habit the zones charge for — the floor and its roster say the same thing in two languages. Code
+; Runner because a moving target is what makes standing still tempting in the first place. Then the
+; two new ones.
+;
+; What is deliberately absent is as much of the point. Memory Leech, Recursion and Deadlock are all
+; enemies whose answer is about *timing* — read the windup, choose the moment, break the tether —
+; and a floor teaching a positional idea should not spend half its rooms asking a different
+; question. Pop Up Drone is left out for the opposite reason: it teleports, so nothing the player
+; learns about holding ground applies to it.
+enemy_spawns = Array[EnemySpawn]([ExtResource("11_ticket_bot"), ExtResource("12_firewall_node"), ExtResource("13_code_runner"), ExtResource("14_null_pointer"), ExtResource("15_load_balancer"), ExtResource("16_stale_replica")])
+clear_scrap_range = Vector2i(1, 3)
+enemy_scrap_range = Vector2i(0, 2)
+item_pool = ExtResource("91_pool")
+item_clear_indices = Array[int]([2, 5])
+shop = ExtResource("10_shop_cfg")
+treasure_grants_item = true
+; One boss, and that is the decision rather than a pool nobody has filled in yet. Floors 1 and 2
+; share The Scrap King and Runtime Error precisely because either fight works on either floor —
+; both are answered with skills the game teaches in its first room. Cascade Failure is not: it is
+; written in this floor's own visual language, and a player meeting it before they have spent nine
+; rooms learning what teal-going-red means underfoot would be meeting an unexplained mechanic in
+; the worst room to meet one in. So it guards the Data Center and nothing else, which is the
+; "intentional boss assignment" the plan offers as an option, taken.
+;
+; It also makes `CampaignValidator`'s boss supply exactly tight: three floors, three distinct
+; bosses, and only one way to deal them out. Adding a fourth floor that can only draw from the
+; first two is now a campaign that refuses to start rather than one that quietly repeats a fight.
+boss_pool = Array[BossEncounter]([ExtResource("92_cascade")])

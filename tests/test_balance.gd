@@ -22,6 +22,7 @@ const PLAYER_CONFIG := "res://data/player/player_config.tres"
 const WEAPON := "res://data/weapons/rivet_blaster.tres"
 const BOSS := "res://data/bosses/merge_conflict.tres"
 const SECOND_BOSS := "res://data/bosses/runtime_error.tres"
+const THIRD_BOSS := "res://data/bosses/cascade_failure.tres"
 const FLOOR := "res://data/floors/floor_1_help_desk.tres"
 const SHOP := "res://data/settings/shop_config.tres"
 
@@ -34,6 +35,7 @@ var _player: PlayerConfig
 var _weapon: WeaponConfig
 var _boss: BossConfig
 var _second_boss: RuntimeErrorConfig
+var _third_boss: CascadeFailureConfig
 var _floor: FloorConfig
 var _shop: ShopConfig
 
@@ -43,6 +45,7 @@ func run() -> void:
 	_weapon = load(WEAPON)
 	_boss = load(BOSS)
 	_second_boss = load(SECOND_BOSS)
+	_third_boss = load(THIRD_BOSS)
 	_floor = load(FLOOR)
 	_shop = load(SHOP)
 
@@ -55,6 +58,7 @@ func run() -> void:
 	_test_every_enemy_dies_in_a_reasonable_window()
 	_test_the_boss_is_a_fight_rather_than_a_bullet_sponge()
 	_test_the_second_boss_is_a_fight_rather_than_a_bullet_sponge()
+	_test_the_third_boss_is_a_fight_rather_than_a_bullet_sponge()
 	_test_the_player_can_take_a_few_hits()
 	_test_the_dash_is_worth_pressing()
 	_test_shop_prices_match_the_spec()
@@ -268,6 +272,66 @@ func _test_the_second_boss_is_a_fight_rather_than_a_bullet_sponge() -> void:
 		reach >= deepest_pattern * 1.5,
 		"a lane warning buys comfortably more travel than its answer costs (%.0f against %.0f "
 			% [reach, deepest_pattern] + "pixels)",
+	)
+
+
+## The Floor 3 boss, whose length is the same simple division Runtime Error's is: Cascade Failure
+## refunds nothing, scales nothing, and never plays dead, so its pool over the player's damage is
+## the whole answer.
+##
+## Measured against the *starting* weapon, like everything else in this suite, which is a deliberate
+## overestimate — nobody reaches the Data Center with the rivet blaster and no items. Its value is
+## the comparison against the two bosses before it, both of which are wrong by roughly the same
+## factor.
+func _test_the_third_boss_is_a_fight_rather_than_a_bullet_sponge() -> void:
+	if not require(_third_boss, "the third boss's config loads"):
+		return
+
+	var length := _seconds_to_kill(_third_boss.max_health)
+	check(length >= 10.0, "the third boss needs at least ten seconds of fire (%.1fs)" % length)
+	check(length <= 60.0, "and is not a bullet sponge (%.1fs)" % length)
+
+	# Unlike the first two, this one *is* a claim about the curve. Cascade Failure guards one floor
+	# and only one — it is written in the Data Center's own visual language, so it cannot turn up
+	# early the way the other two can turn up on either of their floors — which makes "the boss the
+	# player meets third is the longest of the three" a sentence about difficulty rather than about
+	# a coin flip.
+	if _second_boss != null:
+		var second := _seconds_to_kill(_second_boss.max_health)
+		check(
+			length > second,
+			"and is the longest fight of the three, being the one that is always third (%.1fs "
+				% length + "against %.1fs)" % second,
+		)
+
+	# Each node is an even share of the pool, so the fight has `node_count` acts. Every one of them
+	# has to last long enough for the rack to vent several times, or a phase is over before the
+	# player has seen what it does differently.
+	var act := length / float(maxi(_third_boss.node_count, 1))
+	var slowest_vent := _third_boss.vent_interval / float(maxi(_third_boss.node_count, 1))
+	check(
+		act >= slowest_vent * 3.0,
+		"every act lasts several of the rack's vents (%.1fs against %.1fs)" % [act, slowest_vent],
+	)
+
+	# The player's travel while a vent climbs, against the vent itself. This is the number that
+	# makes the boss's ground fair, and it belongs written down as arithmetic here as well as as a
+	# rule in the fight's own suite.
+	var reach := _player.move_speed * _third_boss.vent_seconds
+	var deepest := float(maxi(_third_boss.vent_tiles.x, _third_boss.vent_tiles.y) * Room.TILE_SIZE)
+	check(
+		reach >= deepest * 1.5,
+		"a vent's warning buys comfortably more travel than walking out of it costs (%.0f against "
+			% reach + "%.0f pixels)" % deepest,
+	)
+
+	# And the last phase, which is a chase: the node has to be slower than the robot, or its trail
+	# stops being the threat and its body starts being one.
+	check(
+		_third_boss.runaway_speed < _player.move_speed,
+		"the last node cannot outrun the robot (%.0f against %.0f)" % [
+			_third_boss.runaway_speed, _player.move_speed,
+		],
 	)
 
 

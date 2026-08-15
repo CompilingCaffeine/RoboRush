@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="BossEncounter" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/boss_encounter.gd" id="1_encounter"]
+[ext_resource type="PackedScene" path="res://scenes/bosses/cascade_failure.tscn" id="2_scene"]
+
+[resource]
+script = ExtResource("1_encounter")
+id = &"cascade_failure"
+scene = ExtResource("2_scene")
+display_name = "CASCADE FAILURE"
+defeat_banner = "THE RACK IS COLD"
+; Two of the three phases are announced and one is not, which is the honest split rather than an
+; oversight. Losing the first node and losing the last both change what the fight *is* — the ring
+; opens, and then there is no ring — and a player deserves telling. The failure in between changes
+; only how much: two nodes instead of three, carrying more each. That is a change the tint on the
+; bodies and the rate of the vents already say, and a banner repeating it would be the game
+; narrating a number the player can see.
+phase_banners = Array[String](["", "LOAD REROUTED  //  THE SURVIVORS TAKE THE SLACK", "ONE NODE  //  FULL LOAD"])

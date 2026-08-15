@@ -659,7 +659,7 @@ Executed on this machine, not assumed.
 - **Spec section 12's and section 17's numbers are pinned** — Fork Bomb's 60%, Capacitor
   Leak's 5 shots / 3 jumps / 0.7, common 12 / uncommon 20 / rare 32, heal 6, reroll 4 +2 —
   so an inspector edit cannot silently rebalance the game.
-- **Each of the nine enemies is checked for posing its own problem**, not for running. The
+- **Each of the eleven enemies is checked for posing its own problem**, not for running. The
   Pop Up Drone must actually appear somewhere else, never within the player's guard and
   never inside a wall — verified in a real room against real geometry. The Memory Leech must
   hold still through its windup and must *not* steer once committed, checked by moving the
@@ -1412,8 +1412,9 @@ to `[3]` takes it to four.
 
 Boss identity — the scene, the name, the defeat banner, the phase banners — moved off
 `FloorConfig` into a [`BossEncounter`](scripts/resources/boss_encounter.gd), and each floor now
-carries a *pool* of them. Both floors list both bosses, so a run may meet The Scrap King in
-Development and Runtime Error on the Help Desk.
+carries a *pool* of them. Both of these two floors list both of these two bosses, so a run may meet
+The Scrap King in Development and Runtime Error on the Help Desk. The Data Center does not join in:
+see [one floor, one boss](#one-floor-one-boss) for why its fight guards one floor only.
 
 Bundling the four fields was not tidiness. Four parallel fields cannot be shuffled together, and
 the failure mode of getting it wrong is precisely the bug this project already shipped once: the
@@ -1554,6 +1555,199 @@ reason.
 Elite modifiers, challenge and secret rooms, larger arenas, a new weapon core, meta-progression,
 and additional playable characters are deliberately outside this floor. They can follow once
 Development proves that the run can grow without weakening the room combat already present.
+
+---
+
+## Floor 3: Data Center — **built**
+
+The third floor is in the campaign. `main_campaign.tres` lists Help Desk, Development and
+[Data Center](data/floors/floor_3_data_center.tres), and a run now plays all three.
+
+### The floor's job
+
+[`SIX_FLOOR_SCALING_GAMEPLAN.md`](SIX_FLOOR_SCALING_GAMEPLAN.md) calls this the
+"architecture-proving vertical slice", and the emphasis is on *proving* rather than on the floor.
+Two floors produce one transition, and one transition cannot show a trend — a leak, a stale room,
+a run field carried the wrong way. Three floors produce two, which is the smallest number that can.
+So the content below matters, and what matters as much is that adding it needed no new branch
+anywhere in the generator, the controller, or the session: a floor is still a `FloorConfig`, a set
+of templates, a roster, and a boss pool.
+
+Its one taught idea is **stop camping**, and every piece of the floor says it again in a different
+register.
+
+### The signature mechanic: throughput zones
+
+A [`ThermalZone`](scripts/combat/thermal_zone.gd) is a patch of floor that gains heat while the
+player stands inside it *firing*, loses it the moment they move or stop, and vents at full heat for
+one point of integrity. The zone is painted on the ground and its heat is its colour, teal through
+to red. Nothing about it is random and nothing is hidden.
+
+What it charges for is the whole design. Heat per shot would make a fast weapon heat a zone faster,
+which quietly turns Cooling Fan and Unsafe Overclock into liabilities on one floor of six — and an
+item that is a liability on a floor is an item nobody picks. Charging for occupancy alone would
+punish the player for being in the room. Charging *stationary firing* taxes a habit, and a habit is
+what a floor is allowed to teach: keep moving and this floor costs nothing at all, at any fire rate.
+[`tests/test_thermal.gd`](tests/test_thermal.gd) asserts that directly, so the "simplification" to
+per-shot heat fails a named check rather than passing review.
+
+Zones are declared on `RoomTemplate` in tile coordinates, so a Data Center template carries its own
+and a Help Desk template has none, with no `if floor_number == 3` anywhere.
+
+### Two new enemies
+
+The roster is curated rather than cumulative — six entries against Development's seven, chosen
+because each asks a question about *where the player is standing*. Memory Leech, Recursion and
+Deadlock are all left out for the same reason: their answers are about timing, and a floor teaching
+a positional idea should not spend half its rooms asking something else. Two are new.
+
+**[Load Balancer](scenes/enemies/load_balancer.gd)** puts a plate between itself and you, and the
+plate turns. Shots arriving through it are swallowed whole; shots arriving anywhere else are
+ordinary hits. It is the only enemy in the game whose answer is decided by *where you are* rather
+than by *when you fire* — and the fight is one comparison the player can feel without being told
+it: their own angular speed, `v / r`, against the plate's fixed turn rate. That rises as they close,
+so the answer is to get inside about a hundred pixels and keep going round, and the price of being
+that close is that the plate is also the only part of it that hurts to touch. Its armour and its ram
+are one object pointing one way, and both are read off the same arc.
+
+It has no weapon, and that is deliberate: an enemy answerable by planting your feet and out-damaging
+it would be an enemy arguing with the floor it is standing on. A player who never moves does nothing
+to it at all, however good their aim.
+
+Its one weakness from in front is not damage. `Projectile` applies status effects to the body it hit
+rather than through `apply_damage`, so a chill lands on the plate even though the shot does not —
+and the plate's turn is scaled by that chill. Slowing the thing you are trying to out-turn is a real
+answer, it costs an item to have, and nothing had to be written for it: it falls out of two systems
+already behaving as they do.
+
+**[Stale Replica](scenes/enemies/stale_replica.gd)** chases where the player *was*, and gets there
+by retracing the exact route they took. It cannot be dodged, because it is not coming at you; it can
+only be outrun, and only forwards. Keep going and it never arrives. Stop, and the position it is
+walking to catches up with the one you are standing in. Turn back, and you walk into it.
+
+It needs no navigation of any kind, and that is not an optimisation — it is why the design works.
+Every point on its path is a point the player has already walked, so it is clear of walls and inside
+the room by construction. The Data Center's rooms are the most cluttered in the game and it needed
+nothing for them. It is also the only enemy in the game fought over the shoulder: it is behind you
+by definition, so shooting it means running one way and firing the other.
+
+### Floor boss: Cascade Failure
+
+[`scenes/bosses/cascade_failure.gd`](scenes/bosses/cascade_failure.gd). Four server nodes wired into
+one rack, running too hot.
+
+The Scrap King asks the player to **notice**; Runtime Error asks them to **predict**; this one asks
+them to **keep moving**, in the floor's own words. Every hazard it puts on the ground is a
+`ThermalZone` — the same class the floor's rooms are built from — so the colour ramp means here
+exactly what it has meant for nine rooms. What changes is who is heating it.
+
+**Load is the whole fight.** The rack carries a fixed amount of it split between the nodes still
+standing, so `load` is `node_count / nodes_alive`: one at the start, four at the end. It drives how
+fast the ring turns, how fast the packets run, and how often each node vents. Nothing else escalates.
+
+The vent rate is the part worth stating, because it is what keeps the last phase survivable. Per
+node the interval is `vent_interval / load`, so four nodes venting every three seconds and one node
+venting every 0.75 put the *same* heat per second onto the floor. The boss does not out-scale the
+arena as it escalates; it **concentrates**, from a ring of patches into a trail behind one body.
+That is arithmetic rather than tuning, and
+[`tests/test_cascade_failure.gd`](tests/test_cascade_failure.gd) measures it by counting vents in
+real time at both loads rather than by re-deriving the division.
+
+**The rack breathes.** The ring contracts to a third of its radius and opens out again on a
+seven-second sine. Without it the middle of the arena is permanently safe, and a boss with a safe
+centre — on the floor about not standing still — would be arguing with the room it is standing in.
+The fiction does the work: this is cooling equipment, and what cooling equipment does is move air.
+
+**There is not one projectile in it.** Both bosses before it are answered by dodging bullets; this
+floor's mechanic is positional, so its boss is positional. Heat on the ground, and load running along
+the lines between the nodes. The only two things that can hurt the player are places.
+
+#### Why the nodes have no health of their own
+
+They visibly can be shot and they visibly fail one at a time, so per-node pools are the obvious
+build, and they are wrong. Damage would then be the player's to allocate, and allocating it
+optimally means spreading it evenly — which holds the fight at load one for three quarters of its
+length and then collapses phases two and three into a few seconds each. A boss whose best line skips
+its own last act has been designed twice and shipped once.
+
+So the pool is shared and a node blows out at each even fraction of it: 75%, 50%, 25%. Every player
+sees all three phases at the same length. What the player *does* choose is **which** node fails — the
+one that has taken the most damage since the last failure goes — so they decide the shape of the ring
+they are left fighting without deciding how long they fight it. Two nodes left on opposite slots is a
+line that sweeps the whole arena; two on adjacent slots is a short one near the wall. That is a real
+decision, and it is about geometry rather than about pacing, which is the half worth giving away.
+
+#### One floor, one boss
+
+Floors 1 and 2 share The Scrap King and Runtime Error because either fight works on either floor —
+both are answered with skills the game teaches in its first room. Cascade Failure is not, and it
+guards the Data Center alone. A player meeting it earlier would be meeting an unexplained mechanic
+in the worst room to meet one in.
+
+That also makes `CampaignValidator`'s boss supply exactly tight: three floors, three distinct bosses,
+and only one way to deal them out. A fourth floor that can only draw from the first two is now a
+campaign that refuses to start rather than one that quietly repeats a fight.
+
+#### What survives its death
+
+The rule every fight in this game draws: **committed hazards resolve, uncommitted ones never
+happen.** A vent already on the floor was put there, is visibly climbing, and goes on to fill and to
+cost a point in an arena the player has apparently just won. A packet is not committed and stops
+existing the moment the rack does — a packet *is* load moving between two nodes, and there are no
+nodes.
+
+Getting the first half right needed a change: a `ThermalZone` was, until this floor, a room's
+furniture, built with the room and freed with it. `ThermalZone.spawn_vent` parents into the session
+the way `CompileLane` always has, so a boss's heat outlives the boss and not the floor.
+
+### The gate
+
+[`tests/test_gate.gd`](tests/test_gate.gd) is the plan's Floor 3 acceptance list, as a suite, run
+against the **shipped** campaign rather than a greybox one — which is the difference between it and
+the parts of `tests/test_floor.gd` it overlaps with. Those use a synthetic six-floor campaign
+precisely so they can produce five boundaries before five floors exist; this asks the same questions
+of the content a player will actually be handed, and it could not be asked until a third real floor
+existed.
+
+Four of the five criteria were checkable as written. The third — "both transitions preserve every
+declared run-wide field and reset every declared floor-local field" — was not, because nothing had
+declared them. `RunManager` now carries three lists:
+
+- `RUN_WIDE_FIELDS`, which a descent must leave exactly as it found them.
+- `RUN_LEDGER_FIELDS`, which it may append to and must never lose an entry from. Opening a floor
+  draws its boss and reserves the items it will offer, so both of these are longer on the other side
+  of a boundary. A rule demanding they come out untouched would be a rule the game breaks on every
+  descent, and a rule broken on purpose stops being checked.
+- `FLOOR_LOCAL_FIELDS`, which it must replace with the floor being entered.
+
+The suite asserts that those three between them account for every script variable on the node, so a
+field added without a decision fails the gate rather than surfacing three floors later as a run that
+lost its scrap. That check was confirmed to fail when a stray field was added to `RunManager`, which
+is the only evidence that a completeness check is checking anything.
+
+The floor-local half is asserted against what the campaign says the values should be, not merely
+against "something changed" — a boundary that reset the floor seed to zero would satisfy the weaker
+version. The fourth criterion is counted at the only place a result is actually filed,
+`BestRunStats.absorb`, rather than at a state change that happens to precede it: two of its five
+paths are supposed to file *nothing*, and a check watching for game-over could not tell filing
+nothing from filing twice.
+
+### What playing it will have to answer
+
+Every number here is reasoned rather than observed, the same standing limitation the two floors
+before it carry.
+
+- Is the plate readable as armour, or does a Load Balancer read as an enemy your weapon has stopped
+  working on? The only feedback a blocked shot gives is the plate lighting for 0.14s, because
+  nothing was damaged and so no hurt flash fires.
+- Is out-turning it discoverable without being told? The breakeven radius is about 105 pixels and
+  nothing on screen says so.
+- Does the Stale Replica read as "your own path" or as a chaser with broken steering?
+- Is Cascade Failure's breathing ring legible at 416x192, or is a rotating quadrilateral that also
+  pulses simply too much to track?
+- Is a boss with no projectiles in it tense or slack?
+- Is 144 the right pool? It is 36 seconds of *perfect* starting-weapon fire, which nobody will have,
+  against Runtime Error's 110 and The Scrap King's 60.
 
 ---
 

@@ -49,9 +49,12 @@ func run() -> void:
 ## The campaign the game actually boots with. Errors fail the suite outright — `main.gd` refuses
 ## to start a run on any of them, so an error here is a game that does not open.
 ##
-## Warnings are held to an exact count rather than merely allowed. The campaign is two floors into
-## a declared six, so exactly one warning is expected and correct; a second one appearing is
+## Warnings are held to an exact count rather than merely allowed. The campaign is three floors
+## into a declared six, so exactly one warning is expected and correct; a second one appearing is
 ## either a real regression or a floor landing, and both are worth being told about.
+##
+## The Data Center landing is what this check caught, which is the point of writing the expected
+## text out rather than counting warnings alone: the count did not move, and the message did.
 func _test_the_shipped_campaign_is_playable() -> void:
 	var campaign := load(CAMPAIGN_PATH) as RunDefinition
 	if not require(campaign, "main_campaign.tres loads as a RunDefinition"):
@@ -66,7 +69,7 @@ func _test_the_shipped_campaign_is_playable() -> void:
 		],
 	)
 	check(
-		_mentions(report.warnings, "floors 3-6 are missing"),
+		_mentions(report.warnings, "floors 4-6 are missing"),
 		"which names the floors still to be written",
 	)
 
