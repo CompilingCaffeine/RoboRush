@@ -43,8 +43,8 @@ const FOCUS_PADDING := "  "
 
 
 func _ready() -> void:
-	# The router sets this on every other path into the menu; a cold launch arrives here
-	# without passing through it, because this is the project's main scene.
+	# The router sets this on every path into the menu, the bootstrap's included. Kept because
+	# opening this scene directly in the editor still has to produce a working menu.
 	GameManager.enter_main_menu()
 
 	# Everything below reads the save, and the manager no longer loads itself — the bootstrap
