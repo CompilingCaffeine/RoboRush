@@ -44,6 +44,12 @@ const STALE_REPLICA_CONFIG := "res://data/enemies/stale_replica.tres"
 ## against here has to be the one the player actually has.
 const PLAYER_TOP_SPEED := 160.0
 
+## How long a balancer may take to get its plate back onto a player it woke up facing away from.
+## Three seconds, against a worst case measured at 146 frames — enough headroom that this fails on
+## the plate getting slower rather than on the measurement, and tight enough that a plate which
+## stopped tracking could not sneak past it.
+const PLATE_RECOVERY_FRAMES := 180
+
 
 func run() -> void:
 	_test_configs_load_as_their_own_types()
@@ -73,6 +79,7 @@ func run() -> void:
 	await _test_load_balancer_swallows_what_arrives_through_the_plate()
 	await _test_load_balancer_only_rams_with_its_plate()
 	await _test_out_turning_the_plate_is_the_answer_to_it()
+	await _test_a_balancer_woken_facing_away_catches_up()
 	await _test_replica_walks_to_where_the_player_was()
 	await _test_replica_only_ever_walks_where_the_player_has_been()
 	await _test_a_moving_player_is_never_caught_by_its_replica()
@@ -1010,6 +1017,16 @@ func _test_out_turning_the_plate_is_the_answer_to_it() -> void:
 		var target := _add_target(arena, Vector2(radius, 0.0))
 		await advance_physics(2)
 
+		# Pointed at the target before the orbit begins, because a balancer wakes facing a random
+		# direction and this check is not about where it woke up. Left random, it measured the
+		# wake-up angle roughly one run in forty: the settle below closes about 1.55 rad, an error
+		# near pi survives it, and if what survives sits on the side where the plate's shortest turn
+		# runs against the direction the player is about to circle, the two separate before they
+		# meet. That produced 10-18% uncovered frames out of a bound of 10, on a check whose claim
+		# is about angular speed against turn rate. The wake-up window is real and worth having —
+		# it has its own check below — but it is not this one.
+		balancer._facing = (target.global_position - balancer.global_position).angle()
+
 		# A full second of the plate settling onto a player standing still, so neither orbit starts
 		# with a head start the other did not get.
 		await advance_physics(60)
@@ -1037,6 +1054,54 @@ func _test_out_turning_the_plate_is_the_answer_to_it() -> void:
 		outside < 0.1,
 		"and circling outside it does not — the plate keeps up (%.0f%%)" % (outside * 100.0),
 	)
+
+
+## The case the check above deliberately excludes, kept rather than dropped: the moment a balancer
+## wakes up.
+##
+## Its plate starts at a random angle, so a player already standing outside the breakeven radius can
+## find one facing entirely the wrong way. The plate turns the shortest way round, which — for a
+## narrow band of wake-up angles just past directly-away — is the opposite of the way the player is
+## circling, so the two separate before they meet. That window is a real part of the fight and the
+## thing worth asserting about it is that it closes.
+##
+## It is not a short window. From the worst wake-up, a player circling at the outside radius has the
+## plate off them for about two and a half seconds — the plate turns at 1.5 rad/s and the orbit
+## takes 0.75 of that back, so half a turn of error costs 2.4s to undo. That is the only opening
+## this enemy offers a player who refuses to close the distance, and it is worth knowing the number.
+##
+## Set up as the worst case rather than a random one, because a test that finds this two percent of
+## the time is a test that reports it as a mystery.
+func _test_a_balancer_woken_facing_away_catches_up() -> void:
+	var tuning := load(LOAD_BALANCER_CONFIG) as LoadBalancerConfig
+	if not require(tuning, "the balancer's config loads"):
+		return
+
+	var radius := (PLAYER_TOP_SPEED / tuning.plate_turn_speed) * 2.0
+	var arena := _make_arena()
+	var balancer := _add_enemy(arena, LOAD_BALANCER_SCENE, Vector2.ZERO) as LoadBalancer
+	var target := _add_target(arena, Vector2(radius, 0.0))
+	await advance_physics(2)
+
+	# Just past directly away, on the side whose shortest turn runs against the orbit below.
+	balancer._facing = (target.global_position - balancer.global_position).angle() + PI + 0.02
+
+	var angle := 0.0
+	var recovered_at := 0
+	for frame: int in PLATE_RECOVERY_FRAMES:
+		angle += (PLAYER_TOP_SPEED / radius) / 60.0
+		target.global_position = balancer.global_position + Vector2(radius, 0.0).rotated(angle)
+		await advance_physics(1)
+		if balancer.plate_covers(target.global_position - balancer.global_position):
+			recovered_at = frame + 1
+			break
+
+	check(
+		recovered_at > 0 and recovered_at <= PLATE_RECOVERY_FRAMES,
+		"a balancer woken facing away has its plate back on the player within %d frames (took %d)"
+			% [PLATE_RECOVERY_FRAMES, recovered_at],
+	)
+	await _teardown(arena)
 
 
 # --- Stale Replica ----------------------------------------------------------------
