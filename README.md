@@ -175,7 +175,40 @@ tool paths inside the PCK, on an `index.html` whose recorded file sizes disagree
 beside it, and on a build id that is not actually in the artifact.
 
 Templates install as described above; on Linux the directory is
-`~/.local/share/godot/export_templates/4.7.1.stable/` instead.
+`~/.local/share/godot/export_templates/4.7.1.stable/` instead. On a machine that has neither the
+engine nor the template — a CI runner, a fresh clone on a new laptop — there is a script:
+
+```bash
+tools/ci/install_godot.sh --prefix ~/.local/bin
+```
+
+It installs the pinned editor and *only* the Web export template, checking both against a hash
+before anything uses them. The templates are published as one 1.28 GB bundle of which this build
+needs a single 10 MB file, so it reads the bundle's zip directory over HTTP range requests and
+pulls out that one entry rather than downloading the rest.
+
+To boot the exported build in a real browser and wait for it to say it started:
+
+```bash
+python3 -m pip install playwright && python3 -m playwright install chromium
+python3 tools/ci/smoke_web.py build/web --screenshot smoke.png
+```
+
+### Continuous integration
+
+`.github/workflows/web-ci.yml` runs the whole of the above on every pull request and every push to
+`main`: pinned toolchain, build, artifact contract, browser smoke, and the zip kept as the run's
+artifact. It has no credentials, so a pull request from anywhere can run it safely.
+
+`.github/workflows/wavedash-upload.yml` starts when that succeeds on `main` and uploads the exact
+artifact it produced — downloaded, digest-checked, extracted, and checked again — as a new
+immutable Wavedash build. It never rebuilds: the artifact that passed the tests is the artifact
+that gets published, or the testing meant nothing. It is the only place a Wavedash credential
+exists, and it needs a GitHub Environment named `wavedash-beta` holding a `WAVEDASH_TOKEN` secret
+before it can do anything.
+
+Uploading is not publishing. Each upload is a private build with its own playtest URL; making one
+of them the public game stays a deliberate act in the Developer Portal.
 
 ### Assets
 

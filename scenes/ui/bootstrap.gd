@@ -90,9 +90,33 @@ func _ready() -> void:
 	if not SaveManager.is_initialized():
 		await SaveManager.initialized
 
+	# The one line this build prints whether or not it is a debug build, and the only one. A hosted
+	# playtest is a URL, and the browser console is the only instrument a tester has: this says
+	# which build answered and whether it is running against an account or a disk, which are the
+	# two questions every "my save did not come back" report turns out to hinge on.
+	#
+	# It is also what the browser smoke test waits for. Printed here, after persistence is ready
+	# and immediately before the menu, it is the narrowest available statement of "the game
+	# booted" — the engine started, the pack loaded, the autoloads ran, the platform answered or
+	# timed out, and the save is readable.
+	var id := build_id()
+	print("Robo Rush %s ready: %s" % [
+		id if not id.is_empty() else "dev",
+		"cloud save" if online else "local save",
+	])
+
 	finished.emit(online)
 	if navigation_enabled:
 		SceneRouter.go_to_main_menu()
+
+
+## Which build this is, as written into the project settings by tools/ci/build_web.sh at export
+## time. Empty for anything run from source, which has no build id and should not pretend to.
+##
+## Static because the menu asks the same question to put it on screen, and one reading of a setting
+## is easier to keep honest than two.
+static func build_id() -> String:
+	return str(ProjectSettings.get_setting("application/config/version", ""))
 
 
 ## Brings up the platform and waits, briefly, to hear back from it. Returns whether the game is

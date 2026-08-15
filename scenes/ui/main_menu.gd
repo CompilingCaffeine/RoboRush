@@ -177,7 +177,7 @@ func _refresh_cloud_status() -> void:
 ## the editor has none and shows nothing. An empty label is the honest answer there: a source tree
 ## has no build id, and inventing one would make the field untrustworthy in the builds that do.
 func _show_build_id() -> void:
-	var id := str(ProjectSettings.get_setting("application/config/version", ""))
+	var id := Bootstrap.build_id()
 	_build_id.visible = not id.is_empty()
 	if not _build_id.visible:
 		return

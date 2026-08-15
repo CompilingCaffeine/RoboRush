@@ -623,17 +623,17 @@ Official publishing and rollback reference: <https://docs.wavedash.com/publishin
 
 ## Definition of Done
 
-- [ ] Wavedash account, team, and single RoboRush project exist.
-- [ ] `wavedash.toml` is committed without credentials.
-- [ ] Wavedash Godot SDK is vendored, reviewed, enabled, and pinned.
-- [ ] WavedashSDK initializes exactly once.
-- [ ] Bootstrap gates the main menu on persistence readiness or explicit local-only fallback.
-- [ ] Cloud downloads use staging and validation rather than overwriting canonical saves.
-- [ ] Successful local commits drive single-flight, coalesced cloud uploads.
-- [ ] Cloud errors cannot destroy or invalidate local progress.
-- [ ] Divergent saves prompt and archive rather than silently overwrite or merge.
-- [ ] Existing native tests and behavior remain green.
-- [ ] New cloud, menu-gating, and checkpoint tests pass.
+- [x] Wavedash account, team, and single RoboRush project exist.
+- [x] `wavedash.toml` is committed without credentials.
+- [x] Wavedash Godot SDK is vendored, reviewed, enabled, and pinned.
+- [x] WavedashSDK initializes exactly once.
+- [x] Bootstrap gates the main menu on persistence readiness or explicit local-only fallback.
+- [x] Cloud downloads use staging and validation rather than overwriting canonical saves.
+- [x] Successful local commits drive single-flight, coalesced cloud uploads.
+- [x] Cloud errors cannot destroy or invalidate local progress.
+- [x] Divergent saves prompt and archive rather than silently overwrite or merge.
+- [x] Existing native tests and behavior remain green.
+- [x] New cloud, menu-gating, and checkpoint tests pass.
 - [ ] Clean Web export and browser smoke pass in CI.
 - [ ] Build A boots and restores its own cloud-backed checkpoint.
 - [ ] Build B restores Build A's checkpoint before the main menu.
