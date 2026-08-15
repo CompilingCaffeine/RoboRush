@@ -74,6 +74,16 @@ signal settings_changed(settings: GameSettings)
 ## is a signal that never arrives, and a menu awaiting it would hang on the second visit.
 signal initialized
 
+## Emitted after a save has actually landed on disk, with the file it landed in and the SHA-256 of
+## exactly those bytes. The hash is the point: it is what lets a listener tell one generation of
+## the save from the next without re-reading and re-parsing the file, and what the cloud
+## coordinator compares against to know whether what it last uploaded is still current.
+##
+## Deliberately says nothing about the cloud, and deliberately cannot fail. Local saving is
+## authoritative — a listener that throws, hangs, or has no network must not be able to turn a
+## successful write into a failed one.
+signal local_save_committed(path: String, content_hash: String)
+
 var settings := GameSettings.new()
 var best := BestRunStats.new()
 
@@ -162,6 +172,13 @@ func initialize() -> void:
 ## Whether `initialize` has run. Read by anything that can start before the save exists.
 func is_initialized() -> bool:
 	return _initialized
+
+
+## The file the save actually lives in. An accessor rather than the constant, because the suite
+## points the manager at a disposable path and anything reading the constant instead would go
+## looking in the real one — which is the difference between a test and an accident.
+func save_file_path() -> String:
+	return _save_path
 
 
 func _process(delta: float) -> void:
@@ -392,6 +409,13 @@ func save_game() -> void:
 		print("SaveManager: save recovered after %d failed attempt(s)." % _failed_writes)
 	_dirty = false
 	_failed_writes = 0
+
+	# Only here, and only on the success path. Everything a listener could do with this — upload
+	# it, hash it, count it — is a statement about bytes that are already on disk, so announcing a
+	# write that failed, or one that is still in the temporary file, would be announcing a save
+	# that does not exist yet. By this line the temporary file has been written, the previous save
+	# backed up, the rename has landed, and the browser has been asked to flush.
+	local_save_committed.emit(_save_path, FileAccess.get_sha256(_save_path))
 
 
 ## Returns an empty string on success, or a description of what went wrong.

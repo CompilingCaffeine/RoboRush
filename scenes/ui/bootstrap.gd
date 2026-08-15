@@ -29,6 +29,11 @@ extends Control
 ## it is the decision to stop waiting, and the game is fully playable after it.
 const CONNECT_TIMEOUT_SECONDS := 8.0
 
+## Shown only when the local and cloud saves have genuinely diverged, which most players will
+## never see. Preloaded anyway: the alternative is loading a scene from disk at the one moment the
+## game is already waiting on a network round trip.
+const SAVE_CONFLICT_CARD := preload("res://scenes/ui/save_conflict_card.tscn")
+
 ## What the platform is asked for at startup. Empty because the defaults are what this game wants:
 ## the SDK signals readiness for events itself unless `deferEvents` is set, and nothing here needs
 ## to defer them — the game has no lobbies, no invites, and nothing to set up before they arrive.
@@ -70,8 +75,17 @@ func _ready() -> void:
 
 	_set_status("SYNCING SAVE..." if online else "LOADING SAVE...")
 
-	# The one call that turns "there is a save file somewhere" into "the game may read it". Phase 4
-	# puts cloud reconciliation in front of this line; until then, online or not, the save is local.
+	# Before the line below, not after. Reconciliation may replace the save file outright, and the
+	# only moment that is free is this one: nothing has read the old save yet, so nothing has to be
+	# told it changed. It settles every case it can by itself and asks the player only when both
+	# copies have genuinely moved on — which is what the card below is for.
+	CloudSaveCoordinator.conflict_detected.connect(_on_conflict_detected)
+	await CloudSaveCoordinator.reconcile()
+	CloudSaveCoordinator.conflict_detected.disconnect(_on_conflict_detected)
+
+	_set_status("LOADING SAVE...")
+
+	# The one call that turns "there is a save file somewhere" into "the game may read it".
 	SaveManager.initialize()
 	if not SaveManager.is_initialized():
 		await SaveManager.initialized
@@ -126,6 +140,23 @@ func _connect_to_platform() -> bool:
 
 func _on_backend_connected(_payload: Variant) -> void:
 	_backend_connected = true
+
+
+## The one thing in the whole sync path a player has to decide. Both copies changed since they
+## last agreed, there is no way to tell which is derived from the other, and merging them would
+## invent a save neither device ever had. So it is put in front of them, with enough of each to
+## recognise their own afternoon, and the copy they do not pick is archived rather than dropped.
+func _on_conflict_detected(local: Dictionary, cloud: Dictionary) -> void:
+	_set_status("TWO SAVES FOUND")
+	var card: SaveConflictCard = SAVE_CONFLICT_CARD.instantiate()
+	add_child(card)
+	card.present(local, cloud)
+
+	var choice: CloudSaveCoordinator.Resolution = await card.chosen
+	card.queue_free()
+
+	_set_status("SYNCING SAVE...")
+	CloudSaveCoordinator.resolve_conflict(choice)
 
 
 func _set_status(text: String) -> void:

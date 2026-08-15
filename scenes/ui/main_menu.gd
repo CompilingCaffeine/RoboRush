@@ -40,6 +40,7 @@ const FOCUS_PADDING := "  "
 @onready var _tagline: Label = %Tagline
 @onready var _settings: SettingsMenu = %SettingsMenu
 @onready var _controls: ControlsCard = %ControlsCard
+@onready var _cloud_status: Label = %CloudStatus
 
 
 func _ready() -> void:
@@ -61,6 +62,9 @@ func _ready() -> void:
 
 	_build_buttons()
 	_refresh_records()
+
+	CloudSaveCoordinator.status_changed.connect(_on_cloud_status_changed)
+	_refresh_cloud_status()
 
 	_settings.closed.connect(_on_panel_closed)
 	_controls.closed.connect(_on_panel_closed)
@@ -139,6 +143,25 @@ func _refresh_records() -> void:
 	_records_lower.text = "MOST ROOMS %d    MOST SCRAP %d    HIGHEST HIT %.1f" % [
 		best.most_rooms_cleared, best.most_scrap_collected, best.highest_hit,
 	]
+
+
+func _on_cloud_status_changed(_status: CloudSaveCoordinator.Status) -> void:
+	_refresh_cloud_status()
+
+
+## Says where the player's progress currently is. Hidden entirely when there is no cloud in play,
+## which is every desktop launch: a line reading "SAVED LOCALLY" on a game that has only ever
+## saved locally is noise pretending to be information.
+##
+## It exists for the browser build, where "did my run actually get saved before I closed the tab"
+## is a real question with a real wrong answer, and the player has no other way to tell.
+func _refresh_cloud_status() -> void:
+	var status := CloudSaveCoordinator.status()
+	_cloud_status.visible = status != CloudSaveCoordinator.Status.LOCAL_ONLY
+	if not _cloud_status.visible:
+		return
+	UIPalette.style(_cloud_status, UIPalette.TEXT_FAINT)
+	_cloud_status.text = CloudSaveCoordinator.status_text()
 
 
 ## Focus is returned deliberately when a panel closes. A menu whose keyboard focus is nowhere

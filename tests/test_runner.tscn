@@ -1,4 +1,4 @@
-[gd_scene load_steps=27 format=3]
+[gd_scene load_steps=28 format=3]
 
 [ext_resource type="Script" path="res://tests/test_runner.gd" id="1_runner"]
 [ext_resource type="Script" path="res://tests/test_player_movement.gd" id="2_movement"]
@@ -28,6 +28,7 @@
 [ext_resource type="Script" path="res://tests/test_balance.gd" id="14_balance"]
 [ext_resource type="Script" path="res://tests/test_menus.gd" id="15_menus"]
 [ext_resource type="Script" path="res://tests/test_bootstrap.gd" id="28_bootstrap"]
+[ext_resource type="Script" path="res://tests/test_cloud_save.gd" id="29_cloud"]
 
 [node name="TestRunner" type="Node"]
 script = ExtResource("1_runner")
@@ -109,6 +110,9 @@ script = ExtResource("24_soak")
 
 [node name="Menus" type="Node" parent="."]
 script = ExtResource("15_menus")
+
+[node name="CloudSave" type="Node" parent="."]
+script = ExtResource("29_cloud")
 
 ; Last on purpose. It reaches into SaveManager to put it back in the state a cold launch starts
 ; in, and reloading the save afterwards would hand every suite after it whatever is in the real

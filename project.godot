@@ -19,6 +19,7 @@ config/icon="res://art/ui/icon.png"
 
 EventBus="*res://autoload/event_bus.gd"
 WavedashSDK="*res://addons/wavedash/WavedashSDK.gd"
+CloudSaveCoordinator="*res://autoload/cloud_save_coordinator.gd"
 GameManager="*res://autoload/game_manager.gd"
 RunManager="*res://autoload/run_manager.gd"
 AudioManager="*res://autoload/audio_manager.gd"
