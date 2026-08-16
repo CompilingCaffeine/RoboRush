@@ -1,4 +1,4 @@
-[gd_scene load_steps=28 format=3]
+[gd_scene load_steps=29 format=3]
 
 [ext_resource type="Script" path="res://tests/test_runner.gd" id="1_runner"]
 [ext_resource type="Script" path="res://tests/test_player_movement.gd" id="2_movement"]
@@ -19,6 +19,7 @@
 [ext_resource type="Script" path="res://tests/test_cascade_failure.gd" id="26_cascade"]
 [ext_resource type="Script" path="res://tests/test_gate.gd" id="27_gate"]
 [ext_resource type="Script" path="res://tests/test_hud.gd" id="17_hud"]
+[ext_resource type="Script" path="res://tests/test_minimap.gd" id="30_minimap"]
 [ext_resource type="Script" path="res://tests/test_save.gd" id="11_save"]
 [ext_resource type="Script" path="res://tests/test_checkpoint.gd" id="23_checkpoint"]
 [ext_resource type="Script" path="res://tests/test_soak.gd" id="24_soak"]
@@ -80,6 +81,9 @@ script = ExtResource("19_post_boss")
 
 [node name="HUD" type="Node" parent="."]
 script = ExtResource("17_hud")
+
+[node name="Minimap" type="Node" parent="."]
+script = ExtResource("30_minimap")
 
 [node name="Save" type="Node" parent="."]
 script = ExtResource("11_save")
