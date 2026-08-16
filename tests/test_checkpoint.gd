@@ -47,6 +47,7 @@ func run() -> void:
 	await _test_a_restore_reproduces_the_run()
 	await _test_a_restore_does_not_duplicate_credit()
 	await _test_a_resumed_floor_keeps_the_boss_it_already_drew()
+	await _test_a_resumed_floor_keeps_the_shop_it_left()
 	await _test_every_ending_clears_the_checkpoint()
 	await _test_the_title_screen_offers_the_saved_run()
 	await _test_the_game_scene_resumes_the_saved_run()
@@ -503,6 +504,88 @@ func _test_a_resumed_floor_keeps_the_boss_it_already_drew() -> void:
 	SaveManager.clear_checkpoint()
 
 
+## The shop a run walks away from is the shop it comes back to, and putting it back costs the run
+## nothing.
+##
+## A floor is rebuilt from its seed on a resume, and everything on it can be: the rooms, the
+## enemies, the layout, the boss. The shop cannot. Its stands are stocked by `RunManager.draw_item`,
+## which draws against a ledger the *run* carries across the boundary, so re-stocking skipped
+## everything the shop had held before the save and reserved two more items in their place. The
+## player came back to a different shelf, and the pair they had been saving up for were gone from
+## the run without anyone having taken them — every resume cost two more.
+##
+## Both halves are checked, because either alone would pass on a broken build: the shelf is the one
+## the player left, *and* the run's ledger is untouched by the trip through the file.
+func _test_a_resumed_floor_keeps_the_shop_it_left() -> void:
+	SaveManager.clear_checkpoint()
+	SceneRouter._resume_requested = false
+	var game := await _open_game_scene()
+	var floor_node := game.get_node("%Floor") as FloorController
+	var shop: ShopRoom = floor_node._shop if floor_node != null else null
+	if not require(shop, "the floor being played has a shop"):
+		game.queue_free()
+		await advance_physics(1)
+		return
+
+	# Something bought off the shelf, so what comes back has to be the shop as the player left it
+	# rather than the shop the seed would build again.
+	RunManager.add_scrap(400)
+	for stand: ShopStand in shop.get_stands():
+		if stand.kind == ShopStand.Kind.ITEM and stand.item != null:
+			check(stand.interact(game.get_node("%Player") as Player), "an item is bought in the shop")
+			break
+
+	var shelf := _describe_shelf(shop)
+	check(not shelf.is_empty(), "the shop has stands to remember (%s)" % str(shelf))
+	check(&"" in shelf, "including the one just bought, which is now empty")
+
+	check(floor_node.save_run_now(), "the pause menu's save writes a checkpoint")
+	var checkpoint := SaveManager.get_checkpoint()
+	if not require(checkpoint, "and there is a checkpoint to resume from"):
+		game.queue_free()
+		await advance_physics(1)
+		return
+	check(checkpoint.floor_shop.item_ids == shelf, "the checkpoint carries the shelf")
+	check(checkpoint.validate(_campaign).is_empty(), "and it is still playable")
+
+	var reserved: Array[StringName] = checkpoint.offered_item_ids.duplicate()
+	game.queue_free()
+	await advance_physics(1)
+
+	SceneRouter._resume_requested = true
+	var resumed := await _open_game_scene()
+	var resumed_floor := resumed.get_node("%Floor") as FloorController
+	var resumed_shop: ShopRoom = resumed_floor._shop if resumed_floor != null else null
+	if require(resumed_shop, "the resumed floor has its shop"):
+		check(
+			_describe_shelf(resumed_shop) == shelf,
+			"and the shelf is the one the run left (%s, was %s)"
+				% [str(_describe_shelf(resumed_shop)), str(shelf)],
+		)
+	check(
+		RunManager.offered_item_ids == reserved,
+		"resuming spends nothing more out of the run's item pool (%d ids, was %d)"
+			% [RunManager.offered_item_ids.size(), reserved.size()],
+	)
+
+	resumed.queue_free()
+	await advance_physics(1)
+	RunManager.end_run(false)
+	SaveManager.clear_checkpoint()
+
+
+## What each of a shop's item stands is holding, in stand order, with an empty id for a stand with
+## nothing left on it. The same shape `ShopStock` records, read off a live shop by a different route
+## so a check comparing the two is not comparing the code under test with itself.
+func _describe_shelf(shop: ShopRoom) -> Array[StringName]:
+	var shelf: Array[StringName] = []
+	for stand: ShopStand in shop.get_stands():
+		if stand.kind != ShopStand.Kind.ITEM:
+			continue
+		shelf.append(&"" if stand.is_sold or stand.item == null else stand.item.id)
+	return shelf
+
+
 ## All four endings. A checkpoint that outlived any of them would offer the player a run they had
 ## already finished — with the scrap, the build, and the boss credit they finished it with.
 func _test_every_ending_clears_the_checkpoint() -> void:
@@ -788,6 +871,14 @@ func _test_validation_refuses_a_tampered_checkpoint() -> void:
 			func(c: RunCheckpoint) -> void:
 				for index: int in RunCheckpoint.MAX_FLOOR_RECORDS + 1:
 					c.stats.floors.append(FloorRecord.new())],
+		["a shop holding an item the game does not have",
+			func(c: RunCheckpoint) -> void: c.floor_shop.item_ids.append(&"item_of_pure_gold")],
+		["a shop with more stands than a shop has",
+			func(c: RunCheckpoint) -> void:
+				for index: int in RunCheckpoint.MAX_SHOP_STANDS + 1:
+					c.floor_shop.item_ids.append(&"")],
+		["a negative reroll count",
+			func(c: RunCheckpoint) -> void: c.floor_shop.rerolls_used = -1],
 	]
 
 	for mutation: Array in mutations:
@@ -824,6 +915,11 @@ func _test_a_checkpoint_round_trips_through_json() -> void:
 	check(read.item_ids == written.item_ids, "the build survives JSON in order")
 	check_near(read.integrity, written.integrity, "integrity survives JSON")
 	check(read.stats.floors.size() == written.stats.floors.size(), "the floor records survive JSON")
+	check(read.floor_shop.item_ids == written.floor_shop.item_ids, "the shop's shelf survives JSON in stand order")
+	check(
+		read.floor_shop.rerolls_used == written.floor_shop.rerolls_used,
+		"and how many times it had been rerolled",
+	)
 	check(read.validate(_campaign).is_empty(), "and what comes back is still playable")
 
 	var junk := RunCheckpoint.from_dict({
@@ -1053,7 +1149,16 @@ func _capture_synthetic_checkpoint(seed_value: int) -> RunCheckpoint:
 		held.append(unique)
 		RunManager.offered_item_ids.append(unique.id)
 
-	return RunCheckpoint.capture(_campaign, floor_config, 3.0, held)
+	# A shelf with one stand holding something and one already bought, because an empty shop is the
+	# one shape of `ShopStock` that survives every mistake a reader or writer could make.
+	var shop := ShopStock.new()
+	shop.rerolls_used = 2
+	var on_sale := _first_unique_item_other_than(unique)
+	if on_sale != null:
+		shop.item_ids.assign([&"", on_sale.id])
+		RunManager.offered_item_ids.append(on_sale.id)
+
+	return RunCheckpoint.capture(_campaign, floor_config, 3.0, held, shop)
 
 
 ## An item no run may hold twice, for the stacking checks. Read out of the floor's own pool rather
@@ -1062,6 +1167,17 @@ func _first_unique_item() -> ItemConfig:
 	var pool := _campaign.load_floor(1).get_items()
 	for item: ItemConfig in pool:
 		if item != null and not item.is_repeatable():
+			return item
+	return null
+
+
+## A second unique, so the fixture's shop can be holding something the fixture's robot is not
+## already carrying. Null for a pool with only one, which every check that uses it treats as "no
+## shelf to record".
+func _first_unique_item_other_than(taken: ItemConfig) -> ItemConfig:
+	var pool := _campaign.load_floor(1).get_items()
+	for item: ItemConfig in pool:
+		if item != null and not item.is_repeatable() and item != taken:
 			return item
 	return null
 

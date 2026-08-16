@@ -49,6 +49,7 @@ func run() -> void:
 	await _test_a_floor_cannot_afford_the_whole_shop()
 	await _test_stands_land_where_they_were_asked_to()
 	await _test_rerolling_does_not_consume_the_item_pool()
+	await _test_a_saved_shelf_is_put_back_rather_than_drawn()
 	await _test_an_empty_choice_creates_no_stands()
 
 
@@ -489,11 +490,14 @@ func _make_shop(scrap: int, stock_seed := 4242) -> void:
 	_shop = SHOP_ROOM_SCENE.instantiate()
 	_arena.add_child(_shop)
 
-	var positions: Array[Vector2] = [
-		Vector2(0.0, 0.0), Vector2(60.0, 0.0), Vector2(120.0, 0.0), Vector2(180.0, 0.0),
-	]
-	_shop.stock(_shop_config, _floor_config.get_items(), positions, stock_seed)
+	_shop.stock(_shop_config, _floor_config.get_items(), _stand_positions(), stock_seed)
 	await advance_physics(2)
+
+
+## Where this suite's stands go. One list rather than one per shop, so a check that builds a second
+## shop to compare against the first is comparing shops built the same way.
+func _stand_positions() -> Array[Vector2]:
+	return [Vector2(0.0, 0.0), Vector2(60.0, 0.0), Vector2(120.0, 0.0), Vector2(180.0, 0.0)]
 
 
 func _teardown() -> void:
@@ -571,6 +575,78 @@ func _test_rerolling_does_not_consume_the_item_pool() -> void:
 			"'%s' is reserved while it is on the shelf" % stand.item.display_name,
 		)
 
+	await _teardown()
+
+
+## The other way a shop can eat the item pool, and this one had no reroll in it at all: it happened
+## to anyone who saved and came back.
+##
+## A floor is rebuilt from its seed when a run is resumed onto it, and rebuilding a shop used to
+## mean stocking it — which draws from `RunManager.offered_item_ids`, a ledger the *run* carries
+## across the boundary. The items the shop held before the save were still struck off, so the draw
+## skipped them and reserved two more: the player came back to a shelf of different things, and the
+## pair they had been deciding between were gone from the run without ever having been taken. Every
+## resume cost two more.
+##
+## So the claim is not "the shelf round-trips" but the thing the pool cannot survive: putting a
+## saved shelf back reserves *nothing*, because it was all reserved the first time.
+func _test_a_saved_shelf_is_put_back_rather_than_drawn() -> void:
+	await _make_shop(400)
+	var stands := _item_stands(_shop)
+	if stands.size() < 2:
+		fail("the shop is not stocked as expected")
+		await _teardown()
+		return
+
+	# A shop with something bought off it and a reroll behind it, so what is being restored is a
+	# shelf the player changed rather than the one the seed would have produced anyway.
+	check(stands[0].interact(_player), "an item is bought off the shelf")
+	_shop.reroll()
+	await advance_physics(1)
+
+	var saved := ShopStock.of(_shop)
+	var reserved := RunManager.offered_item_ids.size()
+	var expected: Array[StringName] = saved.item_ids.duplicate()
+	check(expected.size() == _shop_config.item_stand_count, "the shelf records one entry per stand")
+	check(&"" in expected, "including the stand that was bought, recorded as holding nothing")
+
+	# A second shop from the same seed and the same pool, given the shelf. Built here rather than
+	# through `_make_shop`, because that starts a run — and a run reset would empty the very ledger
+	# this is watching.
+	var revived: ShopRoom = SHOP_ROOM_SCENE.instantiate()
+	_arena.add_child(revived)
+	revived.stock(_shop_config, _floor_config.get_items(), _stand_positions(), 4242, saved)
+	await advance_physics(1)
+
+	check(
+		RunManager.offered_item_ids.size() == reserved,
+		"putting a saved shelf back reserves nothing further (%d ids held, was %d)"
+			% [RunManager.offered_item_ids.size(), reserved],
+	)
+
+	var restored: Array[StringName] = []
+	var sold := 0
+	for stand: ShopStand in revived.get_stands():
+		if stand.kind != ShopStand.Kind.ITEM:
+			continue
+		restored.append(&"" if stand.item == null else stand.item.id)
+		if stand.is_sold:
+			sold += 1
+	check(restored == expected, "and the shelf comes back as it was left (%s)" % str(restored))
+	check(sold == 1, "with the bought stand still sold (%d sold)" % sold)
+
+	var reroll := _stand_of_kind(revived, ShopStand.Kind.REROLL)
+	check(
+		revived.get_rerolls_used() == 1,
+		"the reroll count comes back (%d)" % revived.get_rerolls_used(),
+	)
+	check(
+		reroll != null and reroll.price == _shop_config.reroll_price(1),
+		"so the next reroll is priced as the second, not the first (%d)"
+			% [reroll.price if reroll != null else -1],
+	)
+
+	revived.queue_free()
 	await _teardown()
 
 

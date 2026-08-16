@@ -30,18 +30,40 @@ var _rerolls_used := 0
 
 ## Builds the shop. `positions` are in *global* space, because that is what a Room reports
 ## and because this node sits under a room that is itself offset onto the floor grid.
+##
+## `saved` is the shelf a resumed run left behind (see `ShopStock`). Given one, the stands are put
+## back rather than stocked: the draw is skipped entirely, because drawing is what spends items out
+## of the run's pool and the items on this shelf were spent the first time the floor was built.
+## Passing nothing stocks the shop the way it always has, and so does a shelf with no stands
+## recorded on it: a first arrival, a floor whose shop had nothing to remember, and a checkpoint
+## written before shelves were carried all mean the same thing here, which is "draw".
+##
+## What a resumed shop does not restore is the position of its own generator: `_rng` is re-seeded
+## from the floor's seed and nothing consumes from it here, so a reroll bought after a resume draws
+## from the front of the sequence rather than from wherever the pre-save rerolls had reached. It
+## still draws from the run's pool as it stands, so nothing is duplicated or handed back — the only
+## difference is which of the remaining items a later reroll lands on, which is not something a
+## player can be surprised by.
 func stock(
 	shop_config: ShopConfig,
 	item_pool: Array[ItemConfig],
 	positions: Array[Vector2],
 	seed_value: int,
+	saved: ShopStock = null,
 ) -> void:
 	config = shop_config
 	_pool = item_pool
 	_rng.seed = seed_value
+	_rerolls_used = saved.rerolls_used if saved != null else 0
 
 	if config == null or positions.is_empty():
 		return
+
+	# Resolved once, here, rather than per stand: the pool is the same for every stand and this is
+	# the only place that knows both the shelf and the pool it was drawn from.
+	var restored: Array[ItemConfig] = []
+	if saved != null:
+		restored = saved.resolve(_pool)
 
 	for index: int in positions.size():
 		var stand: ShopStand = STAND_SCENE.instantiate()
@@ -50,7 +72,7 @@ func stock(
 		# After add_child: global_position is meaningless until the node is in the tree.
 		stand.global_position = positions[index]
 		_stands.append(stand)
-		_assign_kind(stand, index)
+		_assign_kind(stand, index, restored)
 
 	# A stand's `_ready` fires inside `add_child`, before `_assign_kind` has told it what it
 	# is, so every stand draws itself once as an empty item stand. Item stands then redraw
@@ -136,9 +158,18 @@ func get_rerolls_used() -> int:
 ## The first `item_stand_count` positions sell items; then a repair stand, then a reroll
 ## stand. Driven by how many positions the template declares, so a bigger shop is a
 ## template edit.
-func _assign_kind(stand: ShopStand, index: int) -> void:
+##
+## `restored` is one entry per item stand of a resumed shop's shelf, and empty for a shop being
+## stocked for the first time. A null entry is a stand with nothing left to sell — bought, or
+## stocked from a dry pool — which `stock_item` already reads as sold, so the two need no separate
+## handling here. A stand the shelf does not reach (a shop that has grown a stand since the file was
+## written) is stocked normally rather than left blank.
+func _assign_kind(stand: ShopStand, index: int, restored: Array[ItemConfig]) -> void:
 	if index < config.item_stand_count:
-		_restock(stand)
+		if index < restored.size():
+			stand.stock_item(restored[index], config.price_for(restored[index]))
+		else:
+			_restock(stand)
 		return
 
 	if index == config.item_stand_count:

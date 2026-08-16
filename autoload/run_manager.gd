@@ -294,15 +294,15 @@ func restore_run(checkpoint: RunCheckpoint, campaign: RunDefinition) -> void:
 ## hazard committed before the boss died can kill the player in the same frame the reward is
 ## claimed. The descent is already refused in that case; this is the same guard one level down,
 ## because a checkpoint written for a run that lost would offer the player their death back.
-func checkpoint_floor(campaign: RunDefinition, floor_config: FloorConfig, player: Player) -> void:
+## `shop` is what the floor's shop is holding — see `ShopStock`, and note that a *boundary*
+## checkpoint needs it as much as a mid-floor one does: the floor being descended into has already
+## stocked its shop out of the run's item ledger by the time this is called.
+func checkpoint_floor(
+	campaign: RunDefinition, floor_config: FloorConfig, player: Player, shop: ShopStock
+) -> void:
 	if not _can_checkpoint(campaign, floor_config, player):
 		return
-
-	var health := player.get_health_component()
-	var inventory := player.get_item_inventory()
-	SaveManager.store_checkpoint(
-		RunCheckpoint.capture(campaign, floor_config, health.current, inventory.get_items())
-	)
+	SaveManager.store_checkpoint(_capture(campaign, floor_config, player, shop))
 
 
 ## Checkpoints the run where it stands, floor progress and all. What the pause menu's SAVE GAME
@@ -313,20 +313,30 @@ func checkpoint_floor(campaign: RunDefinition, floor_config: FloorConfig, player
 ## the guard is shared rather than written twice. Returns whether a checkpoint was written: a run
 ## that has already ended cannot be saved, and the menu says so rather than claiming otherwise.
 func checkpoint_here(
-	campaign: RunDefinition, floor_config: FloorConfig, player: Player,
+	campaign: RunDefinition, floor_config: FloorConfig, player: Player, shop: ShopStock,
 	cleared_rooms: Array[int], visited_rooms: Array[int], clears: int
 ) -> bool:
 	if not _can_checkpoint(campaign, floor_config, player):
 		return false
 
-	var health := player.get_health_component()
-	var inventory := player.get_item_inventory()
-	var checkpoint := RunCheckpoint.capture(
-		campaign, floor_config, health.current, inventory.get_items()
-	)
+	var checkpoint := _capture(campaign, floor_config, player, shop)
 	checkpoint.record_floor_progress(cleared_rooms, visited_rooms, clears)
 	SaveManager.store_checkpoint(checkpoint)
 	return true
+
+
+## The capture both paths share, for the reason they share `_can_checkpoint`: everything a
+## checkpoint records of the run and the floor it is standing on is decided here once, so the
+## boundary and the pause menu cannot record different things about the same run. What the pause
+## menu adds on top is floor *progress*, which a boundary genuinely has none of.
+func _capture(
+	campaign: RunDefinition, floor_config: FloorConfig, player: Player, shop: ShopStock
+) -> RunCheckpoint:
+	var health := player.get_health_component()
+	var inventory := player.get_item_inventory()
+	return RunCheckpoint.capture(
+		campaign, floor_config, health.current, inventory.get_items(), shop
+	)
 
 
 ## Whether there is a run here worth writing down. Shared by both checkpoint paths so that the

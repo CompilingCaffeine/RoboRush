@@ -114,6 +114,13 @@ var _content_fingerprint := ""
 ## reading the number from *before* this clear.
 var _clears := 0
 
+## This floor's shop, or null for a floor whose layout has no shop room or whose template declares
+## no stands. Held because it is the only thing that can say what is on its shelves when a
+## checkpoint is written, and because nothing else on the floor can be asked for it: the shop is a
+## child of a room, and finding it by walking the tree would be a second answer to a question this
+## node already knows the answer to.
+var _shop: ShopRoom
+
 ## The boss, once the player has walked into its arena. Null until then — a boss that
 ## existed from the moment the floor was built would be a boss firing at an empty room.
 var _boss: Boss
@@ -148,14 +155,27 @@ var _resume_cleared: Array[int] = []
 var _resume_visited: Array[int] = []
 var _resume_clears := 0
 
+## The shelf the resumed run left in this floor's shop, consumed by the same `build` and forgotten
+## the same way. Null rather than an empty stock for "there is nothing saved here", because an empty
+## `ShopStock` is a real answer — a floor whose shop has no stands — and the two must not be
+## confused: one stocks the shop from the pool and the other deliberately does not.
+var _resume_shop: ShopStock = null
+
 
 ## Tells the next `build` how much of the floor it is about to open was already done, so a run
 ## resumed from a mid-floor save comes back to the rooms it had cleared rather than to a floor that
 ## has forgotten them. See `RunCheckpoint.floor_cleared_room_ids`.
-func resume_floor_progress(cleared: Array[int], visited: Array[int], clears: int) -> void:
+##
+## `shop` is that floor's shelf, and it is carried by every checkpoint rather than only by a
+## mid-floor one — see `ShopStock` for why a shop is not floor *progress* even though it is
+## floor-local.
+func resume_floor_progress(
+	cleared: Array[int], visited: Array[int], clears: int, shop: ShopStock = null
+) -> void:
 	_resume_cleared = cleared.duplicate()
 	_resume_visited = visited.duplicate()
 	_resume_clears = clears
+	_resume_shop = shop
 
 
 ## Writes a checkpoint of the run exactly where it stands, including this floor's progress.
@@ -178,7 +198,9 @@ func save_run_now() -> bool:
 	for id: int in visited:
 		if visited[id]:
 			visited_ids.append(id)
-	return RunManager.checkpoint_here(campaign, config, _player, cleared, visited_ids, _clears)
+	return RunManager.checkpoint_here(
+		campaign, config, _player, ShopStock.of(_shop), cleared, visited_ids, _clears
+	)
 
 
 func build(player: Player, seed_value: int) -> bool:
@@ -241,16 +263,18 @@ func _open_session(generated: FloorLayout, seed_value: int) -> void:
 	# out of it must not arrive on the next floor carrying the last one's cleared rooms.
 	var resumed_cleared := _resume_cleared
 	var resumed_visited := _resume_visited
+	var resumed_shop := _resume_shop
 	_clears = _resume_clears
 	_resume_cleared = []
 	_resume_visited = []
 	_resume_clears = 0
+	_resume_shop = null
 	for id: int in resumed_cleared:
 		_cleared[id] = true
 	for id: int in resumed_visited:
 		visited[id] = true
 
-	_instantiate_rooms()
+	_instantiate_rooms(resumed_shop)
 	_instantiate_doors()
 	_place_player_in_start_room()
 
@@ -387,7 +411,11 @@ func get_view_rect_for(room: Room) -> Rect2i:
 	)
 
 
-func _instantiate_rooms() -> void:
+## `resumed_shop` is the shelf a resumed run left in this floor's shop, or null for a floor being
+## opened for the first time. Threaded down from `_open_session` rather than read off a field,
+## because the shop is stocked in the middle of this loop and a field would have to stay set across
+## it — which is one more thing that has to be cleared at exactly the right moment.
+func _instantiate_rooms(resumed_shop: ShopStock = null) -> void:
 	for plan: RoomPlan in layout.rooms:
 		var room: Room = ROOM_SCENE.instantiate()
 		# Grid cell to world: the room's interior origin sits one wall inside its cell.
@@ -402,7 +430,7 @@ func _instantiate_rooms() -> void:
 			# seed describes rather than a different one that merely starts the same.
 			room.populate(config, _encounter_rng, is_room_cleared(plan.id))
 		elif plan.type == RoomTemplate.Type.SHOP:
-			_stock_shop(room)
+			_stock_shop(room, resumed_shop)
 		room.set_active(false)
 		room.player_entered.connect(_on_player_entered_room)
 		room.get_room_combat().cleared.connect(_on_room_cleared.bind(plan.id))
@@ -418,13 +446,18 @@ func _instantiate_rooms() -> void:
 ## than sharing a generator: the room it stands in is instantiated among nine others, and a shop
 ## reading from the stream the rooms are populated from would restock itself every time an enemy
 ## placement changed.
-func _stock_shop(room: Room) -> void:
+## `resumed_shop` is a shelf to put back rather than to draw. Handed straight to `stock`, which is
+## what decides between the two — see `ShopRoom.stock` and `ShopStock` for why a resumed shop must
+## not draw: its items were taken out of the run's pool the first time this floor was built, and
+## drawing again would spend two more that the player never sees.
+func _stock_shop(room: Room, resumed_shop: ShopStock = null) -> void:
 	var positions := room.get_shop_positions()
 	if config.shop == null or positions.is_empty():
 		return
 	var shop: ShopRoom = SHOP_ROOM_SCENE.instantiate()
 	room.add_child(shop)
-	shop.stock(config.shop, config.get_items(), positions, _shop_rng.randi())
+	shop.stock(config.shop, config.get_items(), positions, _shop_rng.randi(), resumed_shop)
+	_shop = shop
 
 
 ## One door per link, filling the passage between two rooms. Each link is visited once — the
@@ -723,7 +756,7 @@ func _advance_to_next_floor(next_index: int, seed_value: int) -> void:
 	# released, the new one is built and empty, and the run's whole state is a handful of numbers.
 	# Anywhere earlier and the checkpoint would describe a floor that is being torn down; anywhere
 	# later and it would have to describe a fight in progress. See `RunCheckpoint`.
-	RunManager.checkpoint_floor(campaign, config, _player)
+	RunManager.checkpoint_floor(campaign, config, _player, ShopStock.of(_shop))
 	floor_advanced.emit(config)
 
 
@@ -767,6 +800,11 @@ func _release_session() -> void:
 		remove_child(_session)
 		_session.queue_free()
 		_session = null
+
+	# The shop dies with the session that owns it — it is a child of one of the rooms just freed —
+	# so what is dropped here is only this node's reference to it. A stale one would have the next
+	# floor's checkpoint recording the shelf of the floor the run has left.
+	_shop = null
 
 	_rooms.clear()
 	_doors_by_room.clear()

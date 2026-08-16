@@ -100,13 +100,16 @@ func _ready() -> void:
 	# placed. One connection covers both the opening floor and every descent.
 	_floor.floor_theme_changed.connect(_feedback.set_floor_theme)
 	# Before the build, because the build is what instantiates the rooms and a room that was already
-	# cleared has to be built empty rather than emptied afterwards. Empty for a checkpoint written at
-	# a floor boundary, which is every checkpoint written by anything other than the pause menu.
+	# cleared has to be built empty rather than emptied afterwards. The room lists are empty for a
+	# checkpoint written at a floor boundary, which is every checkpoint written by anything other
+	# than the pause menu; the shop's shelf is not, because a floor stocks its shop before the player
+	# has taken a step on it (see `ShopStock`).
 	if checkpoint != null:
 		_floor.resume_floor_progress(
 			checkpoint.floor_cleared_room_ids,
 			checkpoint.floor_visited_room_ids,
 			checkpoint.floor_clears,
+			checkpoint.floor_shop,
 		)
 	if not _floor.build(_player, floor_seed):
 		# Generation failing is a content bug, not something to hide from the player behind a
