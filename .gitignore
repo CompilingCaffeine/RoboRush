@@ -7,5 +7,8 @@
 /build/
 /export/
 
+# Python bytecode, from the asset generators and the CI helpers
+__pycache__/
+
 # macOS
 .DS_Store

@@ -114,9 +114,21 @@ var _content_fingerprint := ""
 ## reading the number from *before* this clear.
 var _clears := 0
 
+## This floor's shop, or null for a floor whose layout has no shop room or whose template declares
+## no stands. Held because it is the only thing that can say what is on its shelves when a
+## checkpoint is written, and because nothing else on the floor can be asked for it: the shop is a
+## child of a room, and finding it by walking the tree would be a second answer to a question this
+## node already knows the answer to.
+var _shop: ShopRoom
+
 ## The boss, once the player has walked into its arena. Null until then — a boss that
 ## existed from the moment the floor was built would be a boss firing at an empty room.
 var _boss: Boss
+
+## The boss's choice of three, while it stands unclaimed. Null before the boss dies and again once
+## the choice is taken, which is exactly the window a checkpoint has to be able to describe — see
+## `get_pending_boss_reward_ids`.
+var _boss_reward: ShopRoom
 
 ## Which boss guards this floor, drawn once in `build()`.
 var _boss_encounter: BossEncounter
@@ -140,6 +152,70 @@ var _boss_defeated_handler := Callable()
 
 ## Generates and builds the floor. Returns false if generation failed, so the caller can
 ## report it rather than presenting an empty world.
+## Floor-local progress a resumed run is bringing back with it, consumed by the next `build` and
+## then forgotten. A field rather than an argument because it applies to exactly one floor — the
+## one being resumed onto — and a descent from it must open the next floor untouched. Cleared in
+## `_open_session` for that reason, not here.
+var _resume_cleared: Array[int] = []
+var _resume_visited: Array[int] = []
+var _resume_clears := 0
+
+## The shelf the resumed run left in this floor's shop, consumed by the same `build` and forgotten
+## the same way. Null rather than an empty stock for "there is nothing saved here", because an empty
+## `ShopStock` is a real answer — a floor whose shop has no stands — and the two must not be
+## confused: one stocks the shop from the pool and the other deliberately does not.
+var _resume_shop: ShopStock = null
+
+## The boss's offer the resumed run left standing unclaimed, by item id, and empty for every
+## checkpoint that was not taken in that window. Consumed by the same `build`.
+var _resume_boss_reward: Array[StringName] = []
+
+
+## Tells the next `build` how much of the floor it is about to open was already done, so a run
+## resumed from a mid-floor save comes back to the rooms it had cleared rather than to a floor that
+## has forgotten them. See `RunCheckpoint.floor_cleared_room_ids`.
+##
+## `shop` is that floor's shelf, and it is carried by every checkpoint rather than only by a
+## mid-floor one — see `ShopStock` for why a shop is not floor *progress* even though it is
+## floor-local. `boss_reward` is the offer left standing over a dead boss, which is the one piece of
+## floor state whose loss is not merely unfair but final — see `get_pending_boss_reward_ids`.
+func resume_floor_progress(
+	cleared: Array[int], visited: Array[int], clears: int, shop: ShopStock = null,
+	boss_reward: Array[StringName] = []
+) -> void:
+	_resume_cleared = cleared.duplicate()
+	_resume_visited = visited.duplicate()
+	_resume_clears = clears
+	_resume_shop = shop
+	_resume_boss_reward = boss_reward.duplicate()
+
+
+## Writes a checkpoint of the run exactly where it stands, including this floor's progress.
+##
+## The pause menu's SAVE GAME. Everything the automatic boundary checkpoint records is recorded the
+## same way — this adds only the floor-local part, which is what makes a save taken in the middle
+## of a floor resume honestly instead of paying the floor's rewards out twice.
+##
+## Answers whether a checkpoint was actually written, because the menu says so on screen and a
+## button that reports "saved" when the run was already over would be lying about the one thing the
+## player pressed it to find out.
+func save_run_now() -> bool:
+	if _player == null or not is_instance_valid(_player) or campaign == null:
+		return false
+	var cleared: Array[int] = []
+	for id: int in _cleared:
+		if _cleared[id]:
+			cleared.append(id)
+	var visited_ids: Array[int] = []
+	for id: int in visited:
+		if visited[id]:
+			visited_ids.append(id)
+	return RunManager.checkpoint_here(
+		campaign, config, _player, ShopStock.of(_shop), get_pending_boss_reward_ids(),
+		cleared, visited_ids, _clears
+	)
+
+
 func build(player: Player, seed_value: int) -> bool:
 	assert(config != null, "FloorController.config is unset: assign a FloorConfig resource.")
 
@@ -188,10 +264,34 @@ func _open_session(generated: FloorLayout, seed_value: int) -> void:
 	# seed alone. Drawing it on arrival would make which boss you fight depend on how the RNG
 	# had been consumed getting there, and one `--seed` would stop reproducing the whole run.
 	_boss_encounter = _draw_boss_encounter()
-	RunManager.record_floor_boss(_boss_encounter.id if _boss_encounter != null else &"")
+	# Only when there is one to record. A floor that could not be given a boss must not *erase* the
+	# one this floor's record already names — that record is what a resume reads to take the boss
+	# back (`_draw_boss_encounter`), and overwriting it with an empty id would turn a floor that
+	# failed to draw once into a floor that can never draw again.
+	if _boss_encounter != null:
+		RunManager.record_floor_boss(_boss_encounter.id)
 
-	_instantiate_rooms()
+	# Taken before the rooms are built, because `_instantiate_rooms` is what has to know, and
+	# emptied in the same breath: this describes the floor being opened right now, and a descent
+	# out of it must not arrive on the next floor carrying the last one's cleared rooms.
+	var resumed_cleared := _resume_cleared
+	var resumed_visited := _resume_visited
+	var resumed_shop := _resume_shop
+	var resumed_reward := _resume_boss_reward
+	_clears = _resume_clears
+	_resume_cleared = []
+	_resume_visited = []
+	_resume_clears = 0
+	_resume_shop = null
+	_resume_boss_reward = []
+	for id: int in resumed_cleared:
+		_cleared[id] = true
+	for id: int in resumed_visited:
+		visited[id] = true
+
+	_instantiate_rooms(resumed_shop)
 	_instantiate_doors()
+	_restore_boss_reward(resumed_reward)
 	_place_player_in_start_room()
 
 	# The next floor starts loading now, while the player has this one to fight through. By the time
@@ -199,6 +299,46 @@ func _open_session(generated: FloorLayout, seed_value: int) -> void:
 	# floor's templates, tile sheets and enemy scenes out of the one frame the transition happens in.
 	if campaign != null and floor_index >= 0:
 		campaign.preload_floor(floor_index + 1)
+
+
+## Stands the boss's offer back up in a resumed floor's arena, if the run was saved with one
+## unclaimed. Nothing to do for every other checkpoint, which is nearly all of them: the list is
+## empty unless the save was taken between the killing blow and the choice.
+##
+## The items are resolved rather than drawn, for the reason `_place_boss_reward` gives — they were
+## struck off the run's pool when they were first offered, and the run is still carrying that.
+##
+## Only into a boss room the checkpoint says is cleared. An offer standing over a *live* boss is not
+## a state this game can produce, so a file describing one has been edited, and the honest answer to
+## a state that cannot happen is to build the floor as though it did not say so — the player then
+## fights the boss and is offered a reward by the ordinary path.
+func _restore_boss_reward(ids: Array[StringName]) -> void:
+	if ids.is_empty():
+		return
+
+	var arenas := layout.find_by_type(RoomTemplate.Type.BOSS)
+	if arenas.is_empty():
+		return
+	var plan: RoomPlan = arenas[0]
+	if not is_room_cleared(plan.id):
+		push_warning(
+			"FloorController: the saved run left a boss reward on floor %d, whose arena is not "
+			% config.floor_number
+			+ "recorded as cleared; the offer has been dropped."
+		)
+		return
+
+	var catalogue: Dictionary[StringName, ItemConfig] = {}
+	for item: ItemConfig in config.get_items():
+		if item != null:
+			catalogue[item.id] = item
+
+	var items: Array[ItemConfig] = []
+	for id: StringName in ids:
+		var item: ItemConfig = catalogue.get(id)
+		if item != null:
+			items.append(item)
+	_place_boss_reward(_rooms[plan.id], items)
 
 
 ## Points every subsystem's generator at its own stream of this floor's seed.
@@ -237,26 +377,43 @@ func get_boss_encounter() -> BossEncounter:
 	return _boss_encounter
 
 
-## Picks this floor's boss from its pool. Never one the run has already fought.
+## Picks this floor's boss from its pool. Never one the run has already fought — unless it is this
+## floor's own, already drawn, and being taken back.
 ##
 ## The campaign policy is one distinct boss per floor, so a repeat is not a degraded outcome to
 ## fall back on — it is a content error, and this is where it becomes visible instead of silent.
 ##
-## It used to fall back to the whole pool once everything had been fought, on the reasoning that a
-## repeated boss is a better run than a boss-less one. That reasoning was sound while there were
-## two floors and two bosses, because the fallback was unreachable. At six floors it stops being a
-## safety net and becomes the actual behaviour: floors 3, 4, 5 and 6 would each quietly re-run a
-## fight the player had already won, and nothing anywhere would say so. A player cannot tell an
-## intended rematch from an exhausted pool, and neither could the log.
+## **A re-opened floor takes its boss back.** A floor is opened once per *visit*, and a resume is a
+## second visit to a floor the run has already been standing on: the boundary checkpoint is written
+## just after the floor opens, so by the time it is saved this floor's boss is already in
+## `fought_boss_ids`. Drawing again would therefore skip past the run's own boss — to a different
+## one on a floor whose pool holds two, and to *nothing* on a floor whose pool holds one, which is
+## every floor of a campaign that gives each floor a boss of its own. A boss room with no boss still
+## seals behind the player (see `_needs_clearing`) and nothing in it can ever clear it, so what the
+## second draw actually produced was an empty locked room for the rest of the run. Asking the run
+## which boss this floor already drew is what makes a resumed floor the same floor.
 ##
-## Refusing instead is safe because the failure cannot reach a player: `CampaignValidator` proves
-## before the run starts that every floor can be given a boss of its own, so an empty draw here
-## means the campaign was never validated. Loud and once, rather than quiet and four times.
+## **An exhausted pool draws a repeat rather than nothing.** This used to refuse, on the reasoning
+## that `CampaignValidator` proves every floor can be given a boss of its own before the run starts,
+## so an empty draw could only mean an unvalidated campaign and could not reach a player. The
+## paragraph above is how it reached one anyway — and the cost of being wrong is asymmetric in a way
+## the old reasoning did not weigh. A repeated fight is a run that continues and a loud error in the
+## log; no boss at all is a sealed room, a lost run, and the same error. The refusal is kept as the
+## error, not as the behaviour.
 func _draw_boss_encounter() -> BossEncounter:
-	var unfought: Array[BossEncounter] = []
+	var pool: Array[BossEncounter] = []
 	for entry: BossEncounter in config.boss_pool:
-		if entry == null or not entry.is_valid():
-			continue
+		if entry != null and entry.is_valid():
+			pool.append(entry)
+
+	# Before the draw, and before anything is struck off: this floor has already had its turn.
+	var already_drawn := RunManager.current_floor_boss_id()
+	for entry: BossEncounter in pool:
+		if entry.id == already_drawn:
+			return _claim_boss(entry)
+
+	var unfought: Array[BossEncounter] = []
+	for entry: BossEncounter in pool:
 		if entry.id not in RunManager.fought_boss_ids:
 			unfought.append(entry)
 
@@ -266,11 +423,25 @@ func _draw_boss_encounter() -> BossEncounter:
 			+ "The campaign must give every floor a boss of its own — see CampaignValidator.")
 			% [config.floor_number, config.id]
 		)
-		return null
+		if pool.is_empty():
+			return null
+		return _claim_boss(pool[_boss_rng.randi_range(0, pool.size() - 1)])
 
-	var drawn := unfought[_boss_rng.randi_range(0, unfought.size() - 1)]
-	RunManager.fought_boss_ids.append(drawn.id)
-	return drawn
+	return _claim_boss(unfought[_boss_rng.randi_range(0, unfought.size() - 1)])
+
+
+## Records that the run has met `entry`, and hands it back so the draw above reads as one
+## expression.
+##
+## Appended only if it is not already there. The two paths that can hand this a boss the run has
+## already fought — a floor taking its own boss back, and an exhausted pool repeating one — would
+## otherwise write a second copy of the same id, and a duplicate in that list is a checkpoint this
+## build refuses to load: `RunCheckpoint._validate_collections` treats it as a boss credited twice,
+## which is exactly what it would be if anything else had produced it.
+func _claim_boss(entry: BossEncounter) -> BossEncounter:
+	if entry.id not in RunManager.fought_boss_ids:
+		RunManager.fought_boss_ids.append(entry.id)
+	return entry
 
 
 func get_room(id: int) -> Room:
@@ -296,7 +467,11 @@ func get_view_rect_for(room: Room) -> Rect2i:
 	)
 
 
-func _instantiate_rooms() -> void:
+## `resumed_shop` is the shelf a resumed run left in this floor's shop, or null for a floor being
+## opened for the first time. Threaded down from `_open_session` rather than read off a field,
+## because the shop is stocked in the middle of this loop and a field would have to stay set across
+## it — which is one more thing that has to be cleared at exactly the right moment.
+func _instantiate_rooms(resumed_shop: ShopStock = null) -> void:
 	for plan: RoomPlan in layout.rooms:
 		var room: Room = ROOM_SCENE.instantiate()
 		# Grid cell to world: the room's interior origin sits one wall inside its cell.
@@ -305,9 +480,13 @@ func _instantiate_rooms() -> void:
 
 		room.build(plan, config.theme)
 		if plan.type == RoomTemplate.Type.COMBAT:
-			room.populate(config, _encounter_rng)
+			# A room a resumed run had already fought through is built empty. `populate` still draws
+			# from the encounter stream for it — see `Room.populate` — so the rooms after it in this
+			# loop get the same enemies they got the first time, and the floor stays the floor its
+			# seed describes rather than a different one that merely starts the same.
+			room.populate(config, _encounter_rng, is_room_cleared(plan.id))
 		elif plan.type == RoomTemplate.Type.SHOP:
-			_stock_shop(room)
+			_stock_shop(room, resumed_shop)
 		room.set_active(false)
 		room.player_entered.connect(_on_player_entered_room)
 		room.get_room_combat().cleared.connect(_on_room_cleared.bind(plan.id))
@@ -323,13 +502,18 @@ func _instantiate_rooms() -> void:
 ## than sharing a generator: the room it stands in is instantiated among nine others, and a shop
 ## reading from the stream the rooms are populated from would restock itself every time an enemy
 ## placement changed.
-func _stock_shop(room: Room) -> void:
+## `resumed_shop` is a shelf to put back rather than to draw. Handed straight to `stock`, which is
+## what decides between the two — see `ShopRoom.stock` and `ShopStock` for why a resumed shop must
+## not draw: its items were taken out of the run's pool the first time this floor was built, and
+## drawing again would spend two more that the player never sees.
+func _stock_shop(room: Room, resumed_shop: ShopStock = null) -> void:
 	var positions := room.get_shop_positions()
 	if config.shop == null or positions.is_empty():
 		return
 	var shop: ShopRoom = SHOP_ROOM_SCENE.instantiate()
 	room.add_child(shop)
-	shop.stock(config.shop, config.get_items(), positions, _shop_rng.randi())
+	shop.stock(config.shop, config.get_items(), positions, _shop_rng.randi(), resumed_shop)
+	_shop = shop
 
 
 ## One door per link, filling the passage between two rooms. Each link is visited once — the
@@ -412,7 +596,10 @@ func _enter_room(id: int) -> void:
 		_rooms[previous_id].set_active(false)
 	room.set_active(true)
 
-	if room.plan.type == RoomTemplate.Type.BOSS and _boss == null:
+	# Not for an arena a resumed run had already won. Without the clearing check a player who saved
+	# after killing the boss and before taking the reward would walk back into a second one — and
+	# `fought_boss_ids` would deny them the credit for it, so it would be a fight for nothing.
+	if room.plan.type == RoomTemplate.Type.BOSS and _boss == null and not is_room_cleared(id):
 		_spawn_boss(room)
 
 	if _needs_clearing(id):
@@ -523,13 +710,46 @@ func _on_boss_defeated(_boss_node: Node, room: Room) -> void:
 		_finish_floor()
 		return
 
+	_place_boss_reward(room, items)
+
+
+## Stands the offer up in the arena. Split from the draw above because a resumed floor has to put
+## back a choice that was already drawn: the items are spent out of the run's pool the moment they
+## are offered (`_take_reward`), so drawing a second set would both cost the run three more items
+## and hand the player a different prize than the one they walked away from.
+func _place_boss_reward(room: Room, items: Array[ItemConfig]) -> void:
+	if items.is_empty():
+		return
 	var reward: ShopRoom = SHOP_ROOM_SCENE.instantiate()
 	room.add_child(reward)
 	reward.choice_taken.connect(_on_boss_reward_taken)
 	reward.stock_choice(config.shop, items, _boss_reward_positions(room))
+	# Held so a checkpoint can be told what is standing there. Dropped when the choice is taken,
+	# because from that moment the floor is finishing and there is no offer left to record.
+	_boss_reward = reward
+
+
+## What the boss's offer is holding, for a checkpoint taken while it is standing unclaimed. Empty
+## whenever there is nothing to put back: before the boss dies, and after the choice is taken.
+##
+## This is the second half of what `ShopStock` does for the floor's shop, and it exists for a
+## sharper reason than a leak. The boss room is marked cleared the instant the boss falls, so a
+## resumed floor rebuilds it with no boss in it — and the stands died with the session that owned
+## them. Nothing else can descend a floor: `_finish_floor` runs only from `choice_taken`. A run
+## saved in the seconds between the killing blow and taking the prize therefore came back to a
+## cleared arena with nothing in it and no way off the floor, for the rest of the run.
+func get_pending_boss_reward_ids() -> Array[StringName]:
+	var ids: Array[StringName] = []
+	if _boss_reward == null or not is_instance_valid(_boss_reward):
+		return ids
+	for stand: ShopStand in _boss_reward.get_stands():
+		if not stand.is_sold and stand.item != null:
+			ids.append(stand.item.id)
+	return ids
 
 
 func _on_boss_reward_taken(_item: ItemConfig) -> void:
+	_boss_reward = null
 	_finish_floor()
 
 
@@ -625,7 +845,9 @@ func _advance_to_next_floor(next_index: int, seed_value: int) -> void:
 	# released, the new one is built and empty, and the run's whole state is a handful of numbers.
 	# Anywhere earlier and the checkpoint would describe a floor that is being torn down; anywhere
 	# later and it would have to describe a fight in progress. See `RunCheckpoint`.
-	RunManager.checkpoint_floor(campaign, config, _player)
+	RunManager.checkpoint_floor(
+		campaign, config, _player, ShopStock.of(_shop), get_pending_boss_reward_ids()
+	)
 	floor_advanced.emit(config)
 
 
@@ -669,6 +891,12 @@ func _release_session() -> void:
 		remove_child(_session)
 		_session.queue_free()
 		_session = null
+
+	# The shop and the boss's offer die with the session that owns them — both are children of rooms
+	# just freed — so what is dropped here is only this node's references. Stale ones would have the
+	# next floor's checkpoint recording the shelves of the floor the run has left.
+	_shop = null
+	_boss_reward = null
 
 	_rooms.clear()
 	_doors_by_room.clear()

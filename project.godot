@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="Robo Rush"
-run/main_scene="res://scenes/ui/main_menu.tscn"
+run/main_scene="res://scenes/ui/bootstrap.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://art/ui/icon.png"
 
@@ -19,12 +19,17 @@ config/icon="res://art/ui/icon.png"
 
 EventBus="*res://autoload/event_bus.gd"
 WavedashSDK="*res://addons/wavedash/WavedashSDK.gd"
+CloudSaveCoordinator="*res://autoload/cloud_save_coordinator.gd"
 GameManager="*res://autoload/game_manager.gd"
 RunManager="*res://autoload/run_manager.gd"
 AudioManager="*res://autoload/audio_manager.gd"
 SaveManager="*res://autoload/save_manager.gd"
 SceneRouter="*res://autoload/scene_router.gd"
 ScreenEffects="*res://autoload/screen_effects.gd"
+
+[audio]
+
+buses/default_bus_layout="res://data/audio/default_bus_layout.tres"
 
 [display]
 

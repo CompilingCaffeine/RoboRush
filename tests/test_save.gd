@@ -33,6 +33,8 @@ func run() -> void:
 	_test_boss_defeats_are_recorded_regardless_of_config_type()
 	await _test_a_finished_run_files_exactly_one_result()
 	await _test_a_failed_write_stays_pending_and_recovers()
+	_test_initialization_happens_once_and_is_announced()
+	await _test_writes_are_refused_before_initialization()
 
 	_teardown()
 
@@ -400,4 +402,108 @@ func _test_a_failed_write_stays_pending_and_recovers() -> void:
 	SaveManager.persistence_enabled = was_enabled
 	SaveManager._dirty = false
 	SaveManager._failed_writes = 0
+	await advance_physics(1)
+
+
+## The manager no longer loads in `_ready`, because the browser build's save may have to come
+## over the network first. What replaces it has to be exactly once: a second load would discard
+## everything the session had changed since the first, which is a rollback rather than a crash
+## and so would reach a player before it reached a log.
+func _test_initialization_happens_once_and_is_announced() -> void:
+	var real_save: String = SaveManager._save_path
+	var was_enabled: bool = SaveManager.persistence_enabled
+
+	# A file with a value in it no default could produce, so "it loaded" is provable rather than
+	# inferred from a field that happens to match.
+	SaveManager._save_path = "user://test_only_init_save.json"
+	SaveManager.persistence_enabled = false
+	var seed_file := FileAccess.open(SaveManager._save_path, FileAccess.WRITE)
+	seed_file.store_string(JSON.stringify({
+		"save_version": SaveManager.SAVE_VERSION,
+		"tutorial_completed": true,
+		"bosses_defeated": ["test_only_boss"],
+	}))
+	seed_file.close()
+
+	# The runner already initialized the live manager, so this reaches back to the state a
+	# freshly-launched game starts in.
+	SaveManager._initialized = false
+	SaveManager.tutorial_completed = false
+	SaveManager.bosses_defeated.clear()
+
+	var announcements := [0]
+	var counter := func() -> void: announcements[0] += 1
+	SaveManager.initialized.connect(counter)
+
+	check(not SaveManager.is_initialized(), "a manager that has not initialized says so")
+	SaveManager.initialize()
+
+	check(SaveManager.is_initialized(), "and says the opposite once it has")
+	check(SaveManager.tutorial_completed, "initializing loads the save")
+	check(
+		StringName("test_only_boss") in SaveManager.bosses_defeated,
+		"including the parts of it that are not settings",
+	)
+	check(announcements[0] == 1, "and announces itself exactly once")
+
+	# The second call is the one that matters: a bootstrap that retried, or a boot scene entered
+	# twice, must not roll the session back to what was on disk.
+	SaveManager.tutorial_completed = false
+	SaveManager.initialize()
+	check(not SaveManager.tutorial_completed, "initializing again does not reload over live state")
+	check(announcements[0] == 1, "and does not announce itself again")
+
+	SaveManager.initialized.disconnect(counter)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SaveManager._save_path))
+	SaveManager._save_path = real_save
+	SaveManager.persistence_enabled = was_enabled
+	SaveManager.initialize()
+
+
+## The failure this exists to prevent: a cloud fetch that has not landed yet, a menu that saves
+## something harmless — a settings tweak, a run counter — and the defaults this node was declared
+## with go over the player's real file. The save is gone before anything has read it.
+func _test_writes_are_refused_before_initialization() -> void:
+	var real_save: String = SaveManager._save_path
+	var real_temp: String = SaveManager._temp_path
+	var was_enabled: bool = SaveManager.persistence_enabled
+
+	SaveManager._save_path = "user://test_only_early_write.json"
+	SaveManager._temp_path = SaveManager._save_path + ".tmp"
+	SaveManager.persistence_enabled = true
+	SaveManager._initialized = false
+	SaveManager._warned_early_write = false
+
+	SaveManager.request_save()
+	SaveManager.save_game()
+	check(
+		not FileAccess.file_exists(SaveManager._save_path),
+		"a save before initialization writes nothing",
+	)
+	check(
+		not SaveManager._dirty,
+		"and is refused rather than left pending, which would only write the same defaults later",
+	)
+
+	# The two immediate writes bypass the debounce entirely, so they need the guard as much as the
+	# debounced path does.
+	SaveManager.store_checkpoint(null)
+	check(
+		not FileAccess.file_exists(SaveManager._save_path),
+		"storing a checkpoint before initialization writes nothing either",
+	)
+
+	SaveManager.initialize()
+	SaveManager.save_game()
+	check(
+		FileAccess.file_exists(SaveManager._save_path),
+		"and saving works normally once initialized",
+	)
+
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SaveManager._save_path))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SaveManager._temp_path))
+	SaveManager._save_path = real_save
+	SaveManager._temp_path = real_temp
+	SaveManager.persistence_enabled = was_enabled
+	SaveManager._dirty = false
 	await advance_physics(1)

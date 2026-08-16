@@ -1,0 +1,44 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scenes/ui/bootstrap.gd" id="1_bootstrap"]
+
+[node name="Bootstrap" type="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_bootstrap")
+
+[node name="Backdrop" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+; The menu's backdrop, exactly. The handover between the two scenes should look like the same
+; screen changing its mind, not like a second program starting.
+color = Color(0.043137, 0.05098, 0.070588, 1)
+
+[node name="Title" type="Label" parent="."]
+anchor_right = 1.0
+offset_top = 30.0
+offset_bottom = 60.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.345098, 0.941176, 0.784314, 1)
+theme_override_font_sizes/font_size = 24
+text = "ROBO RUSH"
+horizontal_alignment = 1
+
+[node name="Status" type="Label" parent="."]
+unique_name_in_owner = true
+anchor_right = 1.0
+offset_top = 64.0
+offset_bottom = 74.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.486275, 0.541176, 0.6, 1)
+text = "CONNECTING..."
+horizontal_alignment = 1

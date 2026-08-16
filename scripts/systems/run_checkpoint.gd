@@ -42,10 +42,21 @@ const MAX_ITEMS := 128
 const MAX_OFFERED_ITEMS := 512
 const MAX_BOSSES := 64
 const MAX_FLOOR_RECORDS := 64
+
+## Rooms on one floor, for the two lists a mid-floor save records. Floors are ten rooms; this is
+## far above anything a generator produces and far below a number worth allocating against.
+const MAX_FLOOR_ROOMS := 256
 const MAX_SCRAP := 999_999
 const MAX_ROOMS_CLEARED := 10_000
 const MAX_INTEGRITY := 999.0
 const MAX_DEATH_SAVES := 64
+
+## Item stands in one shop, and rerolls of one shop. A shop has two stands and a run buys a handful
+## of rerolls; both are refusals for a hand-edited file rather than tuning. The reroll ceiling is
+## above what `MAX_SCRAP` could ever pay for at `ShopConfig.reroll_price`, so no reachable run can be
+## refused by it.
+const MAX_SHOP_STANDS := 16
+const MAX_SHOP_REROLLS := 1024
 
 ## Twenty-four hours. A run that claims to have taken longer than a day is a corrupt duration
 ## rather than a patient player, and a run's records are folded into lifetime bests on the way
@@ -102,12 +113,64 @@ var fought_boss_ids: Array[StringName] = []
 ## victory as having cleared ten rooms.
 var stats := RunStats.new()
 
+## How much of the *current floor* was already done. Empty in a checkpoint written at a boundary,
+## which is every checkpoint the game writes by itself: a floor nobody has walked into yet has no
+## progress to record, so the fields below cost a boundary checkpoint two empty arrays.
+##
+## They exist for the save the player asks for from the pause menu, which can land anywhere. The
+## class comment above explains why the boundary is the only moment the *run* is a handful of
+## numbers, and none of that changes: a resume still rebuilds the floor from its seed and still
+## puts the player at the top of it. What these add is the one thing that made saving mid-floor
+## unfair rather than merely lossy — without them the rooms the player had already fought through
+## came back with their enemies and their rewards, while the scrap and items from clearing them
+## the first time stayed in the run. Save in the last room of a floor, reload, and the floor pays
+## out twice, and again, for as long as the player is willing to do it.
+##
+## Room ids are stable for a floor: the layout is generated from the floor's derived seed, and a
+## resume derives the same seed from the same run seed. So the ids recorded here name the same
+## rooms on the way back in. A room that has been cleared is rebuilt empty and pays nothing; a
+## room that was merely visited comes back on the minimap.
+var floor_cleared_room_ids: Array[int] = []
+var floor_visited_room_ids: Array[int] = []
+
+## What the current floor's shop has on its shelves. Recorded by *every* checkpoint, unlike the two
+## lists above, and the difference is worth being clear about: those describe how much of the floor
+## the player has done, and a floor nobody has walked into has done none of it. A shop is stocked
+## when the floor is *built*, before the player has taken a step, and stocking it spends items out
+## of the run's own ledger (see `ShopStock`). So a boundary checkpoint has no progress to record and
+## a shelf it must record anyway — it is part of what the floor was built as, not part of what the
+## player did to it.
+var floor_shop := ShopStock.new()
+
+## The boss's choice of three, if the run was put down while it stood unclaimed. Empty for every
+## other checkpoint, which is nearly all of them — the window is the seconds between the killing
+## blow and taking the prize.
+##
+## Recorded for a harder reason than the shelf above. The arena is marked cleared the instant the
+## boss falls, so a resumed floor rebuilds it with no boss in it, and the stands are gone with the
+## session that held them. Taking one of them is the *only* thing that finishes a floor
+## (`FloorController._finish_floor`), so a run saved in that window came back to an empty cleared
+## arena it could never leave — with the three items still struck off its pool.
+var floor_boss_reward_ids: Array[StringName] = []
+
+## The floor's own clear counter, which decides when the next repair cell and the next item drop
+## are due (`FloorController._clears`). Carried for the same reason as the ids: restarting it at
+## zero would restart the reward cadence with it, so a resumed floor would hand out its early
+## drops a second time.
+var floor_clears: int = 0
+
 
 ## Takes a checkpoint of the run as it stands. Called at a floor boundary and nowhere else; see
 ## the class comment for why nowhere else is safe.
+##
+## `shop` and `boss_reward` are asked for rather than defaulted, and both callers are one method
+## apart in `RunManager` so that neither can answer differently. Either left out is not a checkpoint
+## missing a detail: it is a resumed floor drawing a fresh offer out of the run's item ledger, which
+## is the whole of what these two exist to stop. A floor with no shop and a boss still alive pass
+## empty ones and say so.
 static func capture(
 	campaign: RunDefinition, floor_config: FloorConfig, player_integrity: float,
-	held_items: Array[ItemConfig]
+	held_items: Array[ItemConfig], shop: ShopStock, boss_reward: Array[StringName]
 ) -> RunCheckpoint:
 	var checkpoint := RunCheckpoint.new()
 	checkpoint.campaign_id = campaign.id
@@ -123,6 +186,8 @@ static func capture(
 	checkpoint.enemy_health_scale = RunManager.enemy_health_scale
 	checkpoint.offered_item_ids = RunManager.offered_item_ids.duplicate()
 	checkpoint.fought_boss_ids = RunManager.fought_boss_ids.duplicate()
+	checkpoint.floor_shop = shop
+	checkpoint.floor_boss_reward_ids = boss_reward.duplicate()
 	# A copy, not the live object. The checkpoint outlives this call — `SaveManager` holds it as
 	# the active one until the run ends — and a reference would keep quietly absorbing the rest of
 	# the run, so what was written to disk and what the object said would drift apart the moment
@@ -134,6 +199,19 @@ static func capture(
 			checkpoint.item_ids.append(item.id)
 
 	return checkpoint
+
+
+## Records how far into the current floor the run had got. Called only by the pause menu's save,
+## through `FloorController.save_run_now`; a boundary checkpoint leaves these empty because there
+## is nothing yet to record. Sorted so that two saves of the same position produce the same bytes,
+## which is what stops the cloud coordinator seeing a change that is only a dictionary's iteration
+## order.
+func record_floor_progress(cleared: Array[int], visited: Array[int], clears: int) -> void:
+	floor_cleared_room_ids = cleared.duplicate()
+	floor_visited_room_ids = visited.duplicate()
+	floor_cleared_room_ids.sort()
+	floor_visited_room_ids.sort()
+	floor_clears = clears
 
 
 func to_dict() -> Dictionary:
@@ -153,6 +231,11 @@ func to_dict() -> Dictionary:
 		"offered_items": _names_to_strings(offered_item_ids),
 		"fought_bosses": _names_to_strings(fought_boss_ids),
 		"stats": stats.to_dict(),
+		"floor_cleared_rooms": floor_cleared_room_ids.duplicate(),
+		"floor_visited_rooms": floor_visited_room_ids.duplicate(),
+		"floor_clears": floor_clears,
+		"floor_shop": floor_shop.to_dict(),
+		"boss_reward": _names_to_strings(floor_boss_reward_ids),
 	}
 
 
@@ -177,9 +260,43 @@ static func from_dict(data: Dictionary) -> RunCheckpoint:
 	checkpoint.offered_item_ids = _strings_to_names(data.get("offered_items"))
 	checkpoint.fought_boss_ids = _strings_to_names(data.get("fought_bosses"))
 
+	# Absent in every checkpoint written before the pause menu could save, and absent in every
+	# boundary checkpoint written since. An older save therefore reads back as a floor with no
+	# progress recorded, which is exactly what it was.
+	checkpoint.floor_cleared_room_ids = _to_room_ids(data.get("floor_cleared_rooms"))
+	checkpoint.floor_visited_room_ids = _to_room_ids(data.get("floor_visited_rooms"))
+	checkpoint.floor_clears = RunStats.read_int(data, "floor_clears")
+
+	# Absent in every checkpoint written before the shelf was carried. Those read back as a shop with
+	# nothing recorded, which is what they were: `FloorController._stock_shop` stocks a shop the
+	# saved run has nothing to say about, exactly as it did when the file was written.
+	var raw_shop: Variant = data.get("floor_shop")
+	checkpoint.floor_shop = ShopStock.from_dict(
+		raw_shop as Dictionary if raw_shop is Dictionary else {}
+	)
+	checkpoint.floor_boss_reward_ids = _strings_to_names(data.get("boss_reward"))
+
 	var raw_stats: Variant = data.get("stats")
 	checkpoint.stats = RunStats.from_dict(raw_stats as Dictionary if raw_stats is Dictionary else {})
 	return checkpoint
+
+
+## Room ids out of a save file, treated as hostile like everything else read back here. Anything
+## that is not a whole number is dropped rather than coerced: a room id is an index into a layout,
+## and a junk value would either name a room that does not exist — harmless, and ignored on the way
+## back in — or a real one it was never meant to name.
+static func _to_room_ids(raw: Variant) -> Array[int]:
+	var ids: Array[int] = []
+	if not (raw is Array):
+		return ids
+	for value: Variant in raw as Array:
+		# JSON has one number type, so a whole number arrives as a float. `is_integer` is what tells
+		# an id apart from a fraction somebody hand-edited in.
+		if value is int:
+			ids.append(value as int)
+		elif value is float and is_equal_approx(value as float, roundf(value as float)):
+			ids.append(int(roundf(value as float)))
+	return ids
 
 
 ## Every reason this checkpoint cannot be played, or an empty list if there is none.
@@ -315,6 +432,24 @@ func _validate_collections(problems: PackedStringArray) -> void:
 	if stats.floors.size() > MAX_FLOOR_RECORDS:
 		problems.append("it holds %d floor records" % stats.floors.size())
 
+	# A refusal rather than a cap, like every other ceiling here. A floor has ten rooms; a list
+	# claiming hundreds is a hand-edit or a corruption, and the ids in it would be applied to a
+	# layout that has no such rooms.
+	for entry: Array in [
+		[floor_cleared_room_ids, "cleared rooms"], [floor_visited_room_ids, "visited rooms"],
+	]:
+		var ids: Array[int] = entry[0]
+		if ids.size() > MAX_FLOOR_ROOMS:
+			problems.append("it lists %d %s on one floor" % [ids.size(), entry[1]])
+	if floor_clears < 0 or floor_clears > MAX_FLOOR_ROOMS:
+		problems.append("it reports %d rooms cleared on the current floor" % floor_clears)
+
+	_validate_id_list(problems, floor_boss_reward_ids, "boss reward offers", MAX_SHOP_STANDS)
+	if floor_shop.item_ids.size() > MAX_SHOP_STANDS:
+		problems.append("its shop has %d item stands" % floor_shop.item_ids.size())
+	if floor_shop.rerolls_used < 0 or floor_shop.rerolls_used > MAX_SHOP_REROLLS:
+		problems.append("its shop has been rerolled %d times" % floor_shop.rerolls_used)
+
 	# The offered list is a set — `RunManager.draw_item` appends an id once and `release_item`
 	# removes it — and a duplicate in it would be an item struck off the run twice.
 	var seen_offers: Dictionary[StringName, bool] = {}
@@ -369,6 +504,19 @@ func _validate_items(problems: PackedStringArray, floor_config: FloorConfig) -> 
 	for id: StringName in offered_item_ids:
 		if not catalogue.has(id):
 			problems.append("it has spent item '%s', which floor '%s' does not offer" % [id, floor_id])
+
+	# An empty id is a stand with nothing left on it, which is a state rather than a missing item.
+	for id: StringName in floor_shop.item_ids:
+		if not id.is_empty() and not catalogue.has(id):
+			problems.append(
+				"its shop is holding item '%s', which floor '%s' does not offer" % [id, floor_id]
+			)
+
+	for id: StringName in floor_boss_reward_ids:
+		if not catalogue.has(id):
+			problems.append(
+				"its boss is offering item '%s', which floor '%s' does not offer" % [id, floor_id]
+			)
 
 
 func _item_catalogue(floor_config: FloorConfig) -> Dictionary[StringName, ItemConfig]:

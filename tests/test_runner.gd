@@ -62,6 +62,12 @@ func _ready() -> void:
 	# the save file of whoever is running the tests — and, worse, make the tests pass or fail
 	# differently depending on what that file already said.
 	SaveManager.persistence_enabled = false
+
+	# Stands in for the bootstrap scene, which the suites do not go through: the manager no
+	# longer loads in `_ready`, and every write is refused until it has. Writes are already off
+	# by the line above, so this loads without being able to put anything back.
+	SaveManager.initialize()
+
 	SaveManager.settings = GameSettings.new()
 	SaveManager.best = BestRunStats.new()
 	SaveManager.apply_settings()

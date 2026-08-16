@@ -192,6 +192,10 @@ var _is_timing := false
 
 ## False only while a run is open. Starts true because the game boots to a menu, and "no run
 ## has started" and "the run is already filed" want the same answer from `end_run`.
+##
+## Set by `suspend_run` too, which is not an ending. What the flag really means is "this run is
+## closed here and must not be filed again", and a run put down to be picked up later wants that
+## for a different reason: the trip back to the title screen would otherwise file it as abandoned.
 var _is_finished := true
 
 
@@ -290,20 +294,72 @@ func restore_run(checkpoint: RunCheckpoint, campaign: RunDefinition) -> void:
 ## hazard committed before the boss died can kill the player in the same frame the reward is
 ## claimed. The descent is already refused in that case; this is the same guard one level down,
 ## because a checkpoint written for a run that lost would offer the player their death back.
-func checkpoint_floor(campaign: RunDefinition, floor_config: FloorConfig, player: Player) -> void:
-	if _is_finished or GameManager.is_run_over() or campaign == null or floor_config == null:
+## `shop` is what the floor's shop is holding — see `ShopStock`, and note that a *boundary*
+## checkpoint needs it as much as a mid-floor one does: the floor being descended into has already
+## stocked its shop out of the run's item ledger by the time this is called. `boss_reward` is always
+## empty here for the same reason it is rarely empty in `checkpoint_here`: a floor written down at
+## its own boundary has a boss nobody has met yet.
+func checkpoint_floor(
+	campaign: RunDefinition, floor_config: FloorConfig, player: Player, shop: ShopStock,
+	boss_reward: Array[StringName]
+) -> void:
+	if not _can_checkpoint(campaign, floor_config, player):
 		return
-	if player == null or not is_instance_valid(player) or player.is_dead():
-		return
+	SaveManager.store_checkpoint(_capture(campaign, floor_config, player, shop, boss_reward))
 
+
+## Checkpoints the run where it stands, floor progress and all. What the pause menu's SAVE GAME
+## does, through `FloorController.save_run_now` — which is the only thing that knows which rooms
+## have been cleared.
+##
+## Every refusal `checkpoint_floor` makes is made here too, and for the same reasons, which is why
+## the guard is shared rather than written twice. Returns whether a checkpoint was written: a run
+## that has already ended cannot be saved, and the menu says so rather than claiming otherwise.
+func checkpoint_here(
+	campaign: RunDefinition, floor_config: FloorConfig, player: Player, shop: ShopStock,
+	boss_reward: Array[StringName], cleared_rooms: Array[int], visited_rooms: Array[int],
+	clears: int
+) -> bool:
+	if not _can_checkpoint(campaign, floor_config, player):
+		return false
+
+	var checkpoint := _capture(campaign, floor_config, player, shop, boss_reward)
+	checkpoint.record_floor_progress(cleared_rooms, visited_rooms, clears)
+	SaveManager.store_checkpoint(checkpoint)
+	return true
+
+
+## The capture both paths share, for the reason they share `_can_checkpoint`: everything a
+## checkpoint records of the run and the floor it is standing on is decided here once, so the
+## boundary and the pause menu cannot record different things about the same run. What the pause
+## menu adds on top is floor *progress*, which a boundary genuinely has none of.
+func _capture(
+	campaign: RunDefinition, floor_config: FloorConfig, player: Player, shop: ShopStock,
+	boss_reward: Array[StringName]
+) -> RunCheckpoint:
 	var health := player.get_health_component()
 	var inventory := player.get_item_inventory()
-	if health == null or inventory == null:
-		return
-
-	SaveManager.store_checkpoint(
-		RunCheckpoint.capture(campaign, floor_config, health.current, inventory.get_items())
+	return RunCheckpoint.capture(
+		campaign, floor_config, health.current, inventory.get_items(), shop, boss_reward
 	)
+
+
+## Whether there is a run here worth writing down. Shared by both checkpoint paths so that the
+## boundary and the pause menu cannot come to different conclusions about the same run — a save
+## button that worked one frame after the automatic checkpoint had refused would write exactly the
+## checkpoint that refusal exists to prevent.
+##
+## The dead-player case is the one that matters: a hazard committed before the boss died can kill
+## the player in the same frame the reward is claimed, and a checkpoint written then would offer
+## the player their own death back the next time they pressed CONTINUE.
+func _can_checkpoint(
+	campaign: RunDefinition, floor_config: FloorConfig, player: Player
+) -> bool:
+	if _is_finished or GameManager.is_run_over() or campaign == null or floor_config == null:
+		return false
+	if player == null or not is_instance_valid(player) or player.is_dead():
+		return false
+	return player.get_health_component() != null and player.get_item_inventory() != null
 
 
 ## The run's seed. See `_run_seed` for why this is a function rather than a field.
@@ -338,6 +394,21 @@ func record_floor_boss(boss_id: StringName) -> void:
 	stats.record_floor_boss(boss_id)
 
 
+## Which boss the floor being played has already drawn, or empty if it has not drawn one.
+##
+## The counterpart to `record_floor_boss`, and it exists for the one caller that has to ask: a floor
+## being *re-opened* — which is what a resume is — must take back the boss the run already drew for
+## it rather than draw a second one. See `FloorController._draw_boss_encounter`.
+##
+## The open floor record is the right place to ask because it is the run's own memory of the floor it
+## is standing on: it survives a checkpoint (`FloorRecord.to_dict` carries `boss_id`), and
+## `RunStats.begin_floor` keeps it rather than opening a second record when the same floor is entered
+## again. A run that has no floor open — a test arena, a menu — has drawn nothing, and says so.
+func current_floor_boss_id() -> StringName:
+	var open := stats.current_floor()
+	return open.boss_id if open != null else &""
+
+
 ## Closes the current floor's record with how it ended. Descending is the controller's business;
 ## every other outcome arrives through `end_run`.
 func finish_floor(outcome: FloorRecord.Outcome) -> void:
@@ -370,6 +441,27 @@ func end_run(won: bool, abandoned := false) -> void:
 	# than at each ending's own call site. The fourth is `begin_run`.
 	SaveManager.clear_checkpoint()
 	records_beaten = SaveManager.record_run_finished(stats, won)
+
+
+## Puts the run down without ending it. What SAVE AND EXIT does, once the checkpoint is written.
+##
+## Three things `end_run` does that this must not. It must not `finish_floor`, because the run is
+## still standing on that floor and will be back on it. It must not `clear_checkpoint`, because the
+## checkpoint is the entire point of having pressed the button. And it must not
+## `record_run_finished`, because the run is not finished — folding it into the lifetime bests here
+## would file a loss every time the player took a break, and a run interrupted five times would be
+## five abandoned runs in a record they cannot repair.
+##
+## What it shares with `end_run` is the flag, and that is deliberate rather than convenient. Leaving
+## for the title screen goes through `GameManager._set_state`, which ends any open run — and it is
+## reached twice, once from the router and once from the menu's own `_ready`. Setting `_is_finished`
+## here is what makes both of those the no-op they need to be, rather than the thing that quietly
+## deletes the save the player just asked for.
+func suspend_run() -> void:
+	if _is_finished:
+		return
+	_is_finished = true
+	_is_timing = false
 
 
 ## Pauses the clock without ending the run.

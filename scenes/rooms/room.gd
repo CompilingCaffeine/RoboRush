@@ -84,7 +84,15 @@ func build(room_plan: RoomPlan, room_theme: FloorTheme = null) -> void:
 ## The template's own `difficulty` decides which enemies are eligible, so a harder layout
 ## gets a harder encounter without the generator having to know what either means. A point
 ## with a matching `forced_enemies` entry skips the roll entirely — see that field's doc.
-func populate(floor_config: FloorConfig, rng: RandomNumberGenerator) -> void:
+##
+## `already_cleared` builds the room empty, for a run resumed from a save taken after this room was
+## fought through. The rolls still happen — every one of them, in the same order — and only the
+## placing is skipped: `rng` is the floor's shared encounter stream, so a room that drew nothing
+## would leave every room built after it holding the enemies of the room before, and a resumed
+## floor would quietly stop being the floor its seed describes.
+func populate(
+	floor_config: FloorConfig, rng: RandomNumberGenerator, already_cleared := false
+) -> void:
 	if plan.template == null or floor_config == null:
 		return
 
@@ -94,12 +102,15 @@ func populate(floor_config: FloorConfig, rng: RandomNumberGenerator) -> void:
 		var scene: PackedScene = forced[index] if index < forced.size() else null
 		if scene == null:
 			scene = floor_config.pick_enemy(plan.template.difficulty, rng)
-		if scene == null:
+		if scene == null or already_cleared:
 			continue
 		var enemy: Node2D = scene.instantiate()
 		enemy.position = _tile_centre(spawns[index])
 		_enemies.add_child(enemy)
 
+	# Called either way, and with nothing in it for a cleared room. `RoomCombat` treats a room that
+	# never had an enemy as one that was never in combat, so it will not announce a clear for a
+	# room whose clear was counted before the save.
 	_room_combat.begin(_enemies)
 
 

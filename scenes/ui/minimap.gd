@@ -26,8 +26,16 @@ const MARGIN := 5.0
 var _layout: FloorLayout
 var _floor: FloorController
 
-## Set by a future utility item (spec section 11: "Reveal secret rooms").
-var reveal_all := false
+## Set by a future utility item (spec section 11: "Reveal secret rooms"). Resizes as well as
+## redrawing, because revealing the floor is the largest change the drawn extent ever makes and the
+## frame is sized to that extent.
+var reveal_all := false:
+	set(value):
+		if value == reveal_all:
+			return
+		reveal_all = value
+		_resize_to_layout()
+		queue_redraw()
 
 
 func bind_floor(floor_controller: FloorController) -> void:
@@ -43,20 +51,53 @@ func bind_floor(floor_controller: FloorController) -> void:
 
 
 func _on_room_entered(_plan: RoomPlan) -> void:
+	# Resized as well as redrawn: entering a room can reveal the ring of cells around it, and the
+	# frame is sized to what is drawn rather than to the floor. See `_known_bounds`.
+	_resize_to_layout()
 	queue_redraw()
 
 
-## Sized from the floor's grid extent and pinned to the top-right corner through its anchors,
-## so a wide floor grows leftwards instead of off the screen.
+## Sized from the cells it is actually drawing and pinned to the top-right corner through its
+## anchors, so a wide floor grows leftwards instead of off the screen.
 func _resize_to_layout() -> void:
 	if _layout == null:
 		return
-	var bounds := _layout.get_cell_bounds()
+	var bounds := _known_bounds()
+	if bounds.size == Vector2i.ZERO:
+		return
 	var wanted := Vector2(bounds.size) * (CELL + GAP) - GAP
 	offset_left = -MARGIN - wanted.x
 	offset_right = -MARGIN
 	offset_top = MARGIN
 	offset_bottom = MARGIN + wanted.y
+
+
+## The extent of the cells the map is drawing: visited rooms and the ring of doors leading off
+## them, which is exactly what `_is_known` admits.
+##
+## Deliberately not `FloorLayout.get_cell_bounds`, which is the extent of the whole floor. Sized to
+## that, the frame reserves room for cells it is not allowed to draw yet, and on the first room of
+## a floor the player gets a panel several times wider than its contents with the four cells they
+## know sitting wherever the generator happened to put the start room — off-centre, against
+## whichever edge, with blank panel beside them. It reads as a map that has come loose from its
+## frame. It also *is* the floor's width and height, which is the one thing about an unexplored
+## floor this map is not supposed to be saying (spec section 9.6).
+##
+## The cost is that the map shifts when a reveal extends the bounds towards a pinned edge — the
+## right one or the top one. That is the frame growing as the floor is explored, which is what the
+## player has just done, and it beats a permanent hole in the corner of the screen.
+func _known_bounds() -> Rect2i:
+	var bounds := Rect2i()
+	var found := false
+	for room: RoomPlan in _layout.rooms:
+		if not _is_known(room):
+			continue
+		if not found:
+			bounds = Rect2i(room.cell, Vector2i.ONE)
+			found = true
+		else:
+			bounds = bounds.expand(room.cell).expand(room.cell + Vector2i.ONE)
+	return bounds
 
 
 ## How far the backing panel extends past the cells on each side.
@@ -75,7 +116,8 @@ func _draw() -> void:
 	draw_rect(panel, UIPalette.VOID)
 	draw_rect(panel, UIPalette.PANEL_BORDER, false, 1.0)
 
-	var origin := _layout.get_cell_bounds().position
+	# The same origin the frame was sized from, or the cells would be drawn outside it.
+	var origin := _known_bounds().position
 
 	# Links first, so room cells draw over the connector stubs.
 	for room: RoomPlan in _layout.rooms:

@@ -66,6 +66,10 @@ func _ready() -> void:
 
 
 func open() -> void:
+	# See ControlsCard.open: a modal hidden while the browser was still deciding how big the canvas
+	# is keeps an empty rect, and opens as a sliver in the corner until it is told to fill its
+	# parent again.
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	visible = true
 	_selected = 0
 	_refresh()

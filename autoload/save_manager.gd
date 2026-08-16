@@ -21,6 +21,13 @@ extends Node
 ## the spec's "runs are not saved" was written for a ten-room run that could be replayed in six
 ## minutes, and a sixty-room run cannot. See `RunCheckpoint` for what is stored and why the
 ## boundary is the only safe moment to store it.
+##
+## Loading is explicit rather than automatic: `initialize` does it, and until it has, this node
+## holds defaults and refuses to write. `_ready` used to load, which was fine while the only
+## source of a save was a local file that could be read synchronously. The browser build's save
+## arrives over the network, so *something* has to be allowed to take time before the game reads
+## a record — and a node that has already loaded defaults cannot be told to wait. The bootstrap
+## scene owns that decision now; see `scenes/ui/bootstrap.gd`.
 
 const SAVE_PATH := "user://save.json"
 
@@ -62,6 +69,21 @@ const SAVE_RETRY_SECONDS := 5.0
 
 signal settings_changed(settings: GameSettings)
 
+## Emitted once, when the persistent state below has been loaded and applied. Consumers that may
+## start either side of that moment must check `is_initialized()` first: a signal already emitted
+## is a signal that never arrives, and a menu awaiting it would hang on the second visit.
+signal initialized
+
+## Emitted after a save has actually landed on disk, with the file it landed in and the SHA-256 of
+## exactly those bytes. The hash is the point: it is what lets a listener tell one generation of
+## the save from the next without re-reading and re-parsing the file, and what the cloud
+## coordinator compares against to know whether what it last uploaded is still current.
+##
+## Deliberately says nothing about the cloud, and deliberately cannot fail. Local saving is
+## authoritative — a listener that throws, hangs, or has no network must not be able to turn a
+## successful write into a failed one.
+signal local_save_committed(path: String, content_hash: String)
+
 var settings := GameSettings.new()
 var best := BestRunStats.new()
 
@@ -98,6 +120,13 @@ var _writes_refused := false
 ## read from the primary. It costs the run in progress, and only the run — see `_read_checkpoint`.
 var _recovered := false
 
+## Whether the state above came from disk rather than from the defaults it was declared with.
+## Every write is refused while it is false — see `save_game`.
+var _initialized := false
+
+## So that refusing a write before initialization costs one log line rather than one per caller.
+var _warned_early_write := false
+
 var _dirty := false
 var _save_countdown := 0.0
 
@@ -119,9 +148,38 @@ func _ready() -> void:
 	# from the pause menu, and a volume slider that only worked while unpaused would look
 	# broken in the one place it is used.
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	load_game()
 	EventBus.item_collected.connect(_on_item_collected)
 	EventBus.boss_defeated.connect(_on_boss_defeated)
+	_watch_web_unload()
+
+
+## Loads the save and announces that it is safe to read. Called once, by the bootstrap scene,
+## after it has settled whatever it can about cloud state.
+##
+## Idempotent because the alternative is a second load discarding whatever the session has
+## changed since the first — a bootstrap that retried, or a second entry into the boot scene,
+## would silently roll the player back rather than fail visibly.
+##
+## `_initialized` is set *before* the load, not after: `load_game` writes back a save it had to
+## recover, and that write has to be allowed to happen.
+func initialize() -> void:
+	if _initialized:
+		return
+	_initialized = true
+	load_game()
+	initialized.emit()
+
+
+## Whether `initialize` has run. Read by anything that can start before the save exists.
+func is_initialized() -> bool:
+	return _initialized
+
+
+## The file the save actually lives in. An accessor rather than the constant, because the suite
+## points the manager at a disposable path and anything reading the constant instead would go
+## looking in the real one — which is the difference between a test and an accident.
+func save_file_path() -> String:
+	return _save_path
 
 
 func _process(delta: float) -> void:
@@ -136,8 +194,58 @@ func _notification(what: int) -> void:
 	# Quitting is the one moment a pending debounced save must not be lost. Both
 	# notifications are handled because they do not both arrive: closing the window sends the
 	# first, `get_tree().quit()` only the second.
+	#
+	# Neither arrives in a browser, which is what `_watch_web_unload` is for.
 	var is_shutdown := what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_EXIT_TREE
 	if is_shutdown and _dirty:
+		save_game()
+
+
+## Registered on the page for the lifetime of the game. Held in a field because a callback the
+## Godot side has dropped is a listener the browser can no longer call: it would be collected, the
+## registration would stay, and the flush below would quietly stop happening.
+var _web_unload_callback: JavaScriptObject = null
+
+
+## Flushes a pending write when the browser takes the page away.
+##
+## A browser sends no close notification. `NOTIFICATION_WM_CLOSE_REQUEST` is what saves a debounced
+## write when a desktop window is closed, and the web platform never delivers it — the tab is
+## closed, reloaded, or swapped away from on a phone, and the engine simply stops running. Anything
+## still inside the half-second debounce at that instant was lost, silently, with the code above
+## claiming to have covered it.
+##
+## A run in progress is not what this rescues. `store_checkpoint` already writes immediately, for
+## exactly this reason — the session ending without warning is the whole point of a checkpoint. What
+## is left to the debounce is a settings change, a newly unlocked item, a finished run's records,
+## and those are what a reload used to drop.
+##
+## `pagehide` and `visibilitychange` rather than `beforeunload`: `beforeunload` does not fire when a
+## mobile browser discards a backgrounded tab, which is the most common way a phone ends a session.
+## Both of these are registered because neither one covers every exit, and a duplicate flush costs
+## nothing — `save_game` returns immediately once the save is no longer dirty.
+##
+## The limit is worth being plain about: the write reaches Godot's in-memory filesystem
+## synchronously, but the IndexedDB transaction `force_fs_sync` starts is asynchronous, and a
+## browser tearing down a tab is under no obligation to wait for it. This makes the ordinary exits
+## safe rather than all of them, which is why nothing that matters is left to it in the first place.
+func _watch_web_unload() -> void:
+	if not OS.has_feature("web"):
+		return
+	var window := JavaScriptBridge.get_interface("window")
+	if window == null:
+		push_warning("SaveManager: no page to watch; a pending save may not survive a reload.")
+		return
+	_web_unload_callback = JavaScriptBridge.create_callback(_on_web_unload)
+	window.addEventListener("pagehide", _web_unload_callback)
+	window.addEventListener("visibilitychange", _web_unload_callback)
+
+
+## Fires on the way out and also on the way back in, since `visibilitychange` reports both. The
+## dirty check is what makes that harmless, and writing early when a player merely switches tabs is
+## the behaviour wanted anyway.
+func _on_web_unload(_arguments: Array) -> void:
+	if _dirty:
 		save_game()
 
 
@@ -318,6 +426,18 @@ func save_game() -> void:
 		_dirty = false
 		return
 
+	if not _initialized:
+		# Refused rather than left pending, and refused rather than queued. Before `initialize`
+		# every field this writes holds the default it was declared with, so the file this would
+		# produce is a *new* save — written over the real one, which is the exact way a slow cloud
+		# fetch turns into a wiped profile. Queuing would be worse than refusing: the write would
+		# land later carrying the same defaults, having overwritten what the load just brought in.
+		_dirty = false
+		if not _warned_early_write:
+			_warned_early_write = true
+			push_warning("SaveManager: refusing to save before initialize(); nothing is loaded yet.")
+		return
+
 	if _writes_refused:
 		# Not retryable, so it is not left pending: the file will still have been written by a
 		# newer build in five seconds' time, and a pending write would only mean `_process` came
@@ -340,6 +460,13 @@ func save_game() -> void:
 		print("SaveManager: save recovered after %d failed attempt(s)." % _failed_writes)
 	_dirty = false
 	_failed_writes = 0
+
+	# Only here, and only on the success path. Everything a listener could do with this — upload
+	# it, hash it, count it — is a statement about bytes that are already on disk, so announcing a
+	# write that failed, or one that is still in the temporary file, would be announcing a save
+	# that does not exist yet. By this line the temporary file has been written, the previous save
+	# backed up, the rename has landed, and the browser has been asked to flush.
+	local_save_committed.emit(_save_path, FileAccess.get_sha256(_save_path))
 
 
 ## Returns an empty string on success, or a description of what went wrong.

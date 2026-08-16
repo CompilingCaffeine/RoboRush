@@ -1,0 +1,103 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scenes/ui/save_conflict_card.gd" id="1_conflict"]
+
+[node name="SaveConflictCard" type="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+; STOP, like the controls card. This is a modal over the boot screen, and a click that fell
+; through it would reach whatever the boot screen grows into later.
+mouse_filter = 0
+script = ExtResource("1_conflict")
+
+[node name="Backdrop" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.019608, 0.027451, 0.043137, 0.941176)
+
+[node name="Panel" type="PanelContainer" parent="."]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -190.0
+offset_top = -95.0
+offset_right = 190.0
+offset_bottom = 95.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Layout" type="VBoxContainer" parent="Panel"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Heading" type="Label" parent="Panel/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94902, 0.631373, 0.235294, 1)
+theme_override_font_sizes/font_size = 16
+text = "TWO SAVES FOUND"
+horizontal_alignment = 1
+
+[node name="Explanation" type="Label" parent="Panel/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.486275, 0.541176, 0.6, 1)
+text = "This device and your Wavedash account have both changed since they last agreed. Pick the one to keep. The other is kept as a backup."
+autowrap_mode = 3
+horizontal_alignment = 1
+
+[node name="Columns" type="HBoxContainer" parent="Panel/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Local" type="VBoxContainer" parent="Panel/Layout/Columns"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="LocalHeading" type="Label" parent="Panel/Layout/Columns/Local"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.345098, 0.941176, 0.784314, 1)
+text = "THIS DEVICE"
+horizontal_alignment = 1
+
+[node name="LocalSummary" type="Label" parent="Panel/Layout/Columns/Local"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.847059, 0.886275, 0.92549, 1)
+horizontal_alignment = 1
+
+[node name="KeepLocal" type="Button" parent="Panel/Layout/Columns/Local"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "USE THIS DEVICE"
+
+[node name="Cloud" type="VBoxContainer" parent="Panel/Layout/Columns"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="CloudHeading" type="Label" parent="Panel/Layout/Columns/Cloud"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.345098, 0.941176, 0.784314, 1)
+text = "WAVEDASH CLOUD"
+horizontal_alignment = 1
+
+[node name="CloudSummary" type="Label" parent="Panel/Layout/Columns/Cloud"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.847059, 0.886275, 0.92549, 1)
+horizontal_alignment = 1
+
+[node name="TakeCloud" type="Button" parent="Panel/Layout/Columns/Cloud"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "USE CLOUD"

@@ -1,0 +1,79 @@
+# Builds and tests the browser version of the game, and hands the result on as one immutable
+# artifact. It has no credentials of any kind, which is the point of it being its own workflow:
+# it runs on pull requests from anywhere, and the only thing it can do is produce a zip.
+#
+# The upload to Wavedash is a separate workflow that starts when this one succeeds on main and
+# downloads what this one produced. Nothing is ever rebuilt for the upload — the artifact that
+# passed here is the artifact that gets published, or the testing meant nothing.
+
+name: Web CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-ci-${{ github.ref }}
+  # A superseded pull-request build is wasted work. A superseded main build is not cancelled: its
+  # artifact is what the upload workflow is waiting for, and cancelling it silently skips a
+  # deployment nobody was told about.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # Generous, because the failure this guards against is a hang rather than a slow build: the
+    # whole run takes about five minutes.
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out the commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the pinned engine and Web export template
+        run: |
+          tools/ci/install_godot.sh --prefix "$RUNNER_TEMP/godot-bin"
+          echo "$RUNNER_TEMP/godot-bin" >> "$GITHUB_PATH"
+
+      - name: Build
+        # Verifies the pins and the export preset, imports, runs every suite, exports into an empty
+        # directory, checks the artifact contract, and writes build/web-artifact.
+        run: tools/ci/build_web.sh
+
+      - name: Install a browser to smoke-test with
+        run: |
+          python3 -m pip install --quiet playwright
+          python3 -m playwright install --with-deps chromium
+
+      - name: Boot the exported game in a browser
+        # The one thing no amount of reading files can establish. Serves the artifact over HTTP
+        # with production-equivalent MIME types and no cross-origin isolation headers — the build
+        # is single-threaded so that it does not need them, and a smoke test that supplied them
+        # would be qualifying against a kinder host than the real one.
+        run: python3 tools/ci/smoke_web.py build/web --screenshot build/web-artifact/smoke.png
+
+      - name: Keep the artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          # Named for the commit, because the upload workflow finds it by that name and nothing
+          # else about a workflow run identifies which source it came from.
+          name: web-${{ github.sha }}
+          path: build/web-artifact
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Keep the test log when the build fails
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: failure-logs-${{ github.sha }}
+          path: |
+            build/web-artifact/*.log
+            build/web-artifact/smoke.png
+          if-no-files-found: ignore
+          retention-days: 14

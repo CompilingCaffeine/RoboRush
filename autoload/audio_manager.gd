@@ -235,6 +235,21 @@ func set_bus_volume_db(bus: StringName, volume_db: float) -> void:
 ## Creates the SFX and Music buses if the bus layout is missing or was replaced.
 ## Volume settings (spec section 21) target these by name, so a missing bus would
 ## silently make those settings do nothing.
+##
+## A fallback, and only a fallback. The buses this game plays into are authored in
+## `data/audio/default_bus_layout.tres` and loaded by the engine before any autoload runs, which
+## on the web is not a tidiness preference but the difference between a game with sound and one
+## without. Godot's web export defaults `audio/general/default_playback_type.web` to *Sample*:
+## an `AudioStreamWAV` is handed to WebAudio as a buffer and routed through a JavaScript-side
+## mirror of the bus graph, and that mirror is built once, from the bus layout, at startup. A bus
+## added afterwards by the line below exists to the AudioServer and to nothing else, so every
+## player targeting it plays into a bus the web side has never heard of, and the whole game — SFX
+## and music alike — is silent. Desktop mixes buses itself and never noticed, which is why this
+## survived the desktop milestones and broke in a browser.
+##
+## So this stays for the case it was written for — a layout file that is missing or has been
+## replaced by one that dropped a bus — and on a normal launch it finds both buses already there
+## and does nothing.
 func _ensure_buses() -> void:
 	for bus: StringName in [MUSIC_BUS, SFX_BUS]:
 		if AudioServer.get_bus_index(bus) >= 0:

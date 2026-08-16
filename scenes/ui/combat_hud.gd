@@ -181,6 +181,7 @@ func bind_player(player: Player) -> void:
 	var weapon := player.get_weapon_controller()
 	_weapon_label.text = weapon.config.display_name.to_upper() if weapon.config != null else "NO WEAPON"
 	_rebuild_capacity_pips()
+	_rebuild_item_bar()
 
 
 ## Integrity and dash pips are counts, not bars, so their *number* changes when an item
@@ -348,6 +349,31 @@ func _on_item_collected(item: ItemConfig) -> void:
 ## The tooltip names the icon and stops there, for the same reason the pickup banner does. A
 ## description here would put the answer one hover away and make the discovery optional, which for
 ## anyone playing with a mouse on the screen is no discovery at all.
+## The whole bar, from what the robot is actually carrying.
+##
+## The bar is otherwise built one pickup at a time, from `EventBus.item_collected` — which is the
+## right way to build it and the reason a resumed run showed nothing. `ItemInventory.restore`
+## deliberately announces nothing (a resumed run has already collected these items, and collecting
+## them again would repair the robot and file every item twice), so a HUD listening only for pickups
+## has no way to learn about a build that was put back rather than found. The items went on working;
+## the row that says which ones you have was empty for the rest of the run.
+##
+## Rebuilt rather than appended to, for the reason `_build_pips` empties its container first: this
+## is called at bind time and has to be able to run against a bar that already has icons in it, and
+## a bar that doubled its contents would read as the run having found each item twice.
+func _rebuild_item_bar() -> void:
+	for existing: Node in _item_bar.get_children():
+		# Removed as well as freed, exactly as `_build_pips` does: `queue_free` alone leaves the
+		# node in the container until the end of the frame, so a rebuild would draw both rows for
+		# one frame.
+		_item_bar.remove_child(existing)
+		existing.queue_free()
+	if _player == null:
+		return
+	for item: ItemConfig in _player.get_item_inventory().get_items():
+		_add_item_icon(item)
+
+
 func _add_item_icon(item: ItemConfig) -> void:
 	if item.icon == null:
 		return

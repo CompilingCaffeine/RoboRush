@@ -11,11 +11,15 @@ extends Control
 ## controls card — by instancing the same scenes the pause menu instances. Neither knows where
 ## it was opened from, which is what lets them be opened from anywhere.
 
+## Named so that the browser build can take the entry back out again by label rather than by
+## index — an index would silently remove CONTROLS the first time this list is reordered.
+const QUIT_LABEL := "QUIT"
+
 const BUTTONS: Array = [
 	["START RUN", "_on_start_pressed"],
 	["CONTROLS", "_on_controls_pressed"],
 	["SETTINGS", "_on_settings_pressed"],
-	["QUIT", "_on_quit_pressed"],
+	[QUIT_LABEL, "_on_quit_pressed"],
 ]
 
 ## Where the entry that continues a saved run goes, and what it says. First, above START RUN,
@@ -40,12 +44,21 @@ const FOCUS_PADDING := "  "
 @onready var _tagline: Label = %Tagline
 @onready var _settings: SettingsMenu = %SettingsMenu
 @onready var _controls: ControlsCard = %ControlsCard
+@onready var _cloud_status: Label = %CloudStatus
+@onready var _build_id: Label = %BuildId
 
 
 func _ready() -> void:
-	# The router sets this on every other path into the menu; a cold launch arrives here
-	# without passing through it, because this is the project's main scene.
+	# The router sets this on every path into the menu, the bootstrap's included. Kept because
+	# opening this scene directly in the editor still has to produce a working menu.
 	GameManager.enter_main_menu()
+
+	# Everything below reads the save, and the manager no longer loads itself — the bootstrap
+	# scene does it, once it knows whether there is a cloud save to wait for. This is the floor
+	# under that: any way into the menu that skipped the bootstrap (the editor's "run current
+	# scene", a tool, a future entry point) gets a loaded manager rather than a menu full of
+	# defaults that also refuses to save. Idempotent, so the normal path pays nothing.
+	SaveManager.initialize()
 
 	UIPalette.style(_tagline, UIPalette.TEXT_DIM)
 	_tagline.text = "SHIFT ONE  //  HELP DESK  //  NO OVERTIME AUTHORISED"
@@ -54,6 +67,10 @@ func _ready() -> void:
 
 	_build_buttons()
 	_refresh_records()
+
+	CloudSaveCoordinator.status_changed.connect(_on_cloud_status_changed)
+	_refresh_cloud_status()
+	_show_build_id()
 
 	_settings.closed.connect(_on_panel_closed)
 	_controls.closed.connect(_on_panel_closed)
@@ -69,6 +86,10 @@ func _ready() -> void:
 
 func _build_buttons() -> void:
 	var entries := BUTTONS.duplicate()
+	# Dropped rather than disabled in a browser, where there is nothing to quit to. A greyed-out
+	# QUIT would advertise a door that is not there; see `SceneRouter.can_quit`.
+	if not SceneRouter.can_quit():
+		entries = entries.filter(func(entry: Array) -> bool: return entry[0] != QUIT_LABEL)
 	# The label carries the floor and the elapsed time, because "CONTINUE" alone does not say
 	# *what*: a player coming back the next day needs to recognise the run before they commit to
 	# it, and the alternative is loading it to find out.
@@ -132,6 +153,44 @@ func _refresh_records() -> void:
 	_records_lower.text = "MOST ROOMS %d    MOST SCRAP %d    HIGHEST HIT %.1f" % [
 		best.most_rooms_cleared, best.most_scrap_collected, best.highest_hit,
 	]
+
+
+func _on_cloud_status_changed(_status: CloudSaveCoordinator.Status) -> void:
+	_refresh_cloud_status()
+
+
+## Says where the player's progress currently is. Hidden entirely when there is no cloud in play,
+## which is every desktop launch: a line reading "SAVED LOCALLY" on a game that has only ever
+## saved locally is noise pretending to be information.
+##
+## It exists for the browser build, where "did my run actually get saved before I closed the tab"
+## is a real question with a real wrong answer, and the player has no other way to tell.
+func _refresh_cloud_status() -> void:
+	var status := CloudSaveCoordinator.status()
+	_cloud_status.visible = status != CloudSaveCoordinator.Status.LOCAL_ONLY
+	if not _cloud_status.visible:
+		return
+	UIPalette.style(_cloud_status, UIPalette.TEXT_FAINT)
+	_cloud_status.text = CloudSaveCoordinator.status_text()
+
+
+## Which build this is, in the corner, for builds that have one.
+##
+## A hosted playtest is a URL, and a URL says nothing about what is behind it. Without this, a
+## tester reporting "the checkpoint did not come back" is reporting it against a build nobody can
+## identify afterwards — and the Build A to Build B save qualification, which is the whole point of
+## the browser release, comes down to somebody being sure they are looking at Build B.
+##
+## Written into the project settings by tools/ci/build_web.sh at export time, so a build run from
+## the editor has none and shows nothing. An empty label is the honest answer there: a source tree
+## has no build id, and inventing one would make the field untrustworthy in the builds that do.
+func _show_build_id() -> void:
+	var id := Bootstrap.build_id()
+	_build_id.visible = not id.is_empty()
+	if not _build_id.visible:
+		return
+	UIPalette.style(_build_id, UIPalette.TEXT_FAINT)
+	_build_id.text = "BUILD %s" % id
 
 
 ## Focus is returned deliberately when a panel closes. A menu whose keyboard focus is nowhere

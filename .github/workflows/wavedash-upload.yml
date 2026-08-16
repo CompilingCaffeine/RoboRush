@@ -1,0 +1,164 @@
+# Uploads the artifact that Web CI already tested, as a new immutable Wavedash build.
+#
+# It is a separate workflow from the one that builds because of what it holds: this is the only
+# place in the repository where a Wavedash credential exists. A pull request can change the build
+# workflow and see the result; it cannot reach this one, which runs only from main, only after Web
+# CI has passed, and only in a GitHub Environment that holds the token.
+#
+# It never builds anything. It downloads the exact zip Web CI produced, checks the digest, checks
+# the contract again on the extracted files, and pushes those bytes. A workflow that rebuilt from
+# source here would be uploading something no test had ever seen — recompiled, re-exported, and
+# only probably identical.
+#
+# Uploading is not publishing. This produces a private, immutable build with its own playtest URL;
+# making one of those the public game is a deliberate act in the Developer Portal, and stays that
+# way until the first several releases have proven the qualification flow. See "Phase 8.4" and the
+# rollback runbook in "Wavedash Implementation.md".
+#
+# Before this can run, once:
+#
+#   1. Create a GitHub Environment named wavedash-beta.
+#   2. Add the secret WAVEDASH_TOKEN to it, from the Wavedash Developer Portal.
+#   3. Optionally add required reviewers to the environment, which makes every upload wait for a
+#      human. Worth doing while the flow is new.
+
+name: Wavedash upload
+
+on:
+  workflow_run:
+    workflows: ["Web CI"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  # Only to read the artifact from the run that triggered this one.
+  actions: read
+
+concurrency:
+  # One upload at a time, and never cancelled: two pushes to main landing together would otherwise
+  # race to decide which build is newest, and the loser is the one that finished second rather than
+  # the one that was older.
+  group: wavedash-upload
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    # A failed build must not reach this, and neither must a run triggered by anything other than a
+    # push to main — a workflow_run event carries the conclusion of the run that caused it, which is
+    # the only thing standing between an upload and a red build.
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: wavedash-beta
+
+    env:
+      TESTED_COMMIT: ${{ github.event.workflow_run.head_sha }}
+
+    steps:
+      - name: Check out the commit that was tested
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The scripts and wavedash.toml have to match the artifact, not whatever main has moved
+          # on to since the build started.
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Download the tested artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: web-${{ github.event.workflow_run.head_sha }}
+          path: artifact
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify the digest
+        # The zip travelled: written on one machine, stored by GitHub, downloaded onto another. The
+        # digest was computed before that trip, so comparing it now is the only thing that says the
+        # bytes about to be published are the bytes the suite ran against.
+        run: |
+          set -euo pipefail
+          expected="$(cat artifact/robo_rush-web.zip.sha256)"
+          actual="$(sha256sum artifact/robo_rush-web.zip | cut -d' ' -f1)"
+          echo "expected $expected"
+          echo "actual   $actual"
+          [ "$expected" = "$actual" ] || {
+            echo "::error::the downloaded artifact does not match the digest Web CI recorded"
+            exit 1
+          }
+
+      - name: Extract into the upload directory
+        # Emptied first and matching upload_dir in wavedash.toml exactly. The CLI uploads a
+        # directory, so anything left in it from an earlier step would be published too.
+        run: |
+          set -euo pipefail
+          rm -rf build/web
+          mkdir -p build/web
+          unzip -q artifact/robo_rush-web.zip -d build/web
+          ls -la build/web
+
+      - name: Verify the contract on the extracted files
+        # The same check Web CI ran, against a directory this machine assembled. If the zip lost a
+        # file or the extraction flattened something, this is where it is caught rather than in a
+        # browser after it is hosted.
+        run: tools/ci/verify_web.sh build/web
+
+      - name: Install the Wavedash CLI
+        # Piping an installer to a shell is what Wavedash documents, and it is exactly as
+        # trustworthy as it looks. What makes it acceptable here is the version gate below: the
+        # approved version is recorded in tools/engine.lock, and a new binary cannot be used to
+        # upload until somebody has looked at it and re-recorded it.
+        run: |
+          set -euo pipefail
+          curl -fsSL https://wavedash.com/cli/install.sh | sh
+          # Where the installer puts the binary is not documented, so every plausible place is
+          # added and the next step decides whether one of them worked.
+          for candidate in "$HOME/.wavedash/bin" "$HOME/.local/bin" /usr/local/bin; do
+            if [ -d "$candidate" ]; then
+              echo "$candidate" >> "$GITHUB_PATH"
+            fi
+          done
+
+      - name: Check the CLI is the approved version
+        run: |
+          set -euo pipefail
+          command -v wavedash >/dev/null || { echo "::error::the Wavedash CLI is not on PATH"; exit 1; }
+          approved="$(grep '^wavedash_cli_version=' tools/engine.lock | cut -d= -f2-)"
+          installed="$(wavedash --version | head -1)"
+          echo "approved  $approved"
+          echo "installed $installed"
+          [ "$approved" = "$installed" ] || {
+            echo "::error::the Wavedash CLI changed from '$approved' to '$installed'. Review the new binary, then re-record it with tools/release.sh --relock."
+            exit 1
+          }
+
+      - name: Push the build
+        env:
+          # The only step the token is visible to.
+          WAVEDASH_TOKEN: ${{ secrets.WAVEDASH_TOKEN }}
+        run: |
+          set -euo pipefail
+          wavedash build push -m "Build $TESTED_COMMIT" | tee upload.log
+
+      - name: Record what was uploaded
+        if: always()
+        run: |
+          {
+            echo "### Wavedash upload"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Commit | \`$TESTED_COMMIT\` |"
+            echo "| Artifact sha256 | \`$(cat artifact/robo_rush-web.zip.sha256 2>/dev/null || echo unknown)\` |"
+            echo "| Build id | \`$(python3 -c "import json;print(json.load(open('build/web/build-info.json'))['build_id'])" 2>/dev/null || echo unknown)\` |"
+            echo "| CLI | \`$(wavedash --version 2>/dev/null | head -1 || echo unknown)\` |"
+            echo
+            echo '```'
+            cat upload.log 2>/dev/null || echo "no CLI output"
+            echo '```'
+            echo
+            echo "This build is private. Publishing it is a separate, deliberate act in the Developer Portal."
+          } >> "$GITHUB_STEP_SUMMARY"
