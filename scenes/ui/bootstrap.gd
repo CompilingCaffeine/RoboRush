@@ -99,10 +99,18 @@ func _ready() -> void:
 	# and immediately before the menu, it is the narrowest available statement of "the game
 	# booted" — the engine started, the pack loaded, the autoloads ran, the platform answered or
 	# timed out, and the save is readable.
+	#
+	# Whether `user://` survives a reload is on the line for the same reason. In a browser that is
+	# not a property of the game but of the page it was given: storage partitioning, a third-party
+	# cookie setting, or an embed the host sandboxed can all leave the engine with a filesystem that
+	# looks completely normal and is thrown away when the tab closes. That failure is invisible from
+	# inside the game and indistinguishable, to a tester, from the game not saving — so it is stated
+	# here rather than guessed at afterwards.
 	var id := build_id()
-	print("Robo Rush %s ready: %s" % [
+	print("Robo Rush %s ready: %s, %s" % [
 		id if not id.is_empty() else "dev",
 		"cloud save" if online else "local save",
+		"user:// persists" if OS.is_userfs_persistent() else "user:// IS NOT PERSISTENT",
 	])
 
 	finished.emit(online)

@@ -17,6 +17,7 @@ var _entry_music: StringName
 func run() -> void:
 	_entry_music = AudioManager._music_id
 
+	_test_the_buses_come_from_the_layout_file()
 	_test_every_sound_in_the_library_loads()
 	_test_every_priority_sound_from_the_spec_exists()
 	_test_unknown_ids_are_survivable()
@@ -81,6 +82,45 @@ func _teardown() -> void:
 	AudioManager.stop_music()
 	if not _entry_music.is_empty():
 		AudioManager.play_music(_entry_music)
+
+
+## The whole browser build was silent because of this, and nothing in the game could tell.
+##
+## `AudioManager._ensure_buses` creates Music and SFX at startup if they are missing, and for
+## several milestones that was the only thing that created them: the project shipped no bus layout,
+## the desktop mixer did not care, and every suite passed. The web export plays an `AudioStreamWAV`
+## as a WebAudio buffer through a JavaScript-side mirror of the bus graph that is built once, from
+## the layout file, before any autoload runs — so both buses were created too late to exist there,
+## every player was routed to a bus the web side had never heard of, and the game made no sound at
+## all. Measured in a real browser: zero samples reached the audio destination through a whole menu
+## and a whole run, and 0.13 peak through the same run once the layout existed.
+##
+## Checked against the file rather than against `AudioServer`, which is the distinction that
+## matters: by the time a test can ask, `_ensure_buses` has already run and would answer yes on a
+## project that is about to ship silence.
+func _test_the_buses_come_from_the_layout_file() -> void:
+	var path := str(ProjectSettings.get_setting("audio/buses/default_bus_layout", ""))
+	if not require(not path.is_empty(), "the project names a default bus layout"):
+		return
+	var layout := ResourceLoader.load(path) as AudioBusLayout
+	if not require(layout != null, "the bus layout at %s loads" % path):
+		return
+
+	# AudioBusLayout exposes nothing about its buses to script, so the layout is asked the only
+	# way it can be: applied to the server, which is what the engine does with it at startup.
+	var restore := AudioServer.generate_bus_layout()
+	AudioServer.set_bus_layout(layout)
+	var names: Array[StringName] = []
+	for index: int in AudioServer.bus_count:
+		names.append(AudioServer.get_bus_name(index))
+	AudioServer.set_bus_layout(restore)
+
+	for bus: StringName in [&"Master", AudioManager.MUSIC_BUS, AudioManager.SFX_BUS]:
+		check(
+			bus in names,
+			"the layout file defines the '%s' bus, so the web build has it before a sound plays"
+					% bus,
+		)
 
 
 func _test_every_sound_in_the_library_loads() -> void:

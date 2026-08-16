@@ -42,6 +42,10 @@ const MAX_ITEMS := 128
 const MAX_OFFERED_ITEMS := 512
 const MAX_BOSSES := 64
 const MAX_FLOOR_RECORDS := 64
+
+## Rooms on one floor, for the two lists a mid-floor save records. Floors are ten rooms; this is
+## far above anything a generator produces and far below a number worth allocating against.
+const MAX_FLOOR_ROOMS := 256
 const MAX_SCRAP := 999_999
 const MAX_ROOMS_CLEARED := 10_000
 const MAX_INTEGRITY := 999.0
@@ -102,6 +106,32 @@ var fought_boss_ids: Array[StringName] = []
 ## victory as having cleared ten rooms.
 var stats := RunStats.new()
 
+## How much of the *current floor* was already done. Empty in a checkpoint written at a boundary,
+## which is every checkpoint the game writes by itself: a floor nobody has walked into yet has no
+## progress to record, so the fields below cost a boundary checkpoint two empty arrays.
+##
+## They exist for the save the player asks for from the pause menu, which can land anywhere. The
+## class comment above explains why the boundary is the only moment the *run* is a handful of
+## numbers, and none of that changes: a resume still rebuilds the floor from its seed and still
+## puts the player at the top of it. What these add is the one thing that made saving mid-floor
+## unfair rather than merely lossy — without them the rooms the player had already fought through
+## came back with their enemies and their rewards, while the scrap and items from clearing them
+## the first time stayed in the run. Save in the last room of a floor, reload, and the floor pays
+## out twice, and again, for as long as the player is willing to do it.
+##
+## Room ids are stable for a floor: the layout is generated from the floor's derived seed, and a
+## resume derives the same seed from the same run seed. So the ids recorded here name the same
+## rooms on the way back in. A room that has been cleared is rebuilt empty and pays nothing; a
+## room that was merely visited comes back on the minimap.
+var floor_cleared_room_ids: Array[int] = []
+var floor_visited_room_ids: Array[int] = []
+
+## The floor's own clear counter, which decides when the next repair cell and the next item drop
+## are due (`FloorController._clears`). Carried for the same reason as the ids: restarting it at
+## zero would restart the reward cadence with it, so a resumed floor would hand out its early
+## drops a second time.
+var floor_clears: int = 0
+
 
 ## Takes a checkpoint of the run as it stands. Called at a floor boundary and nowhere else; see
 ## the class comment for why nowhere else is safe.
@@ -136,6 +166,19 @@ static func capture(
 	return checkpoint
 
 
+## Records how far into the current floor the run had got. Called only by the pause menu's save,
+## through `FloorController.save_run_now`; a boundary checkpoint leaves these empty because there
+## is nothing yet to record. Sorted so that two saves of the same position produce the same bytes,
+## which is what stops the cloud coordinator seeing a change that is only a dictionary's iteration
+## order.
+func record_floor_progress(cleared: Array[int], visited: Array[int], clears: int) -> void:
+	floor_cleared_room_ids = cleared.duplicate()
+	floor_visited_room_ids = visited.duplicate()
+	floor_cleared_room_ids.sort()
+	floor_visited_room_ids.sort()
+	floor_clears = clears
+
+
 func to_dict() -> Dictionary:
 	return {
 		"campaign_id": String(campaign_id),
@@ -153,6 +196,9 @@ func to_dict() -> Dictionary:
 		"offered_items": _names_to_strings(offered_item_ids),
 		"fought_bosses": _names_to_strings(fought_boss_ids),
 		"stats": stats.to_dict(),
+		"floor_cleared_rooms": floor_cleared_room_ids.duplicate(),
+		"floor_visited_rooms": floor_visited_room_ids.duplicate(),
+		"floor_clears": floor_clears,
 	}
 
 
@@ -177,9 +223,34 @@ static func from_dict(data: Dictionary) -> RunCheckpoint:
 	checkpoint.offered_item_ids = _strings_to_names(data.get("offered_items"))
 	checkpoint.fought_boss_ids = _strings_to_names(data.get("fought_bosses"))
 
+	# Absent in every checkpoint written before the pause menu could save, and absent in every
+	# boundary checkpoint written since. An older save therefore reads back as a floor with no
+	# progress recorded, which is exactly what it was.
+	checkpoint.floor_cleared_room_ids = _to_room_ids(data.get("floor_cleared_rooms"))
+	checkpoint.floor_visited_room_ids = _to_room_ids(data.get("floor_visited_rooms"))
+	checkpoint.floor_clears = RunStats.read_int(data, "floor_clears")
+
 	var raw_stats: Variant = data.get("stats")
 	checkpoint.stats = RunStats.from_dict(raw_stats as Dictionary if raw_stats is Dictionary else {})
 	return checkpoint
+
+
+## Room ids out of a save file, treated as hostile like everything else read back here. Anything
+## that is not a whole number is dropped rather than coerced: a room id is an index into a layout,
+## and a junk value would either name a room that does not exist — harmless, and ignored on the way
+## back in — or a real one it was never meant to name.
+static func _to_room_ids(raw: Variant) -> Array[int]:
+	var ids: Array[int] = []
+	if not (raw is Array):
+		return ids
+	for value: Variant in raw as Array:
+		# JSON has one number type, so a whole number arrives as a float. `is_integer` is what tells
+		# an id apart from a fraction somebody hand-edited in.
+		if value is int:
+			ids.append(value as int)
+		elif value is float and is_equal_approx(value as float, roundf(value as float)):
+			ids.append(int(roundf(value as float)))
+	return ids
 
 
 ## Every reason this checkpoint cannot be played, or an empty list if there is none.
@@ -314,6 +385,18 @@ func _validate_collections(problems: PackedStringArray) -> void:
 
 	if stats.floors.size() > MAX_FLOOR_RECORDS:
 		problems.append("it holds %d floor records" % stats.floors.size())
+
+	# A refusal rather than a cap, like every other ceiling here. A floor has ten rooms; a list
+	# claiming hundreds is a hand-edit or a corruption, and the ids in it would be applied to a
+	# layout that has no such rooms.
+	for entry: Array in [
+		[floor_cleared_room_ids, "cleared rooms"], [floor_visited_room_ids, "visited rooms"],
+	]:
+		var ids: Array[int] = entry[0]
+		if ids.size() > MAX_FLOOR_ROOMS:
+			problems.append("it lists %d %s on one floor" % [ids.size(), entry[1]])
+	if floor_clears < 0 or floor_clears > MAX_FLOOR_ROOMS:
+		problems.append("it reports %d rooms cleared on the current floor" % floor_clears)
 
 	# The offered list is a set — `RunManager.draw_item` appends an id once and `release_item`
 	# removes it — and a duplicate in it would be an item struck off the run twice.

@@ -18,6 +18,7 @@ var _pause: PauseMenu
 
 
 func run() -> void:
+	await _test_quit_is_offered_only_where_it_works()
 	await _test_a_click_actually_reaches_a_button()
 	await _test_a_click_through_settings_cannot_reach_the_menu()
 	await _test_a_click_through_the_controls_card_cannot_reach_the_menu()
@@ -26,6 +27,43 @@ func run() -> void:
 
 
 # --- Checks -------------------------------------------------------------------
+
+
+## Neither menu may offer a button `SceneRouter` would refuse to honour.
+##
+## The browser playtest reported QUIT as "locking out" the game, and it was doing exactly what it
+## was written to do: `get_tree().quit()` ends the main loop, and in a tab there is nothing behind
+## the game to return to, so the last frame stays on the canvas with the engine gone. A menu that
+## still answers the mouse and does nothing is worse than a menu with one fewer entry.
+##
+## Stated as an equality rather than as "the web has no QUIT", so that it says something on every
+## platform the suite runs on: here it pins that a desktop build *does* still offer it, which is the
+## half a careless `if OS.has_feature("web")` would break. `can_quit` is asked rather than the
+## platform, so the button and the router can never disagree about which build this is.
+func _test_quit_is_offered_only_where_it_works() -> void:
+	var expected := SceneRouter.can_quit()
+
+	await _open_pause_menu()
+	check(
+		(_button_named(PauseMenu.QUIT_LABEL) != null) == expected,
+		"the pause menu offers QUIT exactly when quitting works (can_quit=%s)" % expected,
+	)
+	await _teardown()
+
+	var menu: MainMenu = load("res://scenes/ui/main_menu.tscn").instantiate()
+	add_child(menu)
+	await advance_physics(1)
+	var found := false
+	for child: Node in (menu.get_node("%Buttons") as Node).get_children():
+		var button := child as Button
+		if button != null and MainMenu.QUIT_LABEL in button.text:
+			found = true
+	check(
+		found == expected,
+		"the main menu offers QUIT exactly when quitting works (can_quit=%s)" % expected,
+	)
+	menu.queue_free()
+	await advance_physics(1)
 
 
 ## Calibration, and the most important check in the file. Every other mouse check here asserts

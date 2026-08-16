@@ -140,6 +140,47 @@ var _boss_defeated_handler := Callable()
 
 ## Generates and builds the floor. Returns false if generation failed, so the caller can
 ## report it rather than presenting an empty world.
+## Floor-local progress a resumed run is bringing back with it, consumed by the next `build` and
+## then forgotten. A field rather than an argument because it applies to exactly one floor — the
+## one being resumed onto — and a descent from it must open the next floor untouched. Cleared in
+## `_open_session` for that reason, not here.
+var _resume_cleared: Array[int] = []
+var _resume_visited: Array[int] = []
+var _resume_clears := 0
+
+
+## Tells the next `build` how much of the floor it is about to open was already done, so a run
+## resumed from a mid-floor save comes back to the rooms it had cleared rather than to a floor that
+## has forgotten them. See `RunCheckpoint.floor_cleared_room_ids`.
+func resume_floor_progress(cleared: Array[int], visited: Array[int], clears: int) -> void:
+	_resume_cleared = cleared.duplicate()
+	_resume_visited = visited.duplicate()
+	_resume_clears = clears
+
+
+## Writes a checkpoint of the run exactly where it stands, including this floor's progress.
+##
+## The pause menu's SAVE GAME. Everything the automatic boundary checkpoint records is recorded the
+## same way — this adds only the floor-local part, which is what makes a save taken in the middle
+## of a floor resume honestly instead of paying the floor's rewards out twice.
+##
+## Answers whether a checkpoint was actually written, because the menu says so on screen and a
+## button that reports "saved" when the run was already over would be lying about the one thing the
+## player pressed it to find out.
+func save_run_now() -> bool:
+	if _player == null or not is_instance_valid(_player) or campaign == null:
+		return false
+	var cleared: Array[int] = []
+	for id: int in _cleared:
+		if _cleared[id]:
+			cleared.append(id)
+	var visited_ids: Array[int] = []
+	for id: int in visited:
+		if visited[id]:
+			visited_ids.append(id)
+	return RunManager.checkpoint_here(campaign, config, _player, cleared, visited_ids, _clears)
+
+
 func build(player: Player, seed_value: int) -> bool:
 	assert(config != null, "FloorController.config is unset: assign a FloorConfig resource.")
 
@@ -189,6 +230,20 @@ func _open_session(generated: FloorLayout, seed_value: int) -> void:
 	# had been consumed getting there, and one `--seed` would stop reproducing the whole run.
 	_boss_encounter = _draw_boss_encounter()
 	RunManager.record_floor_boss(_boss_encounter.id if _boss_encounter != null else &"")
+
+	# Taken before the rooms are built, because `_instantiate_rooms` is what has to know, and
+	# emptied in the same breath: this describes the floor being opened right now, and a descent
+	# out of it must not arrive on the next floor carrying the last one's cleared rooms.
+	var resumed_cleared := _resume_cleared
+	var resumed_visited := _resume_visited
+	_clears = _resume_clears
+	_resume_cleared = []
+	_resume_visited = []
+	_resume_clears = 0
+	for id: int in resumed_cleared:
+		_cleared[id] = true
+	for id: int in resumed_visited:
+		visited[id] = true
 
 	_instantiate_rooms()
 	_instantiate_doors()
@@ -305,7 +360,11 @@ func _instantiate_rooms() -> void:
 
 		room.build(plan, config.theme)
 		if plan.type == RoomTemplate.Type.COMBAT:
-			room.populate(config, _encounter_rng)
+			# A room a resumed run had already fought through is built empty. `populate` still draws
+			# from the encounter stream for it — see `Room.populate` — so the rooms after it in this
+			# loop get the same enemies they got the first time, and the floor stays the floor its
+			# seed describes rather than a different one that merely starts the same.
+			room.populate(config, _encounter_rng, is_room_cleared(plan.id))
 		elif plan.type == RoomTemplate.Type.SHOP:
 			_stock_shop(room)
 		room.set_active(false)
@@ -412,7 +471,10 @@ func _enter_room(id: int) -> void:
 		_rooms[previous_id].set_active(false)
 	room.set_active(true)
 
-	if room.plan.type == RoomTemplate.Type.BOSS and _boss == null:
+	# Not for an arena a resumed run had already won. Without the clearing check a player who saved
+	# after killing the boss and before taking the reward would walk back into a second one — and
+	# `fought_boss_ids` would deny them the credit for it, so it would be a fight for nothing.
+	if room.plan.type == RoomTemplate.Type.BOSS and _boss == null and not is_room_cleared(id):
 		_spawn_boss(room)
 
 	if _needs_clearing(id):

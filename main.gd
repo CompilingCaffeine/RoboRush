@@ -22,6 +22,7 @@ const FLOOR_SEED_OVERRIDE := 0
 @onready var _combat_hud: CombatHUD = %CombatHUD
 @onready var _minimap: Minimap = %Minimap
 @onready var _debug_hud: DebugHUD = %DebugHUD
+@onready var _pause_menu: PauseMenu = %PauseMenu
 
 ## Set when this scene has decided not to build anything and has asked to be replaced by the
 ## title screen. The scene change is deferred — it cannot happen inside `_ready` — so there is a
@@ -85,6 +86,10 @@ func _ready() -> void:
 	_combat_hud.bind_player(_player)
 	_debug_hud.bind_player(_player)
 	_floor.boss_encountered.connect(_combat_hud.bind_boss)
+	# The pause menu asks; the floor is the only thing that can answer, because a save taken in the
+	# middle of a floor has to record which of its rooms are already done. Wired here rather than in
+	# either of them, for the same reason as everything else in this file.
+	_pause_menu.save_requested.connect(_on_save_requested)
 
 	# The campaign is the floor order, so the opening floor comes from it too rather than from
 	# whatever `floor.tscn` happens to have in its `config` slot. One authority, including for
@@ -94,6 +99,15 @@ func _ready() -> void:
 	# `FloorController.floor_theme_changed` for why that has to happen before the player is
 	# placed. One connection covers both the opening floor and every descent.
 	_floor.floor_theme_changed.connect(_feedback.set_floor_theme)
+	# Before the build, because the build is what instantiates the rooms and a room that was already
+	# cleared has to be built empty rather than emptied afterwards. Empty for a checkpoint written at
+	# a floor boundary, which is every checkpoint written by anything other than the pause menu.
+	if checkpoint != null:
+		_floor.resume_floor_progress(
+			checkpoint.floor_cleared_room_ids,
+			checkpoint.floor_visited_room_ids,
+			checkpoint.floor_clears,
+		)
 	if not _floor.build(_player, floor_seed):
 		# Generation failing is a content bug, not something to hide from the player behind a
 		# blank screen (spec section 31.10 forbids placeholder error messages reaching them).
@@ -155,6 +169,11 @@ func _resolve_checkpoint(campaign: RunDefinition) -> RunCheckpoint:
 ## they restore two different things. The run's own state — scrap, seeds, what has been offered,
 ## what has been fought — belongs to `RunManager`; integrity and the build belong to the robot,
 ## and the robot is this scene's to assemble.
+## The pause menu's SAVE GAME, answered by the floor and reported back to the button.
+func _on_save_requested() -> void:
+	_pause_menu.report_saved(_floor.save_run_now())
+
+
 func _restore_player(checkpoint: RunCheckpoint, campaign: RunDefinition) -> void:
 	var floor_config := campaign.load_floor_by_id(checkpoint.floor_id)
 	if floor_config == null:

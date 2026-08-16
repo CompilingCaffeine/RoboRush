@@ -27,6 +27,10 @@ SaveManager="*res://autoload/save_manager.gd"
 SceneRouter="*res://autoload/scene_router.gd"
 ScreenEffects="*res://autoload/screen_effects.gd"
 
+[audio]
+
+buses/default_bus_layout="res://data/audio/default_bus_layout.tres"
+
 [display]
 
 window/size/viewport_width=480

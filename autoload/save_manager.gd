@@ -150,6 +150,7 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	EventBus.item_collected.connect(_on_item_collected)
 	EventBus.boss_defeated.connect(_on_boss_defeated)
+	_watch_web_unload()
 
 
 ## Loads the save and announces that it is safe to read. Called once, by the bootstrap scene,
@@ -193,8 +194,58 @@ func _notification(what: int) -> void:
 	# Quitting is the one moment a pending debounced save must not be lost. Both
 	# notifications are handled because they do not both arrive: closing the window sends the
 	# first, `get_tree().quit()` only the second.
+	#
+	# Neither arrives in a browser, which is what `_watch_web_unload` is for.
 	var is_shutdown := what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_EXIT_TREE
 	if is_shutdown and _dirty:
+		save_game()
+
+
+## Registered on the page for the lifetime of the game. Held in a field because a callback the
+## Godot side has dropped is a listener the browser can no longer call: it would be collected, the
+## registration would stay, and the flush below would quietly stop happening.
+var _web_unload_callback: JavaScriptObject = null
+
+
+## Flushes a pending write when the browser takes the page away.
+##
+## A browser sends no close notification. `NOTIFICATION_WM_CLOSE_REQUEST` is what saves a debounced
+## write when a desktop window is closed, and the web platform never delivers it — the tab is
+## closed, reloaded, or swapped away from on a phone, and the engine simply stops running. Anything
+## still inside the half-second debounce at that instant was lost, silently, with the code above
+## claiming to have covered it.
+##
+## A run in progress is not what this rescues. `store_checkpoint` already writes immediately, for
+## exactly this reason — the session ending without warning is the whole point of a checkpoint. What
+## is left to the debounce is a settings change, a newly unlocked item, a finished run's records,
+## and those are what a reload used to drop.
+##
+## `pagehide` and `visibilitychange` rather than `beforeunload`: `beforeunload` does not fire when a
+## mobile browser discards a backgrounded tab, which is the most common way a phone ends a session.
+## Both of these are registered because neither one covers every exit, and a duplicate flush costs
+## nothing — `save_game` returns immediately once the save is no longer dirty.
+##
+## The limit is worth being plain about: the write reaches Godot's in-memory filesystem
+## synchronously, but the IndexedDB transaction `force_fs_sync` starts is asynchronous, and a
+## browser tearing down a tab is under no obligation to wait for it. This makes the ordinary exits
+## safe rather than all of them, which is why nothing that matters is left to it in the first place.
+func _watch_web_unload() -> void:
+	if not OS.has_feature("web"):
+		return
+	var window := JavaScriptBridge.get_interface("window")
+	if window == null:
+		push_warning("SaveManager: no page to watch; a pending save may not survive a reload.")
+		return
+	_web_unload_callback = JavaScriptBridge.create_callback(_on_web_unload)
+	window.addEventListener("pagehide", _web_unload_callback)
+	window.addEventListener("visibilitychange", _web_unload_callback)
+
+
+## Fires on the way out and also on the way back in, since `visibilitychange` reports both. The
+## dirty check is what makes that harmless, and writing early when a player merely switches tabs is
+## the behaviour wanted anyway.
+func _on_web_unload(_arguments: Array) -> void:
+	if _dirty:
 		save_game()
 
 

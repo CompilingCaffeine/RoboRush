@@ -11,11 +11,15 @@ extends Control
 ## controls card — by instancing the same scenes the pause menu instances. Neither knows where
 ## it was opened from, which is what lets them be opened from anywhere.
 
+## Named so that the browser build can take the entry back out again by label rather than by
+## index — an index would silently remove CONTROLS the first time this list is reordered.
+const QUIT_LABEL := "QUIT"
+
 const BUTTONS: Array = [
 	["START RUN", "_on_start_pressed"],
 	["CONTROLS", "_on_controls_pressed"],
 	["SETTINGS", "_on_settings_pressed"],
-	["QUIT", "_on_quit_pressed"],
+	[QUIT_LABEL, "_on_quit_pressed"],
 ]
 
 ## Where the entry that continues a saved run goes, and what it says. First, above START RUN,
@@ -82,6 +86,10 @@ func _ready() -> void:
 
 func _build_buttons() -> void:
 	var entries := BUTTONS.duplicate()
+	# Dropped rather than disabled in a browser, where there is nothing to quit to. A greyed-out
+	# QUIT would advertise a door that is not there; see `SceneRouter.can_quit`.
+	if not SceneRouter.can_quit():
+		entries = entries.filter(func(entry: Array) -> bool: return entry[0] != QUIT_LABEL)
 	# The label carries the floor and the elapsed time, because "CONTINUE" alone does not say
 	# *what*: a player coming back the next day needs to recognise the run before they commit to
 	# it, and the alternative is loading it to find out.

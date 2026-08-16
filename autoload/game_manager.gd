@@ -138,6 +138,18 @@ func leave_run() -> void:
 	SceneRouter.go_to_main_menu()
 
 
+## Leaves for the title screen with the run kept rather than thrown away. What the pause menu's
+## SAVE AND EXIT does once the checkpoint has been written.
+##
+## The only difference from `leave_run` is the line in the middle, and it is the whole feature: see
+## `RunManager.suspend_run` for what walking out would otherwise do to a run the player has just
+## asked the game to remember.
+func suspend_run() -> void:
+	_hit_pause_active = false
+	RunManager.suspend_run()
+	SceneRouter.go_to_main_menu()
+
+
 ## Only the two shortcuts that must work from anywhere. Everything else a player can do at a
 ## menu is a button on that menu, because a game whose options are undocumented keypresses
 ## fails milestone 6's success condition before it starts.

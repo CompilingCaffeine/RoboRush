@@ -41,6 +41,9 @@ func run() -> void:
 		return
 
 	await _test_a_boundary_writes_a_checkpoint()
+	await _test_a_mid_floor_save_does_not_pay_the_floor_twice()
+	await _test_saving_and_exiting_keeps_the_run_the_menu_just_saved()
+	_test_a_boundary_checkpoint_records_no_floor_progress()
 	await _test_a_restore_reproduces_the_run()
 	await _test_a_restore_does_not_duplicate_credit()
 	await _test_every_ending_clears_the_checkpoint()
@@ -70,6 +73,203 @@ func run() -> void:
 ## Driven through a real `FloorController` descent rather than by calling `capture` directly,
 ## because the thing most likely to break is not the capture — it is *when* it happens. A
 ## checkpoint taken a line earlier would describe the floor being torn down.
+## The invariant the pause menu's SAVE GAME rests on, and the one thing that made saving mid-floor
+## unfair rather than merely lossy.
+##
+## A resume rebuilds the floor from its seed and puts the player back at the top of it — that much
+## is by design and is what `RunCheckpoint` has always done. What must not come back with the floor
+## is its *rewards*. Without the cleared-room list, a player who saved in the last room of a floor
+## and reloaded would find every room they had fought through full of enemies again, with the scrap
+## and items from clearing them the first time still in the run: the floor pays out twice, and
+## again, for as long as they care to repeat it.
+##
+## So the check is not "the ids round-trip" but the thing a player would actually exploit: on the
+## way back in, a room recorded as done is empty, and a room they never reached is not. The second
+## half is what stops this passing on a build that simply forgot to spawn anything.
+func _test_a_mid_floor_save_does_not_pay_the_floor_twice() -> void:
+	SaveManager.clear_checkpoint()
+	SceneRouter._resume_requested = false
+	var game := await _open_game_scene()
+	var floor_node := game.get_node("%Floor") as FloorController
+	if not require(floor_node != null and floor_node.layout != null, "a floor to fight through"):
+		game.queue_free()
+		await advance_physics(1)
+		return
+
+	# Two combat rooms that really did get enemies, so "empty afterwards" means something.
+	var fought: Array[int] = []
+	for plan: RoomPlan in floor_node.layout.rooms:
+		if plan.type != RoomTemplate.Type.COMBAT:
+			continue
+		var room := floor_node.get_room(plan.id)
+		if room != null and room.has_living_enemies():
+			fought.append(plan.id)
+	if not require(fought.size() >= 2, "the floor has two populated combat rooms (%d)" % fought.size()):
+		game.queue_free()
+		await advance_physics(1)
+		return
+
+	var done_id: int = fought[0]
+	var untouched_id: int = fought[1]
+
+	# Stands in for the player having fought through that one room. Reaching into the controller
+	# rather than killing ten enemies through the physics server: what is under test is what a save
+	# records and a resume rebuilds, and driving a real fight would test the fight.
+	floor_node._cleared[done_id] = true
+	floor_node.visited[done_id] = true
+	floor_node._clears = 3
+	RunManager.add_scrap(40)
+	var scrap_at_save := RunManager.scrap
+
+	check(floor_node.save_run_now(), "the pause menu's save writes a checkpoint")
+	var checkpoint := SaveManager.get_checkpoint()
+	if not require(checkpoint, "and there is a checkpoint to resume from"):
+		game.queue_free()
+		await advance_physics(1)
+		return
+
+	check(done_id in checkpoint.floor_cleared_room_ids, "it records the room already cleared")
+	check(done_id in checkpoint.floor_visited_room_ids, "and that the player had been in it")
+	check(checkpoint.floor_clears == 3, "and the floor's reward cadence (%d)" % checkpoint.floor_clears)
+	check(
+		checkpoint.floor_id == floor_node.config.id,
+		"and it is a checkpoint of the floor being stood on, not the next one",
+	)
+	check(checkpoint.validate(_campaign).is_empty(), "a mid-floor checkpoint is playable")
+
+	game.queue_free()
+	await advance_physics(1)
+
+	SceneRouter._resume_requested = true
+	var resumed := await _open_game_scene()
+	var resumed_floor := resumed.get_node("%Floor") as FloorController
+	if not require(resumed_floor != null and resumed_floor.layout != null, "the run resumes"):
+		resumed.queue_free()
+		await advance_physics(1)
+		return
+
+	check(resumed_floor.is_room_cleared(done_id), "the room already fought through comes back cleared")
+	var done_room := resumed_floor.get_room(done_id)
+	check(
+		done_room != null and not done_room.has_living_enemies(),
+		"and comes back empty, so clearing it cannot pay a second time",
+	)
+	var untouched_room := resumed_floor.get_room(untouched_id)
+	check(
+		untouched_room != null and untouched_room.has_living_enemies(),
+		"while a room the player never reached still has its enemies waiting",
+	)
+	check(
+		resumed_floor._clears == 3,
+		"the reward cadence resumes where it was (%d)" % resumed_floor._clears,
+	)
+	check(RunManager.scrap == scrap_at_save, "and the run comes back with the scrap it saved with")
+
+	resumed.queue_free()
+	await advance_physics(1)
+	SaveManager.clear_checkpoint()
+
+
+## SAVE AND EXIT has to survive the walk back to the title screen, and by default it would not.
+##
+## Everything that leaves a run goes through `GameManager._set_state(MAIN_MENU)`, which ends the
+## open run — and ending a run clears its checkpoint and files it into the lifetime bests as an
+## abandonment. Both of those are right for ABANDON RUN and catastrophic for the button next to it:
+## the checkpoint the player just asked for would be deleted on the way out, by the same press, and
+## a player who took five breaks would find five abandoned runs folded into records they cannot
+## repair. `RunManager.suspend_run` is what stands between those, and this is the check that says so.
+##
+## Both halves are exercised against the same transition, one suspended and one not, because the
+## claim is not "suspending works" but "suspending is the only difference". The transition is driven
+## directly rather than through `SceneRouter`: a test that let the router run would call
+## `change_scene_to_file` and replace the test runner, mid-suite, with the title screen.
+func _test_saving_and_exiting_keeps_the_run_the_menu_just_saved() -> void:
+	SaveManager.clear_checkpoint()
+	SceneRouter._resume_requested = false
+	var game := await _open_game_scene()
+	var floor_node := game.get_node("%Floor") as FloorController
+	if not require(floor_node != null and floor_node.layout != null, "a run to put down"):
+		game.queue_free()
+		await advance_physics(1)
+		return
+
+	RunManager.add_scrap(SaveManager.best.most_scrap_collected + 25)
+	var banked := RunManager.stats.scrap_collected
+	var best_scrap_before := SaveManager.best.most_scrap_collected
+
+	check(floor_node.save_run_now(), "the run is written down before anything leaves")
+	if not require(SaveManager.has_checkpoint(), "there is a checkpoint to protect"):
+		game.queue_free()
+		await advance_physics(1)
+		return
+
+	# What SAVE AND EXIT does, minus the scene change. Twice, because the real path arrives here
+	# twice — once from the router and once from the title screen's own `_ready` — and a guard that
+	# only held for the first would delete the run a frame later.
+	RunManager.suspend_run()
+	GameManager.enter_main_menu()
+	GameManager.enter_main_menu()
+
+	check(SaveManager.has_checkpoint(), "the checkpoint survives the trip to the title screen")
+	check(
+		SaveManager.best.most_scrap_collected == best_scrap_before,
+		"and the run is not filed as finished on the way out (best scrap %d, was %d)"
+				% [SaveManager.best.most_scrap_collected, best_scrap_before],
+	)
+
+	game.queue_free()
+	await advance_physics(1)
+
+	# The other half of the pair: the same transition without the suspend really does end the run,
+	# so the guard above is doing the work rather than the run having been unfileable anyway.
+	SceneRouter._resume_requested = false
+	var abandoned := await _open_game_scene()
+	RunManager.add_scrap(banked + 25)
+	var expected_scrap := RunManager.stats.scrap_collected
+	GameManager.enter_main_menu()
+
+	check(not SaveManager.has_checkpoint(), "abandoning to the title screen still clears the run")
+	check(
+		SaveManager.best.most_scrap_collected == expected_scrap,
+		"and still files it (best scrap %d, expected %d)"
+				% [SaveManager.best.most_scrap_collected, expected_scrap],
+	)
+
+	abandoned.queue_free()
+	await advance_physics(1)
+	SaveManager.clear_checkpoint()
+
+
+## The automatic checkpoint is unchanged by all of the above: a floor nobody has walked into yet
+## has nothing to record, so a boundary save carries two empty lists and a zero. Worth pinning
+## because the cheapest way to break it would be to have the descent record the floor being left.
+func _test_a_boundary_checkpoint_records_no_floor_progress() -> void:
+	var checkpoint := _capture_synthetic_checkpoint(9412)
+	check(
+		checkpoint.floor_cleared_room_ids.is_empty(),
+		"a boundary checkpoint names no cleared rooms (%d)"
+				% checkpoint.floor_cleared_room_ids.size(),
+	)
+	check(checkpoint.floor_visited_room_ids.is_empty(), "and no visited ones")
+	check(checkpoint.floor_clears == 0, "and no clears on the floor it is arriving at")
+
+	# Through a save file and back, because these are the newest fields in the format and the
+	# failure they would have is being written and never read.
+	var restored := RunCheckpoint.from_dict(checkpoint.to_dict())
+	checkpoint.record_floor_progress([4, 1], [1, 4, 6], 2)
+	var with_progress := RunCheckpoint.from_dict(checkpoint.to_dict())
+	check(restored.floor_clears == 0, "an empty floor progress survives the round trip")
+	var expected_cleared: Array[int] = [1, 4]
+	var expected_visited: Array[int] = [1, 4, 6]
+	check(
+		with_progress.floor_cleared_room_ids == expected_cleared,
+		"and a recorded one comes back sorted and intact (%s)"
+				% str(with_progress.floor_cleared_room_ids),
+	)
+	check(with_progress.floor_visited_room_ids == expected_visited, "visited rooms included")
+	check(with_progress.floor_clears == 2, "and the clear count with them")
+
+
 func _test_a_boundary_writes_a_checkpoint() -> void:
 	var arena := Node2D.new()
 	add_child(arena)

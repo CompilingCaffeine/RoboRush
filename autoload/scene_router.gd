@@ -59,12 +59,33 @@ func consume_resume_request() -> bool:
 	return requested
 
 
+## Whether this build has anywhere to quit *to*, and therefore whether a menu should offer it.
+##
+## A browser tab is not a window the game owns. `get_tree().quit()` there does exactly what it
+## says — it ends the main loop — but nothing closes afterwards, because a page cannot close
+## itself. What the player is left with is the last frame the game drew, still on screen, with
+## the engine behind it gone: a menu that looks completely normal and answers nothing. That is
+## precisely how it was reported from the first browser playtest, as the game "locking out" on
+## QUIT, and it is not something the button can be made to do better. So the browser build does
+## not offer it, and the menus below it are complete without it — ABANDON RUN already returns to
+## the title screen, and leaving the game is what closing the tab is for.
+static func can_quit() -> bool:
+	return not OS.has_feature("web")
+
+
 ## Ends the process. `get_tree().quit()` takes effect at the end of the current frame, which
 ## has two consequences worth stating: SaveManager still gets its shutdown notification and
 ## flushes any pending write, and there is no time for a sound. Callers deliberately do not
 ## play one — a 100 ms blip started on the frame the window closes is inaudible, and leaving
 ## it playing at teardown leaked the stream (see AudioManager.stop_all).
+##
+## Refuses on the web rather than trusting every caller to have checked `can_quit`. The menus do
+## check — they do not build the button at all — but this is the function that strands a player,
+## and a guard at the thing that causes the damage outlives whichever menu forgets.
 func quit_game() -> void:
+	if not can_quit():
+		push_warning("SceneRouter: refusing to quit; a browser tab has nothing to quit to.")
+		return
 	_restore_time()
 	AudioManager.stop_all()
 	get_tree().quit()
