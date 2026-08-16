@@ -379,6 +379,21 @@ func record_floor_boss(boss_id: StringName) -> void:
 	stats.record_floor_boss(boss_id)
 
 
+## Which boss the floor being played has already drawn, or empty if it has not drawn one.
+##
+## The counterpart to `record_floor_boss`, and it exists for the one caller that has to ask: a floor
+## being *re-opened* — which is what a resume is — must take back the boss the run already drew for
+## it rather than draw a second one. See `FloorController._draw_boss_encounter`.
+##
+## The open floor record is the right place to ask because it is the run's own memory of the floor it
+## is standing on: it survives a checkpoint (`FloorRecord.to_dict` carries `boss_id`), and
+## `RunStats.begin_floor` keeps it rather than opening a second record when the same floor is entered
+## again. A run that has no floor open — a test arena, a menu — has drawn nothing, and says so.
+func current_floor_boss_id() -> StringName:
+	var open := stats.current_floor()
+	return open.boss_id if open != null else &""
+
+
 ## Closes the current floor's record with how it ended. Descending is the controller's business;
 ## every other outcome arrives through `end_run`.
 func finish_floor(outcome: FloorRecord.Outcome) -> void:

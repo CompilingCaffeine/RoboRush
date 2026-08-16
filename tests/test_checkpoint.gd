@@ -46,6 +46,7 @@ func run() -> void:
 	_test_a_boundary_checkpoint_records_no_floor_progress()
 	await _test_a_restore_reproduces_the_run()
 	await _test_a_restore_does_not_duplicate_credit()
+	await _test_a_resumed_floor_keeps_the_boss_it_already_drew()
 	await _test_every_ending_clears_the_checkpoint()
 	await _test_the_title_screen_offers_the_saved_run()
 	await _test_the_game_scene_resumes_the_saved_run()
@@ -423,6 +424,85 @@ func _test_a_restore_does_not_duplicate_credit() -> void:
 	await advance_physics(1)
 
 
+## The floor a run is resumed onto has already drawn its boss, and the run is carrying the proof:
+## the boss's id is in `fought_boss_ids` because the boundary checkpoint was written *after* the
+## floor opened. Re-opening that floor must therefore take the recorded boss back rather than draw
+## a second one, and this is the check that says so.
+##
+## Drawing again is not a cosmetic mistake. Every boss the run has met is struck off, so the floor
+## either draws a *different* boss than the run recorded, or — on a floor whose pool holds one boss,
+## which is every floor of a campaign with one boss each — draws nothing at all. A boss room with no
+## boss still seals behind the player (`_needs_clearing`: a boss room is shut until it is cleared)
+## and nothing in it can ever clear it: an empty room, locked, for the rest of the run. That is the
+## shape this was reported in, and it is the reason the check below walks into the room rather than
+## stopping at the encounter being non-null.
+func _test_a_resumed_floor_keeps_the_boss_it_already_drew() -> void:
+	SaveManager.clear_checkpoint()
+	SceneRouter._resume_requested = false
+
+	var arena := Node2D.new()
+	add_child(arena)
+	var floor_node := _open_first_floor(arena, 24680)
+	if not require(floor_node, "a first floor to descend from"):
+		arena.queue_free()
+		await advance_physics(1)
+		return
+
+	await _descend(floor_node)
+	var drawn := floor_node.get_boss_encounter()
+	var checkpoint := SaveManager.get_checkpoint()
+	var ok := require(drawn, "the floor descended onto drew a boss")
+	ok = require(checkpoint, "and the descent wrote a checkpoint") and ok
+	arena.queue_free()
+	await advance_physics(1)
+	if not ok:
+		return
+
+	# Put the run down the way SAVE AND EXIT does — the one ending that keeps the checkpoint — and
+	# pick it up again through the game scene, which is the whole path a player takes.
+	RunManager.suspend_run()
+	SceneRouter._resume_requested = true
+	var game := await _open_game_scene()
+	if not require(game, "the game scene resumes the run"):
+		return
+
+	var resumed: FloorController = game.get_node("%Floor")
+	var encounter := resumed.get_boss_encounter()
+	check(encounter != null, "a resumed floor has a boss to fight")
+	check(
+		encounter != null and encounter.id == drawn.id,
+		"and it is the boss the run already drew for that floor (%s, was %s)"
+			% [encounter.id if encounter != null else &"none", drawn.id],
+	)
+	check(
+		RunManager.fought_boss_ids.count(drawn.id) == 1,
+		"resuming does not record that boss as fought twice (%d times)"
+			% RunManager.fought_boss_ids.count(drawn.id),
+	)
+
+	# The room itself, because "the encounter is not null" is not what the player was stuck in.
+	var boss_room: Room = null
+	for plan: RoomPlan in resumed.layout.rooms:
+		if plan.type == RoomTemplate.Type.BOSS:
+			boss_room = resumed.get_room(plan.id)
+			break
+	if require(boss_room, "the resumed floor has a boss room"):
+		var player: Player = game.get_node("%Player")
+		player.global_position = boss_room.get_interior_rect().get_center()
+		resumed._enter_room(boss_room.plan.id)
+		# Two frames: the boss is added deferred, for the physics-flush reason `_add_boss` gives.
+		await advance_physics(2)
+		check(
+			is_instance_valid(resumed._boss) and resumed._boss.is_inside_tree(),
+			"and walking into it seals the player in with a boss rather than with nothing",
+		)
+
+	game.queue_free()
+	await advance_physics(1)
+	RunManager.end_run(false)
+	SaveManager.clear_checkpoint()
+
+
 ## All four endings. A checkpoint that outlived any of them would offer the player a run they had
 ## already finished — with the scrap, the build, and the boss credit they finished it with.
 func _test_every_ending_clears_the_checkpoint() -> void:
@@ -525,6 +605,23 @@ func _test_the_game_scene_resumes_the_saved_run() -> void:
 		"and continuing is not counted as starting a run",
 	)
 	check(SaveManager.has_checkpoint(), "the checkpoint survives being resumed from")
+
+	# The build has to be *visible*, not merely applied. The item row along the bottom is built from
+	# pickups, and a restored build is deliberately not a pickup (`ItemInventory.restore`), so a HUD
+	# that only listened would show an empty row for a run carrying eleven items — which is how this
+	# was reported: the effects were all there and the display said the run had found nothing.
+	var hud := game.get_node("%CombatHUD") as CombatHUD
+	var icons := (hud.get_node("%ItemBar") as HBoxContainer).get_child_count()
+	var expected := 0
+	for item: ItemConfig in player.get_item_inventory().get_items():
+		if item.icon != null:
+			expected += 1
+	check(
+		icons == expected,
+		"the HUD shows the build the resumed run is carrying (%d icons, expected %d)"
+			% [icons, expected],
+	)
+	check(expected > 0, "and the run being resumed carries something to show")
 
 	# Reported by driving the Web build in a browser: the resumed run played floor 2 with `HELP
 	# DESK` written along the bottom of the screen. The strip is pushed rather than polled, and
