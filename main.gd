@@ -110,6 +110,7 @@ func _ready() -> void:
 			checkpoint.floor_visited_room_ids,
 			checkpoint.floor_clears,
 			checkpoint.floor_shop,
+			checkpoint.floor_boss_reward_ids,
 		)
 	if not _floor.build(_player, floor_seed):
 		# Generation failing is a content bug, not something to hide from the player behind a

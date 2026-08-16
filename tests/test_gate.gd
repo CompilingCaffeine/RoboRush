@@ -368,7 +368,9 @@ func _test_each_ending_files_the_run_at_most_once() -> void:
 
 	# And a resume files nothing and counts nothing. A player who saves and quits between every
 	# floor would otherwise finish a six-floor campaign having "started" six runs.
-	var checkpoint := RunCheckpoint.capture(_campaign, _campaign.load_floor(0), 3.0, [], ShopStock.new())
+	var checkpoint := RunCheckpoint.capture(
+		_campaign, _campaign.load_floor(0), 3.0, [], ShopStock.new(), []
+	)
 	counter.filed = 0
 	started = counter.runs_started
 	RunManager.restore_run(checkpoint, _campaign)

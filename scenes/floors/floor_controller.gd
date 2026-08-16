@@ -125,6 +125,11 @@ var _shop: ShopRoom
 ## existed from the moment the floor was built would be a boss firing at an empty room.
 var _boss: Boss
 
+## The boss's choice of three, while it stands unclaimed. Null before the boss dies and again once
+## the choice is taken, which is exactly the window a checkpoint has to be able to describe — see
+## `get_pending_boss_reward_ids`.
+var _boss_reward: ShopRoom
+
 ## Which boss guards this floor, drawn once in `build()`.
 var _boss_encounter: BossEncounter
 
@@ -161,6 +166,10 @@ var _resume_clears := 0
 ## confused: one stocks the shop from the pool and the other deliberately does not.
 var _resume_shop: ShopStock = null
 
+## The boss's offer the resumed run left standing unclaimed, by item id, and empty for every
+## checkpoint that was not taken in that window. Consumed by the same `build`.
+var _resume_boss_reward: Array[StringName] = []
+
 
 ## Tells the next `build` how much of the floor it is about to open was already done, so a run
 ## resumed from a mid-floor save comes back to the rooms it had cleared rather than to a floor that
@@ -168,14 +177,17 @@ var _resume_shop: ShopStock = null
 ##
 ## `shop` is that floor's shelf, and it is carried by every checkpoint rather than only by a
 ## mid-floor one — see `ShopStock` for why a shop is not floor *progress* even though it is
-## floor-local.
+## floor-local. `boss_reward` is the offer left standing over a dead boss, which is the one piece of
+## floor state whose loss is not merely unfair but final — see `get_pending_boss_reward_ids`.
 func resume_floor_progress(
-	cleared: Array[int], visited: Array[int], clears: int, shop: ShopStock = null
+	cleared: Array[int], visited: Array[int], clears: int, shop: ShopStock = null,
+	boss_reward: Array[StringName] = []
 ) -> void:
 	_resume_cleared = cleared.duplicate()
 	_resume_visited = visited.duplicate()
 	_resume_clears = clears
 	_resume_shop = shop
+	_resume_boss_reward = boss_reward.duplicate()
 
 
 ## Writes a checkpoint of the run exactly where it stands, including this floor's progress.
@@ -199,7 +211,8 @@ func save_run_now() -> bool:
 		if visited[id]:
 			visited_ids.append(id)
 	return RunManager.checkpoint_here(
-		campaign, config, _player, ShopStock.of(_shop), cleared, visited_ids, _clears
+		campaign, config, _player, ShopStock.of(_shop), get_pending_boss_reward_ids(),
+		cleared, visited_ids, _clears
 	)
 
 
@@ -264,11 +277,13 @@ func _open_session(generated: FloorLayout, seed_value: int) -> void:
 	var resumed_cleared := _resume_cleared
 	var resumed_visited := _resume_visited
 	var resumed_shop := _resume_shop
+	var resumed_reward := _resume_boss_reward
 	_clears = _resume_clears
 	_resume_cleared = []
 	_resume_visited = []
 	_resume_clears = 0
 	_resume_shop = null
+	_resume_boss_reward = []
 	for id: int in resumed_cleared:
 		_cleared[id] = true
 	for id: int in resumed_visited:
@@ -276,6 +291,7 @@ func _open_session(generated: FloorLayout, seed_value: int) -> void:
 
 	_instantiate_rooms(resumed_shop)
 	_instantiate_doors()
+	_restore_boss_reward(resumed_reward)
 	_place_player_in_start_room()
 
 	# The next floor starts loading now, while the player has this one to fight through. By the time
@@ -283,6 +299,46 @@ func _open_session(generated: FloorLayout, seed_value: int) -> void:
 	# floor's templates, tile sheets and enemy scenes out of the one frame the transition happens in.
 	if campaign != null and floor_index >= 0:
 		campaign.preload_floor(floor_index + 1)
+
+
+## Stands the boss's offer back up in a resumed floor's arena, if the run was saved with one
+## unclaimed. Nothing to do for every other checkpoint, which is nearly all of them: the list is
+## empty unless the save was taken between the killing blow and the choice.
+##
+## The items are resolved rather than drawn, for the reason `_place_boss_reward` gives — they were
+## struck off the run's pool when they were first offered, and the run is still carrying that.
+##
+## Only into a boss room the checkpoint says is cleared. An offer standing over a *live* boss is not
+## a state this game can produce, so a file describing one has been edited, and the honest answer to
+## a state that cannot happen is to build the floor as though it did not say so — the player then
+## fights the boss and is offered a reward by the ordinary path.
+func _restore_boss_reward(ids: Array[StringName]) -> void:
+	if ids.is_empty():
+		return
+
+	var arenas := layout.find_by_type(RoomTemplate.Type.BOSS)
+	if arenas.is_empty():
+		return
+	var plan: RoomPlan = arenas[0]
+	if not is_room_cleared(plan.id):
+		push_warning(
+			"FloorController: the saved run left a boss reward on floor %d, whose arena is not "
+			% config.floor_number
+			+ "recorded as cleared; the offer has been dropped."
+		)
+		return
+
+	var catalogue: Dictionary[StringName, ItemConfig] = {}
+	for item: ItemConfig in config.get_items():
+		if item != null:
+			catalogue[item.id] = item
+
+	var items: Array[ItemConfig] = []
+	for id: StringName in ids:
+		var item: ItemConfig = catalogue.get(id)
+		if item != null:
+			items.append(item)
+	_place_boss_reward(_rooms[plan.id], items)
 
 
 ## Points every subsystem's generator at its own stream of this floor's seed.
@@ -654,13 +710,46 @@ func _on_boss_defeated(_boss_node: Node, room: Room) -> void:
 		_finish_floor()
 		return
 
+	_place_boss_reward(room, items)
+
+
+## Stands the offer up in the arena. Split from the draw above because a resumed floor has to put
+## back a choice that was already drawn: the items are spent out of the run's pool the moment they
+## are offered (`_take_reward`), so drawing a second set would both cost the run three more items
+## and hand the player a different prize than the one they walked away from.
+func _place_boss_reward(room: Room, items: Array[ItemConfig]) -> void:
+	if items.is_empty():
+		return
 	var reward: ShopRoom = SHOP_ROOM_SCENE.instantiate()
 	room.add_child(reward)
 	reward.choice_taken.connect(_on_boss_reward_taken)
 	reward.stock_choice(config.shop, items, _boss_reward_positions(room))
+	# Held so a checkpoint can be told what is standing there. Dropped when the choice is taken,
+	# because from that moment the floor is finishing and there is no offer left to record.
+	_boss_reward = reward
+
+
+## What the boss's offer is holding, for a checkpoint taken while it is standing unclaimed. Empty
+## whenever there is nothing to put back: before the boss dies, and after the choice is taken.
+##
+## This is the second half of what `ShopStock` does for the floor's shop, and it exists for a
+## sharper reason than a leak. The boss room is marked cleared the instant the boss falls, so a
+## resumed floor rebuilds it with no boss in it — and the stands died with the session that owned
+## them. Nothing else can descend a floor: `_finish_floor` runs only from `choice_taken`. A run
+## saved in the seconds between the killing blow and taking the prize therefore came back to a
+## cleared arena with nothing in it and no way off the floor, for the rest of the run.
+func get_pending_boss_reward_ids() -> Array[StringName]:
+	var ids: Array[StringName] = []
+	if _boss_reward == null or not is_instance_valid(_boss_reward):
+		return ids
+	for stand: ShopStand in _boss_reward.get_stands():
+		if not stand.is_sold and stand.item != null:
+			ids.append(stand.item.id)
+	return ids
 
 
 func _on_boss_reward_taken(_item: ItemConfig) -> void:
+	_boss_reward = null
 	_finish_floor()
 
 
@@ -756,7 +845,9 @@ func _advance_to_next_floor(next_index: int, seed_value: int) -> void:
 	# released, the new one is built and empty, and the run's whole state is a handful of numbers.
 	# Anywhere earlier and the checkpoint would describe a floor that is being torn down; anywhere
 	# later and it would have to describe a fight in progress. See `RunCheckpoint`.
-	RunManager.checkpoint_floor(campaign, config, _player, ShopStock.of(_shop))
+	RunManager.checkpoint_floor(
+		campaign, config, _player, ShopStock.of(_shop), get_pending_boss_reward_ids()
+	)
 	floor_advanced.emit(config)
 
 
@@ -801,10 +892,11 @@ func _release_session() -> void:
 		_session.queue_free()
 		_session = null
 
-	# The shop dies with the session that owns it — it is a child of one of the rooms just freed —
-	# so what is dropped here is only this node's reference to it. A stale one would have the next
-	# floor's checkpoint recording the shelf of the floor the run has left.
+	# The shop and the boss's offer die with the session that owns them — both are children of rooms
+	# just freed — so what is dropped here is only this node's references. Stale ones would have the
+	# next floor's checkpoint recording the shelves of the floor the run has left.
 	_shop = null
+	_boss_reward = null
 
 	_rooms.clear()
 	_doors_by_room.clear()

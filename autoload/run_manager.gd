@@ -296,13 +296,16 @@ func restore_run(checkpoint: RunCheckpoint, campaign: RunDefinition) -> void:
 ## because a checkpoint written for a run that lost would offer the player their death back.
 ## `shop` is what the floor's shop is holding — see `ShopStock`, and note that a *boundary*
 ## checkpoint needs it as much as a mid-floor one does: the floor being descended into has already
-## stocked its shop out of the run's item ledger by the time this is called.
+## stocked its shop out of the run's item ledger by the time this is called. `boss_reward` is always
+## empty here for the same reason it is rarely empty in `checkpoint_here`: a floor written down at
+## its own boundary has a boss nobody has met yet.
 func checkpoint_floor(
-	campaign: RunDefinition, floor_config: FloorConfig, player: Player, shop: ShopStock
+	campaign: RunDefinition, floor_config: FloorConfig, player: Player, shop: ShopStock,
+	boss_reward: Array[StringName]
 ) -> void:
 	if not _can_checkpoint(campaign, floor_config, player):
 		return
-	SaveManager.store_checkpoint(_capture(campaign, floor_config, player, shop))
+	SaveManager.store_checkpoint(_capture(campaign, floor_config, player, shop, boss_reward))
 
 
 ## Checkpoints the run where it stands, floor progress and all. What the pause menu's SAVE GAME
@@ -314,12 +317,13 @@ func checkpoint_floor(
 ## that has already ended cannot be saved, and the menu says so rather than claiming otherwise.
 func checkpoint_here(
 	campaign: RunDefinition, floor_config: FloorConfig, player: Player, shop: ShopStock,
-	cleared_rooms: Array[int], visited_rooms: Array[int], clears: int
+	boss_reward: Array[StringName], cleared_rooms: Array[int], visited_rooms: Array[int],
+	clears: int
 ) -> bool:
 	if not _can_checkpoint(campaign, floor_config, player):
 		return false
 
-	var checkpoint := _capture(campaign, floor_config, player, shop)
+	var checkpoint := _capture(campaign, floor_config, player, shop, boss_reward)
 	checkpoint.record_floor_progress(cleared_rooms, visited_rooms, clears)
 	SaveManager.store_checkpoint(checkpoint)
 	return true
@@ -330,12 +334,13 @@ func checkpoint_here(
 ## boundary and the pause menu cannot record different things about the same run. What the pause
 ## menu adds on top is floor *progress*, which a boundary genuinely has none of.
 func _capture(
-	campaign: RunDefinition, floor_config: FloorConfig, player: Player, shop: ShopStock
+	campaign: RunDefinition, floor_config: FloorConfig, player: Player, shop: ShopStock,
+	boss_reward: Array[StringName]
 ) -> RunCheckpoint:
 	var health := player.get_health_component()
 	var inventory := player.get_item_inventory()
 	return RunCheckpoint.capture(
-		campaign, floor_config, health.current, inventory.get_items(), shop
+		campaign, floor_config, health.current, inventory.get_items(), shop, boss_reward
 	)
 
 

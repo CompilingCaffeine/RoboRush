@@ -142,6 +142,17 @@ var floor_visited_room_ids: Array[int] = []
 ## player did to it.
 var floor_shop := ShopStock.new()
 
+## The boss's choice of three, if the run was put down while it stood unclaimed. Empty for every
+## other checkpoint, which is nearly all of them — the window is the seconds between the killing
+## blow and taking the prize.
+##
+## Recorded for a harder reason than the shelf above. The arena is marked cleared the instant the
+## boss falls, so a resumed floor rebuilds it with no boss in it, and the stands are gone with the
+## session that held them. Taking one of them is the *only* thing that finishes a floor
+## (`FloorController._finish_floor`), so a run saved in that window came back to an empty cleared
+## arena it could never leave — with the three items still struck off its pool.
+var floor_boss_reward_ids: Array[StringName] = []
+
 ## The floor's own clear counter, which decides when the next repair cell and the next item drop
 ## are due (`FloorController._clears`). Carried for the same reason as the ids: restarting it at
 ## zero would restart the reward cadence with it, so a resumed floor would hand out its early
@@ -152,13 +163,14 @@ var floor_clears: int = 0
 ## Takes a checkpoint of the run as it stands. Called at a floor boundary and nowhere else; see
 ## the class comment for why nowhere else is safe.
 ##
-## `shop` is asked for rather than defaulted, and both callers are one method apart in `RunManager`
-## so that neither can answer differently. A shelf left out is not a checkpoint missing a detail: it
-## is a resumed floor re-stocking its shop out of the run's item ledger, which is the whole of what
-## `ShopStock` exists to stop. A floor with no shop passes an empty one and says so.
+## `shop` and `boss_reward` are asked for rather than defaulted, and both callers are one method
+## apart in `RunManager` so that neither can answer differently. Either left out is not a checkpoint
+## missing a detail: it is a resumed floor drawing a fresh offer out of the run's item ledger, which
+## is the whole of what these two exist to stop. A floor with no shop and a boss still alive pass
+## empty ones and say so.
 static func capture(
 	campaign: RunDefinition, floor_config: FloorConfig, player_integrity: float,
-	held_items: Array[ItemConfig], shop: ShopStock
+	held_items: Array[ItemConfig], shop: ShopStock, boss_reward: Array[StringName]
 ) -> RunCheckpoint:
 	var checkpoint := RunCheckpoint.new()
 	checkpoint.campaign_id = campaign.id
@@ -175,6 +187,7 @@ static func capture(
 	checkpoint.offered_item_ids = RunManager.offered_item_ids.duplicate()
 	checkpoint.fought_boss_ids = RunManager.fought_boss_ids.duplicate()
 	checkpoint.floor_shop = shop
+	checkpoint.floor_boss_reward_ids = boss_reward.duplicate()
 	# A copy, not the live object. The checkpoint outlives this call — `SaveManager` holds it as
 	# the active one until the run ends — and a reference would keep quietly absorbing the rest of
 	# the run, so what was written to disk and what the object said would drift apart the moment
@@ -222,6 +235,7 @@ func to_dict() -> Dictionary:
 		"floor_visited_rooms": floor_visited_room_ids.duplicate(),
 		"floor_clears": floor_clears,
 		"floor_shop": floor_shop.to_dict(),
+		"boss_reward": _names_to_strings(floor_boss_reward_ids),
 	}
 
 
@@ -260,6 +274,7 @@ static func from_dict(data: Dictionary) -> RunCheckpoint:
 	checkpoint.floor_shop = ShopStock.from_dict(
 		raw_shop as Dictionary if raw_shop is Dictionary else {}
 	)
+	checkpoint.floor_boss_reward_ids = _strings_to_names(data.get("boss_reward"))
 
 	var raw_stats: Variant = data.get("stats")
 	checkpoint.stats = RunStats.from_dict(raw_stats as Dictionary if raw_stats is Dictionary else {})
@@ -429,6 +444,7 @@ func _validate_collections(problems: PackedStringArray) -> void:
 	if floor_clears < 0 or floor_clears > MAX_FLOOR_ROOMS:
 		problems.append("it reports %d rooms cleared on the current floor" % floor_clears)
 
+	_validate_id_list(problems, floor_boss_reward_ids, "boss reward offers", MAX_SHOP_STANDS)
 	if floor_shop.item_ids.size() > MAX_SHOP_STANDS:
 		problems.append("its shop has %d item stands" % floor_shop.item_ids.size())
 	if floor_shop.rerolls_used < 0 or floor_shop.rerolls_used > MAX_SHOP_REROLLS:
@@ -494,6 +510,12 @@ func _validate_items(problems: PackedStringArray, floor_config: FloorConfig) -> 
 		if not id.is_empty() and not catalogue.has(id):
 			problems.append(
 				"its shop is holding item '%s', which floor '%s' does not offer" % [id, floor_id]
+			)
+
+	for id: StringName in floor_boss_reward_ids:
+		if not catalogue.has(id):
+			problems.append(
+				"its boss is offering item '%s', which floor '%s' does not offer" % [id, floor_id]
 			)
 
 
