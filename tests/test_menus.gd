@@ -12,6 +12,7 @@ extends TestCase
 ## property would only restate the fix; pushing a click asks the question the player asks.
 
 const PAUSE_MENU_SCENE := preload("res://scenes/ui/pause_menu.tscn")
+const SUMMARY_SCENE := preload("res://scenes/ui/run_summary.tscn")
 
 var _layer: CanvasLayer
 var _pause: PauseMenu
@@ -63,6 +64,26 @@ func _test_quit_is_offered_only_where_it_works() -> void:
 		"the main menu offers QUIT exactly when quitting works (can_quit=%s)" % expected,
 	)
 	menu.queue_free()
+	await advance_physics(1)
+
+	# The third menu, and the one the browser playtest found it on: the run summary, where a dead
+	# QUIT is at its worst. The player has just lost the run, the screen is asking them what to do
+	# next, and one of the three answers does nothing at all.
+	var summary: RunSummary = SUMMARY_SCENE.instantiate()
+	add_child(summary)
+	GameManager.end_run()
+	await advance_physics(2)
+	var offered := false
+	for child: Node in (summary.get_node("%Buttons") as Node).get_children():
+		var button := child as Button
+		if button != null and RunSummary.QUIT_LABEL in button.text:
+			offered = true
+	check(
+		offered == expected,
+		"the summary offers QUIT exactly when quitting works (can_quit=%s)" % expected,
+	)
+	GameManager.start_run()
+	summary.queue_free()
 	await advance_physics(1)
 
 

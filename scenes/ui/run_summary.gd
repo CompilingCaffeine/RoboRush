@@ -28,10 +28,16 @@ const BACKDROP := Color(0.02, 0.03, 0.05, 0.86)
 ## reason `BestRunStats.absorb` reports what it beat rather than just recording it.
 const RECORD_MARK := " *"
 
+## See `MainMenu.QUIT_LABEL`: removed by label in the browser build, where quitting strands the
+## player on a dead canvas. This screen is the one that mattered most — it is where a browser
+## player was most likely to press it, because a run that has just ended is when leaving the game
+## is the obvious thing to do. RETRY and MENU are both still here, so nothing is lost by dropping it.
+const QUIT_LABEL := "QUIT"
+
 const BUTTONS: Array = [
 	["RETRY", "_on_retry_pressed"],
 	["MENU", "_on_menu_pressed"],
-	["QUIT", "_on_quit_pressed"],
+	[QUIT_LABEL, "_on_quit_pressed"],
 ]
 
 const FOCUS_MARKER := ">"
@@ -73,7 +79,11 @@ func _process(_delta: float) -> void:
 
 
 func _build_buttons() -> void:
-	for entry: Array in BUTTONS:
+	var entries := BUTTONS.duplicate()
+	if not SceneRouter.can_quit():
+		entries = entries.filter(func(entry: Array) -> bool: return entry[0] != QUIT_LABEL)
+
+	for entry: Array in entries:
 		var button := Button.new()
 		button.text = FOCUS_PADDING + (entry[0] as String)
 		button.focus_mode = Control.FOCUS_ALL
