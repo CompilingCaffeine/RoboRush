@@ -15,3 +15,4 @@ dash_charges = 1
 dash_input_buffer = 0.12
 max_integrity = 6
 damage_invulnerability = 0.8
+room_entry_grace = 0.6

@@ -373,10 +373,28 @@ func _open_boss_room(seed_value: int) -> bool:
 		return false
 
 	_player.global_position = boss_room.get_interior_rect().get_center()
-	# No invulnerability window: these checks measure whether a hazard lands, and a grace period
-	# would make that depend on how many frames the check happened to advance.
+
+	# Waited for rather than assumed, and this used to be a flat `advance_physics(2)`. Teleporting
+	# the player into the arena does not enter it — the room's entry Area2D reports the overlap on a
+	# later physics flush, and *how much* later is not fixed: the first arena a run opens took more
+	# than two frames to notice while every one after it took fewer, so a fixed wait made the first
+	# check in this suite behave unlike the seven after it.
+	#
+	# It matters now because entering a room buys the player a moment of immunity
+	# (`PlayerConfig.room_entry_grace`). A window opened after the setup below had finished is a
+	# window every check here would measure instead of the hazard it means to measure, and it would
+	# do it to exactly one test.
+	var waited := 0
+	while _floor.current_room_id != boss_room.plan.id and waited < 120:
+		await advance_physics(1)
+		waited += 1
+	if not require(_floor.current_room_id == boss_room.plan.id, "the player is in the boss arena"):
+		return false
+
+	# Last, so it clears the grace window the entry above just granted. No invulnerability of its
+	# own either, for the original reason: these checks measure whether a hazard lands, and a grace
+	# period would make that depend on how many frames the check happened to advance.
 	_player.get_health_component().configure(3.0, 0.0)
-	await advance_physics(2)
 	return true
 
 

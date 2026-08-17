@@ -87,7 +87,7 @@ func run() -> void:
 
 	_test_config_is_a_fight()
 	_test_the_hud_calls_it_by_its_name()
-	_test_only_the_data_center_can_draw_it()
+	_test_every_floor_can_draw_it()
 
 	await _test_it_starts_as_a_whole_rack()
 	await _test_nodes_fail_at_even_fractions_of_the_pool()
@@ -151,10 +151,17 @@ func _test_the_hud_calls_it_by_its_name() -> void:
 	)
 
 
-## The one boss in the game with a floor of its own, and the reason is in the floor's own file: it
-## is written in the Data Center's visual language, so it must not turn up before the floor that
-## teaches it. This is the check that notices somebody adding it to floor 1's pool for variety.
-func _test_only_the_data_center_can_draw_it() -> void:
+## This boss used to have a floor of its own, and this test used to be the check that nobody added
+## it to floor 1 "for variety". The reasoning was that the fight is written in the Data Center's
+## visual language and so must not turn up before the floor that teaches it — and the fight itself
+## does not bear that out. Every hazard it puts down is a `ThermalZone` that starts cold, climbs
+## visibly for `vent_seconds`, and sits on ground the player is not obliged to be on; that is a
+## telegraph read the same way on any floor. What the lock cost was the campaign's last fight, which
+## was the same fight every run.
+##
+## So the assertion is inverted rather than deleted, and this is now the check that notices somebody
+## quietly re-locking it — which would look like a fix if the pools drifted back to one entry.
+func _test_every_floor_can_draw_it() -> void:
 	var campaign := load("res://data/runs/main_campaign.tres") as RunDefinition
 	if not require(campaign, "the campaign loads"):
 		return
@@ -168,9 +175,8 @@ func _test_only_the_data_center_can_draw_it() -> void:
 			if encounter != null and encounter.id == _config.id:
 				draws = true
 		check(
-			draws == (config.id == &"data_center"),
-			"floor %d ('%s') %s draw Cascade Failure"
-				% [index + 1, config.id, "may" if config.id == &"data_center" else "may not"],
+			draws,
+			"floor %d ('%s') may draw Cascade Failure" % [index + 1, config.id],
 		)
 
 

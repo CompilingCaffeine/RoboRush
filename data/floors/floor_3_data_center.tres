@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="FloorConfig" load_steps=19 format=3]
+[gd_resource type="Resource" script_class="FloorConfig" load_steps=21 format=3]
 
 [ext_resource type="Script" path="res://scripts/resources/floor_config.gd" id="1_floor"]
 [ext_resource type="Resource" path="res://data/rooms/data_cold_aisle.tres" id="2_start"]
@@ -19,6 +19,8 @@
 [ext_resource type="Resource" path="res://data/floors/data_center_theme.tres" id="40_theme"]
 [ext_resource type="Resource" path="res://data/pools/run_item_pool.tres" id="91_pool"]
 [ext_resource type="Resource" path="res://data/bosses/cascade_failure_encounter.tres" id="92_cascade"]
+[ext_resource type="Resource" path="res://data/bosses/scrap_king_encounter.tres" id="93_king"]
+[ext_resource type="Resource" path="res://data/bosses/runtime_error_encounter.tres" id="94_error"]
 
 [resource]
 script = ExtResource("1_floor")
@@ -53,15 +55,23 @@ item_pool = ExtResource("91_pool")
 item_clear_indices = Array[int]([2, 5])
 shop = ExtResource("10_shop_cfg")
 treasure_grants_item = true
-; One boss, and that is the decision rather than a pool nobody has filled in yet. Floors 1 and 2
-; share The Scrap King and Runtime Error precisely because either fight works on either floor —
-; both are answered with skills the game teaches in its first room. Cascade Failure is not: it is
-; written in this floor's own visual language, and a player meeting it before they have spent nine
-; rooms learning what teal-going-red means underfoot would be meeting an unexplained mechanic in
-; the worst room to meet one in. So it guards the Data Center and nothing else, which is the
-; "intentional boss assignment" the plan offers as an option, taken.
+; All three, which reverses this floor's earlier decision to keep Cascade Failure to itself. That
+; decision rested on one claim — that a player meeting the vents before nine rooms of the Data
+; Center would be meeting an unexplained mechanic — and the claim does not survive looking at what
+; the fight actually does. Every hazard it puts down is a `ThermalZone`, drawn cold and climbing
+; through amber for 1.6 seconds before it costs anything, on ground nothing else is standing on.
+; That is a telegraph a first-floor player reads on its own terms; the floor teaches the ramp
+; faster, it does not teach it first. What the lock cost, meanwhile, was real and paid every run:
+; the last fight of the campaign was the same fight every time.
 ;
-; It also makes `CampaignValidator`'s boss supply exactly tight: three floors, three distinct
-; bosses, and only one way to deal them out. Adding a fourth floor that can only draw from the
-; first two is now a campaign that refuses to start rather than one that quietly repeats a fight.
-boss_pool = Array[BossEncounter]([ExtResource("92_cascade")])
+; The other direction is the one this floor was always missing. The Scrap King and Runtime Error
+; are answered with skills the game teaches in its first room, so nothing ever stopped them
+; guarding this floor — they were simply never listed. They arrive here in a room the other two
+; floors do not have: `data_core_arena` keeps its four corner zones, so the King's terminals now
+; stand in ground that charges for standing still to shoot them, and Runtime Error's lanes sweep a
+; floor with cold centre and hot corners. Same fights, this floor's question asked over the top.
+;
+; `CampaignValidator`'s boss supply stops being exactly tight — three bosses, three floors, any
+; dealing works — which is the point of a pool. A fourth floor is now a fourth boss, not a
+; re-plumbing of the first three.
+boss_pool = Array[BossEncounter]([ExtResource("92_cascade"), ExtResource("93_king"), ExtResource("94_error")])

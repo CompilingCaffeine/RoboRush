@@ -235,11 +235,17 @@ func _absorb_with_shield(_info: DamageInfo) -> bool:
 	return true
 
 
-## A new room refills the shield and re-arms the opening shot. Both are floor-local rhythms rather
-## than run state, which is the whole difference between Faraday Cage and Failover.
+## A new room refills the shield, re-arms the opening shot, and buys the player a moment to look at
+## what they have walked into. The first two are floor-local rhythms rather than run state, which is
+## the whole difference between Faraday Cage and Failover.
+##
+## The grace window is granted rather than set, so it can only ever lengthen an immunity the player
+## already had — walking through a door immediately after being hit must not cut the hit's own
+## window short. See `PlayerConfig.room_entry_grace` for the length and the reason for it.
 func _on_room_entered(_type: int, _room_id: int) -> void:
 	_shields_left = _items.get_shield_charges_per_room()
 	_room_opening_shot = true
+	_health.grant_invulnerability(config.room_entry_grace)
 
 
 ## Mutex Lock and Adrenal Loop: fire rate that depends on what the robot is *doing* rather than on
@@ -262,12 +268,15 @@ func _step_conditional_fire_rate(delta: float) -> void:
 	else:
 		_still_seconds = 0.0
 
-	var scale := _items.get_fire_rate_multiplier()
+	# The raw product, because the two conditional bonuses belong inside the curve rather than on
+	# top of it: softening the held items and then multiplying by 1.5 would let a build stand still
+	# to buy back exactly what the curve just took off it.
+	var scale := _items.get_raw_fire_rate_multiplier()
 	if still_bonus > 1.0 and _still_seconds >= _items.get_stillness_seconds():
 		scale *= still_bonus
 	if hurt_bonus > 1.0 and _health.current <= _items.get_low_integrity_points():
 		scale *= hurt_bonus
-	_weapon.fire_rate_multiplier = scale
+	_weapon.fire_rate_multiplier = DiminishingReturns.soften(scale)
 
 
 ## What the next shot is multiplied by, which is Cache Warmer's bonus until the room's first shot
