@@ -42,6 +42,11 @@ func run() -> void:
 	_test_stack_scales_multiplicatively()
 	_test_stack_reports_unknown_keys()
 	_test_shot_interval_gates_capacitor_leak()
+	_test_the_curve_keeps_a_small_build_whole()
+	_test_the_curve_never_pays_a_penalty_back()
+	_test_stacked_damage_bends_instead_of_compounding()
+	_test_only_damage_is_softened()
+	_test_the_worst_legal_build_is_bounded()
 
 	_test_inventory_basics()
 	_test_inventory_aggregates()
@@ -416,6 +421,188 @@ func _test_stack_reports_unknown_keys() -> void:
 	stack.apply(config, 1)
 	check(config.bounce_count == before, "an unknown field changes nothing")
 	check(stack.is_empty(), "an empty stack reports itself empty")
+
+
+# --- Diminishing returns ------------------------------------------------------
+#
+# The curve exists because the offer cadence is flat and the enemies are flatter: eight offers a
+# floor on every floor, nothing about an enemy that reads the floor number, and a product of a
+# dozen scalars against both. By the Data Center that arithmetic reached 52x the damage per second
+# the roster was written for, and the last floor of the campaign stopped asking anything.
+#
+# What these check is not the arithmetic — `DiminishingReturns.soften` is six lines and its
+# doc comment contains the table. It is the two promises the curve makes to a player, which are the
+# parts a future change could break without noticing: a build the player is still assembling is
+# untouched, and a penalty is never quietly refunded.
+
+
+## The promise a player would actually notice being broken. Everything up to the knee is kept
+## whole, so the first fire-rate item is worth exactly what it says on the pickup, and the second
+## still compounds with the first.
+func _test_the_curve_keeps_a_small_build_whole() -> void:
+	for raw: float in [1.0, 1.2, 1.5, 1.0 + DiminishingReturns.KNEE]:
+		check_near(
+			DiminishingReturns.soften(raw), raw,
+			"a %.2fx build is left exactly where it is" % raw,
+		)
+
+	# Just past the knee the curve has started, but only just — the two branches meet with matching
+	# slopes, so there is no build sitting on a step.
+	var past := 1.0 + DiminishingReturns.KNEE + 0.01
+	check(
+		DiminishingReturns.soften(past) < past
+			and DiminishingReturns.soften(past) > past - 0.001,
+		"and one hair past it the curve bends rather than steps (%.4f)" % DiminishingReturns.soften(past),
+	)
+
+	# Monotonic, which is what "more is always more" means as a check. A build that got worse for
+	# taking an item is the failure this whole design is meant to avoid.
+	var previous := 0.0
+	var backwards := 0
+	for step: int in 200:
+		var value := DiminishingReturns.soften(1.0 + float(step) * 0.25)
+		if value < previous:
+			backwards += 1
+		previous = value
+	check(backwards == 0, "taking more never gives less (%d reversals)" % backwards)
+
+
+## Burst Buffer charges 20% of its damage for its fire rate and Deprecated API charges 40% of its
+## fire rate outright. A curve built to compress benefits must not touch either: softening a
+## penalty is refunding part of a price the player agreed to pay, and it would quietly make the
+## trade-off items the safest picks in the pool.
+func _test_the_curve_never_pays_a_penalty_back() -> void:
+	for raw: float in [0.4, 0.6, 0.8, 0.99]:
+		check_near(
+			DiminishingReturns.soften(raw), raw,
+			"a %.2fx penalty is paid in full" % raw,
+		)
+
+
+## The headline: a stack of damage items lands well under their product, while two of them still
+## land on it exactly.
+##
+## Written against synthetic items rather than shipped ones, because this is a check on the rule.
+## Retuning Unsafe Overclock should not be able to fail it, and `_test_the_worst_legal_build_is_bounded`
+## below is where the shipped numbers are held to account.
+func _test_stacked_damage_bends_instead_of_compounding() -> void:
+	var doublers: Array[ItemConfig] = []
+	for index: int in 6:
+		var item := ItemConfig.new()
+		item.id = StringName("test_doubler_%d" % index)
+		item.projectile_scale = {&"damage": 2.0}
+		doublers.append(item)
+
+	# One item, and the curve is not in the way yet: 2.0x is exactly the knee.
+	var one := _rivet_variant()
+	var base := one.damage
+	ProjectileModifierStack.from_items([doublers[0]]).apply(one, 1)
+	check_near(one.damage, base * 2.0, "one doubler doubles")
+
+	# Six of them are 64x on paper. What actually reaches the projectile is the ceiling, near enough
+	# to it that the last three items are decorations — which is the intended outcome, and the
+	# reason the curve is a knee rather than a wall: they are still worth something, just not 32x.
+	var many := _rivet_variant()
+	ProjectileModifierStack.from_items(doublers).apply(many, 1)
+	var ceiling := 1.0 + DiminishingReturns.KNEE + DiminishingReturns.RANGE
+	check(
+		many.damage < base * ceiling,
+		"six doublers stay under the ceiling (%.2fx against %.2fx)" % [many.damage / base, ceiling],
+	)
+	check(
+		many.damage > one.damage,
+		"and are still worth more than one (%.2fx against %.2fx)" % [
+			many.damage / base, one.damage / base,
+		],
+	)
+	check(
+		many.damage < base * 8.0,
+		"nowhere near the 64x the raw product would have been (%.2fx)" % (many.damage / base),
+	)
+
+
+## The curve is deliberately narrow — one field — and the narrowness is the part worth pinning.
+## Chip Speed stacks five times too, and a projectile that flies 1.76x faster is a feel change
+## rather than a floor that stopped being a floor. Softening it would be taking something from the
+## player for no reason anybody could name.
+func _test_only_damage_is_softened() -> void:
+	check(
+		ProjectileModifierStack.SOFTENED_SCALE_KEYS.has(&"damage"),
+		"damage is on the curve",
+	)
+	for key: StringName in [&"speed", &"radius", &"chain_damage_scale", &"split_damage_scale"]:
+		check(
+			not ProjectileModifierStack.SOFTENED_SCALE_KEYS.has(key),
+			"'%s' is not" % key,
+		)
+
+	var speeders: Array[ItemConfig] = []
+	for index: int in 4:
+		var item := ItemConfig.new()
+		item.id = StringName("test_speeder_%d" % index)
+		item.projectile_scale = {&"speed": 2.0}
+		speeders.append(item)
+
+	var config := _rivet_variant()
+	var base := config.speed
+	ProjectileModifierStack.from_items(speeders).apply(config, 1)
+	check_near(config.speed, base * 16.0, "four speed items still compound to the full product")
+
+
+## The shipped numbers, against the ceiling the curve promises. This is the check that notices a
+## new item — or a raised `max_stacks` — putting the campaign back where it was.
+##
+## Built by taking every item in the run pool that helps, at every copy it is allowed, which is a
+## build no player will ever hold: the pool is finite and a run is offered a fraction of it. That
+## is what makes it the right thing to measure. If the build nobody can assemble is inside the
+## ceiling, every build somebody can assemble is too.
+func _test_the_worst_legal_build_is_bounded() -> void:
+	var pool := load("res://data/pools/run_item_pool.tres") as ItemPool
+	if not require(pool, "the run item pool loads"):
+		return
+
+	var everything: Array[ItemConfig] = []
+	var inventory := ItemInventory.new()
+	for item: ItemConfig in pool.items:
+		if item == null:
+			continue
+		for _copy: int in maxi(item.max_stacks, 1):
+			everything.append(item)
+			inventory.add(item)
+
+	var raw_damage := 1.0
+	for item: ItemConfig in everything:
+		raw_damage *= float(item.projectile_scale.get(&"damage", 1.0))
+
+	var config := _rivet_variant()
+	var base := config.damage
+	ProjectileModifierStack.from_items(everything).apply(config, 1)
+	var softened := config.damage / base
+
+	var ceiling := 1.0 + DiminishingReturns.KNEE + DiminishingReturns.RANGE
+	check(
+		softened < ceiling,
+		"the whole pool at once is %.2fx damage, under the %.2fx ceiling (raw would be %.1fx)" % [
+			softened, ceiling, raw_damage,
+		],
+	)
+
+	var rate := inventory.get_fire_rate_multiplier()
+	check(
+		rate < ceiling,
+		"and %.2fx fire rate, under the same ceiling (raw would be %.1fx)" % [
+			rate, ceiling, inventory.get_raw_fire_rate_multiplier(),
+		],
+	)
+
+	# The number the floors are actually built against. Stated as one figure because damage per
+	# second is what an enemy's integrity is spent on, and because the pair of ceilings above does
+	# not say out loud that they multiply.
+	check(
+		softened * rate < 12.0,
+		"which is %.1fx the damage per second the roster was written for" % (softened * rate),
+	)
+	inventory.free()
 
 
 func _test_shot_interval_gates_capacitor_leak() -> void:
@@ -1825,6 +2012,13 @@ func _test_faraday_cage_absorbs_one_hit_a_room() -> void:
 	EventBus.room_entered.emit(RoomTemplate.Type.COMBAT, 0)
 	check(player.get_shield_charges() == 1, "entering a room banks a shield charge")
 
+	# The same entry also opens the doorway grace window, and a hit refused by that window never
+	# reaches the absorber — so the charge would still be sitting there and this test would be
+	# measuring the wrong refusal. Waited out rather than worked around, because the ordering is
+	# real: a shot that catches the player on the threshold costs them neither integrity nor a
+	# shield charge, which is the right answer to both questions.
+	await _skip_room_entry_grace(player)
+
 	var absorbed: Array[int] = []
 	var on_absorbed := func(_at: Vector2, left: int) -> void: absorbed.append(left)
 	EventBus.player_shield_absorbed.connect(on_absorbed)
@@ -2094,6 +2288,9 @@ func _test_compound_interest_and_swap_space_pay_on_a_clear() -> void:
 
 	var health := player.get_health_component()
 	EventBus.room_entered.emit(RoomTemplate.Type.COMBAT, 0)
+	# Past the doorway window, or the room costs nothing and there is nothing for Swap Space to
+	# refund a share of. See `_skip_room_entry_grace`.
+	await _skip_room_entry_grace(player)
 	health.apply_damage(DamageInfo.new(2.0))
 	var hurt := health.current
 
@@ -2263,6 +2460,20 @@ func _add_player(arena: Node2D) -> Player:
 	player.position = Vector2(-400.0, -400.0)
 	arena.add_child(player)
 	return player
+
+
+## Waits out the immunity a room entry grants, so a check about something *else* refusing a hit is
+## not quietly reading the doorway window instead.
+##
+## Needed by every test that announces a room and then damages the player in the same breath, which
+## is the shape of half the item suite. The alternative was to have those tests damage the player
+## before entering the room, and that is worse: it would move them off the sequence a real run
+## produces to keep an assertion convenient.
+##
+## See `PlayerConfig.room_entry_grace`, and `TestFloor._test_walking_into_a_room_buys_a_moment_of_grace`
+## for the window itself being checked rather than waited out.
+func _skip_room_entry_grace(player: Player) -> void:
+	await advance_physics(int(player.config.room_entry_grace * 60.0) + 4)
 
 
 func _add_wall(arena: Node2D, at: Vector2, size: Vector2i) -> void:

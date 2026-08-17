@@ -84,10 +84,17 @@ func step(delta: float) -> void:
 
 ## Applies new limits and refills. Used by the player, whose maximum comes from
 ## PlayerConfig rather than from this component's inspector defaults.
+##
+## Clears any window still running, for the same reason it clears `_is_dead`: this is the component
+## being given a life, not adjusted mid-one. A caller that asks for zero seconds of invulnerability
+## and gets a window left over from before it asked has been told something untrue — which is what
+## happened the moment a second thing besides a hit could open one, and is why the timer is named
+## here rather than left to expire on its own.
 func configure(new_max_health: float, new_invulnerability: float) -> void:
 	max_health = new_max_health
 	invulnerability_seconds = new_invulnerability
 	current = new_max_health
+	_invulnerable_left = 0.0
 	_is_dead = false
 
 
@@ -141,11 +148,14 @@ func set_max_health(new_max: float) -> void:
 	current = minf(current, max_health)
 
 
-## Grants immunity for `seconds` from something other than a hit landing. The death save's grace
-## window is the only caller: surviving a lethal blow and then being killed by the next shot in the
-## same volley is not a save, it is a delay.
+## Grants immunity for `seconds` from something other than a hit landing. Two callers, and both are
+## about a moment the player could not have played around: the death save's grace window, because
+## surviving a lethal blow and then being killed by the next shot in the same volley is not a save
+## but a delay, and `Player._on_room_entered`, because a room's enemies wake on the frame the player
+## crosses its threshold.
 ##
-## Extends rather than replaces, so a grace window cannot shorten the ordinary post-hit immunity.
+## Extends rather than replaces, so a grace window cannot shorten the ordinary post-hit immunity —
+## which is what makes it safe for two of these to overlap without either knowing about the other.
 func grant_invulnerability(seconds: float) -> void:
 	_invulnerable_left = maxf(_invulnerable_left, seconds)
 

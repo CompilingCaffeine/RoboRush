@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="FloorConfig" load_steps=22 format=3]
+[gd_resource type="Resource" script_class="FloorConfig" load_steps=23 format=3]
 
 [ext_resource type="Script" path="res://scripts/resources/floor_config.gd" id="1_floor"]
 [ext_resource type="Resource" path="res://data/rooms/start_bay.tres" id="2_start"]
@@ -21,6 +21,7 @@
 [ext_resource type="Resource" path="res://data/pools/run_item_pool.tres" id="91_pool"]
 [ext_resource type="Resource" path="res://data/bosses/scrap_king_encounter.tres" id="92_king"]
 [ext_resource type="Resource" path="res://data/bosses/runtime_error_encounter.tres" id="93_error"]
+[ext_resource type="Resource" path="res://data/bosses/cascade_failure_encounter.tres" id="94_cascade"]
 
 [resource]
 script = ExtResource("1_floor")
@@ -42,4 +43,8 @@ item_pool = ExtResource("91_pool")
 item_clear_indices = Array[int]([2, 5])
 shop = ExtResource("10_shop_cfg")
 treasure_grants_item = true
-boss_pool = Array[BossEncounter]([ExtResource("92_king"), ExtResource("93_error")])
+; All three, matching floors 1 and 3. See floor 3's file for why Cascade Failure stopped being one
+; floor's private boss; the short version is that a hazard which telegraphs for 1.6 seconds on
+; ground nobody is standing on does not need nine rooms of setup, and a campaign whose third fight
+; is fixed has one fewer decision in it than it should.
+boss_pool = Array[BossEncounter]([ExtResource("92_king"), ExtResource("93_error"), ExtResource("94_cascade")])

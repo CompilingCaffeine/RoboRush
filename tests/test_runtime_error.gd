@@ -76,7 +76,7 @@ func run() -> void:
 	_test_config_matches_the_plan()
 	_test_it_speaks_the_compilers_warning_language()
 	_test_the_hud_calls_it_by_its_name()
-	_test_either_floor_can_draw_either_boss()
+	_test_every_floor_can_draw_every_boss()
 
 	await _test_it_starts_in_its_first_phase()
 	await _test_it_is_a_smaller_target_than_the_first_boss()
@@ -189,23 +189,31 @@ func _test_the_hud_calls_it_by_its_name() -> void:
 	)
 
 
-## Either boss may now guard either floor. Checked from Runtime Error's suite because it is the
-## boss that *gained* a floor — it was Development's and nothing else's, and the interesting new
-## claim is that the Help Desk can hand the player a compile-lane fight too.
-func _test_either_floor_can_draw_either_boss() -> void:
-	var first := load("res://data/floors/floor_1_help_desk.tres") as FloorConfig
-	var second := load(FLOOR_2_CONFIG_PATH) as FloorConfig
-	if first == null or second == null:
-		fail("both floor configs are needed to check the boss draw")
-		return
+## Any boss may guard any floor. Checked from Runtime Error's suite because it is the boss that
+## kept gaining floors — it was Development's and nothing else's, then the Help Desk's too, and now
+## the Data Center's as well.
+##
+## Stated as "every floor names every boss" rather than as three separate memberships, because the
+## property the campaign actually wants is that the pools are *identical*: a boss missing from one
+## floor is a fight that only appears at one depth, which is the state this replaced. The three ids
+## are spelled out rather than derived from a pool, so dropping a boss from every floor at once
+## fails here instead of trivially passing.
+func _test_every_floor_can_draw_every_boss() -> void:
+	var floors: Array = [
+		[load("res://data/floors/floor_1_help_desk.tres"), "the Help Desk"],
+		[load(FLOOR_2_CONFIG_PATH), "Development"],
+		[load("res://data/floors/floor_3_data_center.tres"), "the Data Center"],
+	]
 
-	for pair: Array in [[first, "the Help Desk"], [second, "Development"]]:
-		var config: FloorConfig = pair[0]
+	for pair: Array in floors:
+		var config: FloorConfig = pair[0] as FloorConfig
+		if not require(config, "%s's config loads" % pair[1]):
+			continue
 		check(
-			config.boss_pool.size() >= 2,
-			"%s can draw more than one boss (%d in its pool)" % [pair[1], config.boss_pool.size()],
+			config.boss_pool.size() >= 3,
+			"%s can draw any of them (%d in its pool)" % [pair[1], config.boss_pool.size()],
 		)
-		for id: StringName in [&"merge_conflict", &"runtime_error"]:
+		for id: StringName in [&"merge_conflict", &"runtime_error", &"cascade_failure"]:
 			check(
 				_find_encounter(config, id) != null,
 				"%s can draw '%s'" % [pair[1], id],

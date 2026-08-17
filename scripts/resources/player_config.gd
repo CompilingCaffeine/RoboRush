@@ -49,12 +49,27 @@ extends Resource
 ## Starting and maximum integrity points (health).
 @export var max_integrity: int = 6
 
-## Seconds of invulnerability granted after taking damage. Unused until combat
-## exists, but it belongs with the rest of the survivability tuning.
 ## How fast a shove from damage bleeds off, in pixels per second squared. Separate from
 ## `deceleration`, which is how hard the robot brakes under its own power: at 1800 a 130 px/s
 ## contact shove would be gone in 0.07 seconds and move the player about five pixels, which is
 ## indistinguishable from not being knocked back at all.
 @export var knockback_decay: float = 700.0
 
+## Seconds of invulnerability granted after taking damage.
 @export var damage_invulnerability: float = 0.8
+
+## Seconds of invulnerability granted for walking through a door, before the room the player has
+## just entered is allowed to charge them anything.
+##
+## Beta testers named this one: a room's enemies wake on the frame the player crosses its threshold
+## (`FloorController._enter_room` calls `Room.set_active` and then announces the entry), so a shot
+## already lined up on the doorway lands before the player has seen the room they are in. That is a
+## point of integrity spent on nothing the player could have done, which is the definition of the
+## hit they were complaining about.
+##
+## 0.6 seconds is about 96 pixels at walking speed — six tiles, comfortably past the doorway and
+## into a position the player chose. Deliberately shorter than `damage_invulnerability`, so entering
+## a room is never safer than being hit, and short enough that it cannot be used to walk through a
+## fight: the doors of an uncleared room lock behind the player, so there is no way to spend it
+## twice on the same room.
+@export var room_entry_grace: float = 0.6

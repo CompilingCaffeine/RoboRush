@@ -568,6 +568,7 @@ scripts/resources/item_config.gd          One item, entirely as data
 scripts/combat/damage_info.gd             One described damage event
 scripts/combat/projectile_factory.gd      Builds projectiles; runs the modifier stack
 scripts/combat/projectile_modifier_stack.gd Every held item's changes, applied to one shot
+scripts/combat/diminishing_returns.gd     The knee stacked multipliers bend on
 scripts/combat/shot_counter.gd          + A shot tally several weapons can share
 scripts/combat/targeting.gd               The hostile bodies near a point
 scripts/combat/explosion.gd               One blast, damage only
@@ -1749,16 +1750,29 @@ they are left fighting without deciding how long they fight it. Two nodes left o
 line that sweeps the whole arena; two on adjacent slots is a short one near the wall. That is a real
 decision, and it is about geometry rather than about pacing, which is the half worth giving away.
 
-#### One floor, one boss
+#### Any floor, any boss
 
-Floors 1 and 2 share The Scrap King and Runtime Error because either fight works on either floor —
-both are answered with skills the game teaches in its first room. Cascade Failure is not, and it
-guards the Data Center alone. A player meeting it earlier would be meeting an unexplained mechanic
-in the worst room to meet one in.
+All three floors draw from all three bosses. That reverses an earlier decision to keep Cascade
+Failure to the Data Center, on the reasoning that a player meeting its vents before nine rooms of
+throughput zones would be meeting an unexplained mechanic in the worst room to meet one in.
 
-That also makes `CampaignValidator`'s boss supply exactly tight: three floors, three distinct bosses,
-and only one way to deal them out. A fourth floor that can only draw from the first two is now a
-campaign that refuses to start rather than one that quietly repeats a fight.
+The fight does not bear that out. Every hazard it puts down is a `ThermalZone` that starts cold and
+climbs through amber for 1.6 seconds on ground nothing else is standing on — a telegraph read on its
+own terms at any depth. The Data Center teaches the ramp *faster*, not first. What the lock cost, and
+charged every run, was a campaign whose final fight never changed.
+
+The reverse direction was simply never listed: The Scrap King and Runtime Error are answered with
+skills the game teaches in its first room, so nothing stopped them guarding floor 3. They arrive
+there in a room the other floors do not have — `data_core_arena` keeps its four corner zones, so the
+King's terminals stand in ground that charges for holding still to shoot them, and Runtime Error's
+lanes sweep a cold-centred floor.
+
+`CampaignValidator`'s boss supply is no longer exactly tight — any dealing of three bosses to three
+floors works — which is what a pool is for. A fourth floor is now a fourth boss rather than a
+re-plumbing of the first three.
+
+The change moves what a seed produces, so `RunDefinition.content_version` went to 2 with it and
+in-flight checkpoints from version 1 are refused rather than resumed.
 
 #### What survives its death
 
@@ -1820,6 +1834,89 @@ before it carry.
 - Is a boss with no projectiles in it tense or slack?
 - Is 144 the right pool? It is 36 seconds of *perfect* starting-weapon fire, which nobody will have,
   against Runtime Error's 110 and The Scrap King's 60.
+
+---
+
+## What playing it answered
+
+The first two entries below are not reasoned, which makes them the only tuning in this document
+that is not. They came from beta playthroughs, and both are cases where the thing that was wrong
+had been sitting in plain sight behind a rule that reads as correct.
+
+### Diminishing returns, because the player was the only curve
+
+Floor 3 was trivial, and the cause was not floor 3. Every multiplicative aggregate in the game is a
+product across everything held — the rule that makes Cooling Fan and Unsafe Overclock compound
+instead of one overwriting the other, and the right rule for two items. The offer cadence is eight
+per floor on *every* floor (two combat clears, one treasure, two shop, three boss choices), and
+nothing about an enemy is a function of depth: `floor_number` is read in exactly three places, none
+of them combat. So the player's power was geometric and the opposition was flat. A legal build
+reached about 13.8x damage and 3.8x fire rate — 52x the damage per second the roster was written
+for — and the last floor of the campaign stopped asking anything.
+
+[`DiminishingReturns`](scripts/combat/diminishing_returns.gd) is the answer, and deliberately not a
+cap. A hard ceiling makes every item past it worthless, which turns a reward into a message that
+the run is over and makes the item that crossed the line the one the player blames. This is a soft
+knee: bonus up to +100% is kept whole, and everything above it is compressed onto an asymptote at
+3.5x. The two branches meet with matching slopes, so no build sits on a cliff.
+
+| raw | 1.5 | 2.0 | 3.0 | 5.0 | 8.0 | 13.8 | → ∞ |
+|---|---|---|---|---|---|---|---|
+| softened | 1.5 | 2.0 | 2.6 | 3.0 | 3.2 | 3.3 | 3.5 |
+
+Read the left of that table as the promise and the right as the point: everything a player holds by
+floor 2 is untouched, and the outlier builds that trivialised floor 3 land within reach of ordinary
+ones. Worst legal build is now about 9.4x damage per second rather than 52x, which
+`tests/test_items.gd` asserts against the shipped pool so a new item cannot quietly undo it.
+
+Two aggregates are on the curve and the narrowness is the design: projectile `damage`
+(`ProjectileModifierStack.SOFTENED_SCALE_KEYS`) and the fire-rate multiplier
+(`ItemInventory.get_fire_rate_multiplier`). Those are the two that multiply into damage per second,
+which is the only quantity that can make a floor trivial. Dash cooldown, Cache Warmer's opening
+shot, projectile speed, and the chain/split fractions are each left alone for a reason written down
+in the class doc. Mutex Lock and Adrenal Loop fold *into* the fire-rate product before the curve
+rather than multiplying on top of it — softening the held items and then applying a raw 1.5x would
+let a build stand still to buy back exactly what the curve just took off.
+
+This also does something the earlier "one boss per floor" note wanted: an asymptote is a thing the
+opposition can be tuned *against*. Per-floor enemy scaling is now a sensible next lever rather than
+a race.
+
+### A moment of grace at the door
+
+Beta reports were all one shape: walk through a door, lose a point before the room is on screen.
+The cause is in `FloorController._enter_room`, which wakes the room and *then* announces the entry —
+so anything already aimed at the doorway fires into a player who has not yet seen it. That is a
+point of integrity spent on a decision the player was never offered, which is the definition of a
+cheap shot.
+
+`PlayerConfig.room_entry_grace` is 0.6 seconds of invulnerability granted on entering any room,
+about 96 pixels at walking speed — comfortably past the doorway and into a position the player
+chose. It is granted through `HealthComponent.grant_invulnerability`, which extends rather than
+replaces, so walking through a door immediately after being hit cannot cut the hit's own window
+short. Deliberately shorter than `damage_invulnerability` (0.8s), so entering a room is never safer
+than being hit, and it cannot be farmed: the doors of an uncleared room lock behind the player, so
+there is no way to spend it twice on the same room.
+
+The robot flashes for the duration, because `Player._is_invulnerable` reads the health component
+directly — one predicate decides both whether a hit lands and whether the sprite flashes, so the
+player never has to work out which kind of immunity they currently have.
+
+Two things fell out of building it, and both are worth naming because neither is about the feature:
+
+- `HealthComponent.configure` did not clear a running window. It resets `_is_dead` and refills the
+  pool, so a leftover timer from before it was called was already inconsistent; it simply could not
+  be observed while a hit was the only thing that opened one. It clears the timer now.
+- `tests/test_post_boss.gd` teleported the player into the boss arena and waited a flat two frames
+  for the entry trigger. How long that actually takes is not fixed — the first arena a run opens
+  took longer than two frames while every one after it took fewer — so the helper now waits for the
+  entry rather than assuming it. That made exactly one test in the suite behave unlike the seven
+  after it, which is the kind of thing a fixed wait hides until something else changes.
+
+**This does not weaken the post-boss danger contract.** A committed hazard still resolves in an
+arena whose boss is already dead; the grace window covers a doorway, and the boss arena's doorway is
+one the player crosses before the fight rather than after it. `tests/test_post_boss.gd` still holds
+both halves of that rule.
 
 ---
 

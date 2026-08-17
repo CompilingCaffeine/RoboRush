@@ -24,6 +24,18 @@ extends RefCounted
 ## whole design is most exposed to.
 static var _known_properties: Dictionary[StringName, bool] = _collect_known_properties()
 
+## Scaled fields whose combined multiplier is run through `DiminishingReturns.soften` before it
+## reaches the config. See that class for why this list is one entry long and what the other
+## candidates were measured against.
+##
+## A set rather than a flag on `ItemConfig`, because whether a stat compounds into a trivial floor
+## is a property of the *stat*, not of the item that touches it. An item declaring its own
+## softening would let two items disagree about the same field, and the field is what the curve is
+## a statement about.
+const SOFTENED_SCALE_KEYS: Dictionary[StringName, bool] = {
+	&"damage": true,
+}
+
 var _items: Array[ItemConfig] = []
 
 
@@ -76,9 +88,38 @@ func apply(config: ProjectileConfig, shot_index := 0) -> void:
 	for item: ItemConfig in _items:
 		if item.applies_on_shot(shot_index):
 			_add(config, item.projectile_add)
+	_scale(config, _collect_scales(shot_index))
+
+
+## The combined multiplier for every scaled field, gathered across the whole stack before any of it
+## reaches the config.
+##
+## Gathered rather than applied item by item, which is the change diminishing returns required: a
+## curve on "how much damage has this build stacked" cannot be evaluated one item at a time, because
+## each item after the first would be softened against a knee the ones before it had already spent.
+## Softening the product once is also the only version that keeps the result independent of pickup
+## order, which the class doc promises and `_test_stack_is_order_independent` checks.
+##
+## The product is identical to what the old per-item loop produced for every unsoftened field, with
+## one difference worth naming: an integer field scaled by two items is now rounded once at the end
+## rather than after each item. Rounding twice was never intended — it is the reason `_add` rounds
+## rather than truncates — and no shipped item scales an integer field at all.
+func _collect_scales(shot_index: int) -> Dictionary[StringName, float]:
+	var scales: Dictionary[StringName, float] = {}
 	for item: ItemConfig in _items:
-		if item.applies_on_shot(shot_index):
-			_scale(config, item.projectile_scale)
+		if not item.applies_on_shot(shot_index):
+			continue
+		for key: Variant in item.projectile_scale:
+			var name := StringName(key)
+			if not _known_properties.has(name):
+				continue
+			scales[name] = scales.get(name, 1.0) * float(item.projectile_scale[key])
+
+	for name: StringName in SOFTENED_SCALE_KEYS:
+		if scales.has(name):
+			scales[name] = DiminishingReturns.soften(scales[name])
+
+	return scales
 
 
 func _assign(config: ProjectileConfig, values: Dictionary) -> void:
@@ -119,16 +160,15 @@ func _add(config: ProjectileConfig, values: Dictionary) -> void:
 			config.set(name, float(current) + float(values[key]))
 
 
-func _scale(config: ProjectileConfig, values: Dictionary) -> void:
-	for key: Variant in values:
-		var name := StringName(key)
-		if not _known_properties.has(name):
-			continue
+## Writes the combined multipliers `_collect_scales` gathered. Keys are already known to exist and
+## already softened where they had to be, so this is only the write.
+func _scale(config: ProjectileConfig, values: Dictionary[StringName, float]) -> void:
+	for name: StringName in values:
 		var current: Variant = config.get(name)
 		if current is int:
-			config.set(name, roundi(float(current) * float(values[key])))
+			config.set(name, roundi(float(current) * values[name]))
 		else:
-			config.set(name, float(current) * float(values[key]))
+			config.set(name, float(current) * values[name])
 
 
 static func _collect_known_properties() -> Dictionary[StringName, bool]:

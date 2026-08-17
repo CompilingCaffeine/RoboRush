@@ -22,7 +22,11 @@ config_path = "res://data/floors/floor_3_data_center.tres"
 script = ExtResource("1_run")
 id = &"main_campaign"
 display_name = "RoboRush"
-content_version = 1
+; Bumped to 2 when every floor's boss pool became all three bosses. A seed that used to hand floor
+; 3 Cascade Failure now draws from three, so the same number no longer reproduces the same run —
+; which is the whole contract this field carries. In-flight checkpoints are rejected on the
+; mismatch rather than resumed into a run they no longer describe.
+content_version = 2
 floors = Array[FloorEntry]([SubResource("Resource_floor_1"), SubResource("Resource_floor_2"), SubResource("Resource_floor_3")])
 target_floor_count = 6
 require_complete = false

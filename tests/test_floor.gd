@@ -43,6 +43,7 @@ func run() -> void:
 	_test_combat_templates_skew_easier_near_the_start()
 	_test_each_floor_looks_and_sounds_like_itself()
 	await _test_a_run_never_fights_the_same_boss_twice()
+	await _test_walking_into_a_room_buys_a_moment_of_grace()
 	await _test_a_room_wears_its_floors_theme()
 	await _test_repair_cells_drop_on_every_third_clear()
 	await _test_boss_defeat_advances_to_the_next_floor_and_only_the_last_wins()
@@ -561,9 +562,15 @@ func _test_a_run_never_fights_the_same_boss_twice() -> void:
 
 	check(runs > 0, "the two-floor draw ran (%d times)" % runs)
 	check(repeats == 0, "no run fought the same boss on both floors (%d did)" % repeats)
+	# Derived from the pool rather than typed as a literal, for the reason
+	# `_test_repair_cells_drop_on_every_third_clear` derives its cadence from the constant: the
+	# floors went from two bosses each to three, and an expectation written as a number turns that
+	# into a failure somebody has to work out rather than one that moved with the content.
 	check(
-		first_seen.size() == 2,
-		"and both bosses turn up first across seeds (%d of 2 did)" % first_seen.size(),
+		first_seen.size() == _config.boss_pool.size(),
+		"and every boss in the pool turns up first across seeds (%d of %d did)" % [
+			first_seen.size(), _config.boss_pool.size(),
+		],
 	)
 
 
@@ -571,6 +578,79 @@ func _test_a_run_never_fights_the_same_boss_twice() -> void:
 ## are checked separately from the floor because they are built by different code paths and
 ## an obstacle wearing the wrong sheet is exactly the kind of half-themed room that reads as
 ## a bug rather than as a style.
+## The cheap shot, and the window that answers it.
+##
+## Beta reports were all the same shape: walk through a door, lose a point before the room is on
+## screen. `FloorController._enter_room` wakes the room and *then* announces the entry, so anything
+## already aimed at the doorway fires into a player who has not seen it — which is a point spent on
+## a decision they were never offered.
+##
+## Driven through a real `_enter_room` on a real floor rather than by emitting `room_entered` by
+## hand, because the ordering is the whole claim. A grace window granted before `Room.set_active`
+## would test just as green against a bare signal and would still leave the player exposed on the
+## frame that matters.
+##
+## The expiry half is checked too, and it is the half that keeps this honest: an immunity that
+## never ends is not a grace window, it is a cheat, and nothing else in the suite would notice.
+func _test_walking_into_a_room_buys_a_moment_of_grace() -> void:
+	var arena := Node2D.new()
+	add_child(arena)
+	var floor_node: FloorController = FLOOR_SCENE.instantiate()
+	arena.add_child(floor_node)
+
+	var player: Player = PLAYER_SCENE.instantiate()
+	arena.add_child(player)
+	await advance_physics(1)
+
+	RunManager.begin_run(20260816)
+	if not require(floor_node.build(player, 20260816), "the floor builds"):
+		arena.queue_free()
+		await advance_physics(1)
+		return
+
+	var grace: float = player.config.room_entry_grace
+	check(grace > 0.0, "the config grants a window at all (%.2fs)" % grace)
+
+	var health := player.get_health_component()
+	# Out of any window the build itself started, so what is measured is the door and nothing else.
+	health.grant_invulnerability(0.0)
+	await advance_physics(int(grace * 60.0) + 4)
+	check(not health.is_invulnerable(), "the robot is takeable before it walks anywhere")
+
+	# Any room other than the one the floor opened on. The start bay is empty, so entering it is
+	# not the case anybody complained about.
+	var destination := -1
+	for plan: RoomPlan in floor_node.layout.rooms:
+		if plan.id != floor_node.current_room_id:
+			destination = plan.id
+			break
+	if not require(destination >= 0, "the floor has a second room to walk into"):
+		arena.queue_free()
+		await advance_physics(1)
+		return
+
+	floor_node._enter_room(destination)
+	check(health.is_invulnerable(), "crossing the threshold makes the robot untouchable")
+
+	var landed := health.apply_damage(DamageInfo.new(1.0))
+	check(not landed, "and a shot waiting on the doorway takes nothing")
+
+	# One frame short of the window, then past it. Two checks rather than one, so a window of the
+	# wrong length fails as loudly as a window that never closes.
+	await advance_physics(int(grace * 60.0) - 2)
+	check(health.is_invulnerable(), "the window is still open just before it expires")
+
+	await advance_physics(4)
+	check(not health.is_invulnerable(), "and shut just after")
+	check(
+		health.apply_damage(DamageInfo.new(1.0)),
+		"a room the player has had time to read costs what it always did",
+	)
+
+	arena.queue_free()
+	await advance_physics(1)
+
+
 func _test_a_room_wears_its_floors_theme() -> void:
 	var second := load(FLOOR_2_CONFIG_PATH) as FloorConfig
 	if second == null or second.theme == null:

@@ -97,8 +97,23 @@ func build_modifier_stack() -> ProjectileModifierStack:
 
 
 ## Multiplicative, so two fire-rate items compound instead of one overwriting the other:
-## Cooling Fan and Unsafe Overclock together are 1.2 * 1.25, not 1.25.
+## Cooling Fan and Unsafe Overclock together are 1.2 * 1.25, not 1.25. Softened above the knee, so
+## twelve of them are not 1.2 * 1.25 twelve times over — see `DiminishingReturns` for the curve and
+## for why fire rate is one of only two aggregates on it.
+##
+## This is what almost every caller wants: the number that goes on the weapon. The one caller that
+## does not is `Player._step_conditional_fire_rate`, which has two more multipliers of its own to
+## fold in and must soften the whole product rather than a product of softened parts.
 func get_fire_rate_multiplier() -> float:
+	return DiminishingReturns.soften(get_raw_fire_rate_multiplier())
+
+
+## The unsoftened product, for a caller that has more to multiply in before the curve is applied.
+##
+## Softening twice is not a rounding error, it is a different rule: soften(a) * b tops out at
+## `DiminishingReturns` ceiling times b, so Mutex Lock's 1.5x would sail straight past a cap that
+## the items paying for it are held to. One product, one curve, at the end.
+func get_raw_fire_rate_multiplier() -> float:
 	var total := 1.0
 	for item: ItemConfig in _items:
 		total *= item.fire_rate_scale
@@ -180,7 +195,11 @@ func get_shield_charges_per_room() -> int:
 
 
 ## What the first shot in a room is multiplied by. Multiplied together rather than summed, the same
-## way `get_fire_rate_multiplier` composes, so two such items are a product and not a surprise.
+## way `get_raw_fire_rate_multiplier` composes, so two such items are a product and not a surprise.
+##
+## Left off the diminishing-returns curve, unlike the two aggregates that are on it: this is one
+## shot per room rather than every shot, so no amount of it changes how long a floor takes to get
+## through. See `DiminishingReturns` for the rest of that list.
 func get_first_shot_damage_scale() -> float:
 	var scale := 1.0
 	for item: ItemConfig in _items:
