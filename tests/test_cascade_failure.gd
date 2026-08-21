@@ -18,17 +18,27 @@ extends TestCase
 ##    concentrates. That is the arithmetic keeping the last phase survivable, and it is checked by
 ##    *counting vents in real time* at load one and at load four rather than by re-deriving the
 ##    division, which would only prove that division works.
-## 3. **Nothing it puts on the floor is aimed at the player.** Every vent is centred on a node, so
-##    every patch was announced by a body already on screen, and every patch starts cold. Checked
-##    the way the player meets it: run the fight and catch each zone on the frame it appears.
+## 3. **Every patch of heat starts cold.** Wherever a vent lands — under a node, under the robot,
+##    in an empty corner — it fills from nothing over `vent_seconds`, so there is no hazard in this
+##    fight the player could not have walked out of. Checked the way the player meets it: run the
+##    fight and catch each zone on the frame it appears.
 ##
-## The third one was written the wrong way round first — as "it never vents under the player" — and
-## the suite caught it doing exactly that, three times in forty-seven. The claim was false rather
-## than the code being wrong: a node can be standing on the robot, because bodies on that team pass
-## through it. What the fight actually promises is that it never *chooses* the player's feet, and
-## that is what is checked here. A test that measured the appealing version of a rule instead of the
-## true one would have had to be weakened later by somebody who did not know which of the two the
-## fight was built on.
+## The third one has been written the wrong way round twice, which is worth recording because both
+## mistakes were the same mistake.
+##
+## It began as "it never vents under the player", and the suite caught the fight doing exactly that,
+## three times in forty-seven: a node can be *standing* on the robot, because bodies on that team
+## pass through it. So it was weakened to "it never *chooses* the player's feet" — true at the time,
+## and still the wrong thing to have pinned. It described where the heat went rather than why the
+## heat was fair, and pinning it made the fight's own sentence unsayable: the boss whose subject is
+## *keep moving* could not put anything under a player who had stopped, so a player who found ground
+## the ring did not sweep was free to stand on it and shoot.
+##
+## The fight now aims and scatters (see `CascadeFailure._step_aimed_vent` and `_step_scatter_vent`)
+## and the promise is the one that was doing the work all along: the telegraph, not the aim. That is
+## checked below on every vent from every source, and the two new sources get a check each that they
+## exist at all — because a promise about telegraphs is trivially kept by a boss that has stopped
+## venting.
 ##
 ## The boss is damaged through its nodes rather than by reaching into its pool, because a node is
 ## the only thing a projectile can hit and the forwarding between them is exactly what could break.
@@ -46,21 +56,18 @@ const RIVET_PATH := "res://data/projectiles/rivet.tres"
 ## measuring it against anything else would be measuring the test's own arithmetic.
 const ARENA := Rect2(Vector2.ZERO, Vector2(416.0, 192.0))
 
-## What the fight is compressed to for the tests. The shipped numbers are tuned for a player's
-## reading speed and a suite that waited them out would spend a minute proving what a second
-## proves. The shipped values are checked as values in `_test_config_is_a_fight`; these only have
-## to preserve the *relationships* the fight depends on — a vent still takes long enough to read,
-## and the interval is still longer than the fill.
-const TEST_VENT_INTERVAL := 0.6
-const TEST_VENT_SECONDS := 0.4
-
-## How many frames of node positions to keep, for the check that every vent was centred on a body.
+## What the rack's own vent clock is compressed to for the tests, and the only number here that is
+## chosen. The shipped clocks are tuned for a player's reading speed, and a suite that waited them
+## out would spend a minute proving what a second proves; the shipped values are checked as values
+## in `_test_config_is_a_fight`.
 ##
-## More than one, and the reason is the failure vent: a node blowing out drops a zone on the ground
-## it is vacating and is gone from the rack in the same call, so "a node is standing there right
-## now" would be a frame too strict — and would call the most clearly announced vent in the fight,
-## the one where a body visibly exploded, the one unannounced one.
-const TRACK_FRAMES := 8
+## Every other vent clock is derived from this one by the ratio it represents — see `_new_boss`.
+## That was not always true: the fill used to be its own chosen number, which quietly gave the
+## suite a fight with a third more hot ground on screen at once than the shipped one has, and it
+## was `_test_the_floor_stays_walkable_at_every_load` that noticed by creeping toward its ceiling
+## while the real fight sat nowhere near it. A compression that changes a ratio is not a
+## compression.
+const TEST_VENT_INTERVAL := 0.6
 
 ## Long enough to cover a whole breath at the shipped `ring_breath_speed`, so the sweep test sees
 ## the ring at both extents rather than catching it mid-inhale.
@@ -75,9 +82,6 @@ var _player: Player
 ## appeared. A count alone would not do: the interesting question about a vent is *where* it was
 ## put, and that is only answerable before the player has had time to walk away from it.
 var _seen_zones: Dictionary[int, bool] = {}
-
-## Where the nodes have stood over the last `TRACK_FRAMES` frames, oldest first.
-var _node_tracks: Array[Vector2] = []
 
 
 func run() -> void:
@@ -100,7 +104,9 @@ func run() -> void:
 	await _test_the_rack_stays_inside_its_arena()
 	await _test_the_breathing_sweeps_the_middle()
 	await _test_the_heat_per_second_does_not_rise_with_load()
-	await _test_every_vent_is_announced_by_a_body()
+	await _test_every_vent_starts_cold()
+	await _test_it_heats_the_ground_the_player_is_standing_on()
+	await _test_it_heats_ground_the_ring_never_reaches()
 	await _test_the_floor_stays_walkable_at_every_load()
 	await _test_the_last_node_comes_for_the_player()
 	await _test_real_projectiles_drive_the_whole_fight()
@@ -126,6 +132,19 @@ func _test_config_is_a_fight() -> void:
 	check(
 		_config.vent_tiles.x >= 1 and _config.vent_tiles.y >= 1,
 		"a vent covers real ground (%s tiles)" % _config.vent_tiles,
+	)
+	# Both aimed and scatter clocks have to be longer than the fill, and that is the tuning that
+	# makes "keep moving" a rhythm rather than a treadmill: the ground the player is standing on has
+	# to be cold some of the time, or moving stops being a decision and becomes the only input.
+	check(
+		_config.aimed_vent_interval > _config.vent_seconds,
+		"the ground under the player is cold between aimed vents (%.2fs against a %.2fs fill)"
+			% [_config.aimed_vent_interval, _config.vent_seconds],
+	)
+	check(
+		_config.scatter_vent_interval > _config.vent_seconds,
+		"and the room is not being repainted faster than it can be read (%.2fs)"
+			% _config.scatter_vent_interval,
 	)
 	# The last phase is a chase the player is meant to win on foot. Its threat is the trail, not
 	# the body, and a node faster than the robot would make it the body.
@@ -412,8 +431,13 @@ func _test_the_breathing_sweeps_the_middle() -> void:
 ##
 ## Per node the interval is `vent_interval / load`, and there are `node_count / load` nodes, so the
 ## rack's total vent rate is the same at every load. Counting them in real time is the version of
-## that claim which fails if somebody scales the interval by something other than load, or adds a
-## second vent source to the last phase because it felt thin.
+## that claim which fails if somebody scales the interval by something other than load.
+##
+## It counts *every* vent, not only the ones the nodes drop, and that is what makes it still the
+## right check now that the fight aims and scatters as well. Those two clocks are deliberately flat
+## — see `CascadeFailureConfig.aimed_vent_interval` — so adding them moved the whole line up and
+## left it level. A source that quadrupled alongside the rack would show here as a last phase
+## putting four times the heat down, which is the specific thing this arithmetic exists to forbid.
 func _test_the_heat_per_second_does_not_rise_with_load() -> void:
 	await _begin()
 
@@ -435,51 +459,144 @@ func _test_the_heat_per_second_does_not_rise_with_load() -> void:
 	await _teardown()
 
 
-## The fairness rule, checked the way the player meets it. Every zone is caught on the frame it
-## appears and asked two questions: was a node standing in it, and was it cold?
+## The fairness rule, checked the way the player meets it: every zone is caught on the frame it
+## appears and asked whether it was cold.
 ##
-## Both halves are the warning. A vent centred on a node is a hazard the player was shown before it
-## existed; a vent that starts cold is one they have the whole of `vent_seconds` to leave. A boss
-## that broke either would throw no error and fail no other check in this file — it would simply
-## put damage where no warning had been, on the one floor whose entire promise is that heat is
-## something you can see coming.
-func _test_every_vent_is_announced_by_a_body() -> void:
+## This is the whole warning, and since the fight started aiming it is the only warning. A vent that
+## starts cold is one the player has the whole of `vent_seconds` to leave, wherever it landed and
+## whoever it was meant for. A boss that broke it would throw no error and fail no other check in
+## this file — it would simply put damage where no warning had been, on the one floor whose entire
+## promise is that heat is something you can see coming.
+##
+## Asked of every vent from every source, deliberately. The aimed vent is the one most likely to be
+## "improved" into landing hot, because that is what aiming usually means; this is the check that
+## says no.
+##
+## It also asserts the vents land inside the arena. `_drop_vent` clamps them, and a clamp that
+## stopped working would paint half a hazard through a wall — visible to nobody reading the code and
+## obvious to anyone playing it.
+func _test_every_vent_starts_cold() -> void:
 	await _begin()
 
 	var caught := 0
-	var orphaned := 0
 	var born_hot := 0
+	var outside := 0
+	var walls := ARENA.grow(1.0)
 	for phase_target: int in [4, 2, 1]:
 		await _drive_to_nodes(phase_target)
 		for _frame: int in _frames(TEST_VENT_INTERVAL * 4.0):
-			_track_nodes()
 			await advance_physics(1)
 			# The robot keeps moving, because a stationary player is the easy case: parked in a
 			# corner it would sit clear of the ring by accident. Circling puts it where the nodes
-			# are, which is the only place this rule can be tested.
+			# are, which is where the most vents of every kind land at once.
 			_orbit_player(0.06)
 			for zone: ThermalZone in _new_zones():
 				caught += 1
-				# Grown by a pixel: `_drop_vent` clamps a rect at the wall back into the arena, so a
-				# node right against the edge ends up exactly on its boundary rather than inside it.
-				if not _is_on_a_node(zone.get_rect().grow(1.0)):
-					orphaned += 1
 				# A quarter, not zero. Zones are inspected on the frame after they appear at the
 				# earliest, and a couple of frames later when one arrives during a phase change, so
 				# a strict zero here would be measuring the polling rather than the boss. What it
 				# has to catch is a vent that appears already dangerous.
 				if zone.get_heat() > 0.25:
 					born_hot += 1
+				if not walls.encloses(zone.get_rect()):
+					outside += 1
 
 	check(caught > 0, "the rack put heat on the floor to inspect (%d vents)" % caught)
-	check(
-		orphaned == 0,
-		"and every one of them was centred on a node (%d of %d were not)" % [orphaned, caught],
-	)
 	check(
 		born_hot == 0,
 		"and every one started cold, so it can be walked out of (%d of %d did not)"
 			% [born_hot, caught],
+	)
+	check(
+		outside == 0,
+		"and every one landed inside the arena (%d of %d did not)" % [outside, caught],
+	)
+
+	await _teardown()
+
+
+## The half of the fight the ring cannot do, and the reason the aimed vent exists: a player who
+## stops moving is charged for it wherever in the room they stopped.
+##
+## Parked deliberately in a corner the ring never reaches, which is the ground that used to be a
+## free firing position. A vent still has to arrive there, and it has to arrive *centred* on the
+## robot rather than led — a boss that aimed where the player was going would be a boss whose
+## telegraph the player cannot answer by standing still, and standing still has to remain a real
+## (bad) choice rather than an impossible one.
+func _test_it_heats_the_ground_the_player_is_standing_on() -> void:
+	await _begin()
+
+	# A corner the ring cannot reach: the ellipse at full extension spans x 58-358 and y 34-158, and
+	# a 3x3 vent centred anywhere on it never covers this point. So a patch that lands here came
+	# from the clock that aims, and nothing else in the fight can produce this result by accident.
+	var corner := ARENA.position + Vector2(20.0, 20.0)
+	_player.global_position = corner
+	_player.velocity = Vector2.ZERO
+
+	var expected := 6
+	var covered := 0
+	var seen := 0
+	for _frame: int in _frames(_boss.config.aimed_vent_interval * float(expected + 1)):
+		await advance_physics(1)
+		# Held every frame. `move_and_slide` runs on the robot whatever the test wants, and a
+		# player that had drifted a few pixels would turn a centred vent into a near miss.
+		_player.global_position = corner
+		_player.velocity = Vector2.ZERO
+		for zone: ThermalZone in _new_zones():
+			seen += 1
+			if zone.get_rect().has_point(corner):
+				covered += 1
+
+	check(seen > 0, "the fight put heat down while the robot stood still (%d vents)" % seen)
+	# A count rather than "at least one", because at least one is a check the scatter clock could
+	# pass on its own. Two thirds of the aimed vents the window is long enough for, which leaves
+	# room for the polling and for one landing across a frame boundary but none for the aiming
+	# having quietly stopped.
+	check(
+		covered >= expected * 2 / 3,
+		"and the ground the robot was standing on was heated repeatedly (%d of %d vents, over %d)"
+			% [covered, seen, expected * 2 / 3],
+	)
+
+	await _teardown()
+
+
+## The other half: ground that is neither on the ring nor under the robot still gets heated, so the
+## answer to this fight is a route rather than a spot.
+##
+## Measured against the ring's own reach rather than against a hand-picked rectangle. The ellipse at
+## full extension is `ring_radius` about the arena's centre, so a vent whose normalised distance is
+## past 1.1 is on ground no node can stand on — and with the robot parked at the centre of that
+## ellipse, it is not ground the aimed vent was reaching for either.
+##
+## The window is thirty scatter intervals rather than a handful. Roughly a third of a uniform draw
+## over the arena falls outside the ring, so a short window would be a test that fails once every
+## few hundred runs for no reason — and a flaky check is worse than no check, because the first
+## thing anybody does with one is delete it.
+func _test_it_heats_ground_the_ring_never_reaches() -> void:
+	await _begin()
+
+	var centre := ARENA.get_center()
+	_player.global_position = centre
+	var beyond := 0
+	var seen := 0
+	for _frame: int in _frames(_boss.config.scatter_vent_interval * 30.0):
+		await advance_physics(1)
+		_player.global_position = centre
+		_player.velocity = Vector2.ZERO
+		for zone: ThermalZone in _new_zones():
+			seen += 1
+			var offset := zone.get_rect().get_center() - centre
+			var reach := Vector2(
+				offset.x / _config.ring_radius.x, offset.y / _config.ring_radius.y
+			).length()
+			if reach > 1.1:
+				beyond += 1
+
+	check(seen > 0, "the fight put heat down to inspect (%d vents)" % seen)
+	check(
+		beyond > 0,
+		"and some of it landed past everything the ring can reach (%d of %d)" % [beyond, seen],
 	)
 
 	await _teardown()
@@ -494,6 +611,14 @@ func _test_every_vent_is_announced_by_a_body() -> void:
 ##
 ## Summed rather than unioned, which overstates the coverage wherever two zones overlap. That is the
 ## safe direction for a ceiling — the real figure is never worse than the one asserted here.
+##
+## **The margin is no longer generous, and that is a fact worth carrying rather than hiding.** The
+## fight used to peak around thirteen percent here; the aimed and scatter clocks put it at twenty,
+## against a ceiling of twenty-five. Two of those five remaining points are an artefact of the
+## compression — the 0.18s vent flash is a fixed cost that does not wind down with the clocks, so a
+## wound-in zone spends proportionally longer on screen than a shipped one, and the shipped fight
+## measures nearer eleven percent. What is left is still real headroom, but it is headroom a third
+## vent source would spend. Anyone adding one should expect to move a rate down to pay for it.
 func _test_the_floor_stays_walkable_at_every_load() -> void:
 	await _begin()
 
@@ -609,7 +734,6 @@ func _test_the_floor_spawns_it_in_a_real_boss_room() -> void:
 func _begin() -> void:
 	RunManager.begin_run(90210)
 	_seen_zones.clear()
-	_node_tracks.clear()
 
 	_arena = Node2D.new()
 	var container := Node2D.new()
@@ -639,11 +763,21 @@ func _teardown() -> void:
 ## The shipped fight with its clocks wound in. Everything that decides *shape* — the ring, the
 ## load arithmetic, the failure thresholds — is left exactly as shipped, because that is what the
 ## suite is here to measure.
+##
+## Every vent clock is wound by **one ratio** rather than each being given a chosen number. What the
+## fight's fairness rests on is the relationships between them — the aimed and scatter clocks
+## against the rack's own, and all of them against the fill, which is what decides how many patches
+## are on the floor at once. Winding one down without the others leaves this suite measuring a fight
+## nobody plays. It also means a fourth vent source added tomorrow is one line here rather than a
+## silent gap in every check below.
 func _new_boss() -> CascadeFailure:
 	var boss: CascadeFailure = BOSS_SCENE.instantiate()
 	var fast: CascadeFailureConfig = _config.duplicate()
+	var winding := TEST_VENT_INTERVAL / maxf(_config.vent_interval, 0.001)
 	fast.vent_interval = TEST_VENT_INTERVAL
-	fast.vent_seconds = TEST_VENT_SECONDS
+	fast.aimed_vent_interval = _config.aimed_vent_interval * winding
+	fast.scatter_vent_interval = _config.scatter_vent_interval * winding
+	fast.vent_seconds = _config.vent_seconds * winding
 	boss.config = fast
 	return boss
 
@@ -665,9 +799,6 @@ func _hurt_any(amount: float) -> void:
 ## Drives the pool down until `alive` nodes are left, computed from the threshold rather than
 ## guessed, so this still works if `node_count` moves.
 func _drive_to_nodes(alive: int) -> void:
-	# Before the damage, because the failure it is about to cause drops a vent on the ground the
-	# failing node is standing on right now.
-	_track_nodes()
 	var slots := _config.node_count
 	# Halfway into the band that leaves `alive` standing, so nothing that follows sits on a
 	# boundary. The band for `alive` runs from `(alive - 1) / slots` up to `alive / slots`.
@@ -693,26 +824,6 @@ func _new_zones() -> Array[ThermalZone]:
 		_seen_zones[zone.get_instance_id()] = true
 		fresh.append(zone)
 	return fresh
-
-
-## Records where every living node is standing this frame, dropping the oldest reading once the
-## window is full.
-func _track_nodes() -> void:
-	for slot: int in _config.node_count:
-		var node := _boss.get_node_at(slot)
-		if node != null:
-			_node_tracks.append(node.global_position)
-	var window := TRACK_FRAMES * _config.node_count
-	while _node_tracks.size() > window:
-		_node_tracks.remove_at(0)
-
-
-## Whether a node has stood inside `rect` recently. See `TRACK_FRAMES`.
-func _is_on_a_node(rect: Rect2) -> bool:
-	for position: Vector2 in _node_tracks:
-		if rect.has_point(position):
-			return true
-	return false
 
 
 ## Total ground currently covered by the boss's vents, in square pixels.

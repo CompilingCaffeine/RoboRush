@@ -59,7 +59,7 @@ PALETTE = {
     "Z": (0x25, 0x2A, 0x3E, 255),  # dev floor grid
     "t": (0x34, 0x3B, 0x56, 255),  # dev floor speck
     # --- The Data Center. Cold steel, and deliberately narrow: this floor's throughput zones
-    # --- paint themselves teal when cold and red when hot (see ThermalZone), and a floor that
+    # --- paint themselves teal when cold and violet when hot (see ThermalZone), and a floor that
     # --- carried either colour as decoration would make the one gradient the player's survival
     # --- depends on reading into just another marking. Same call the Development floor's hazard
     # --- tape makes about amber, one floor later and for the same reason.
@@ -70,6 +70,23 @@ PALETTE = {
     "H": (0x39, 0x4C, 0x5F, 255),  # data chassis mid
     "j": (0x5C, 0x76, 0x8D, 255),  # data chassis light
     "i": (0xC2, 0xD8, 0xE6, 255),  # cold status light — ice, never cyan
+    # --- Cloud Operations. A hyperscale hall: sealed concrete, painted aisle markings, and rows
+    # --- of blades that go on past the edge of the room. Deliberately the lightest and warmest
+    # --- environment in the game so far, which is a contrast decision rather than a taste one —
+    # --- the Data Center is near-black cold steel and this floor follows it, so a second dark
+    # --- blue hall would read as the same place with different furniture.
+    # ---
+    # --- **Nothing here is green.** `MigrationPad` draws itself spring green because it is the one
+    # --- piece of floor in the game that is purely an offer rather than a threat, and a floor
+    # --- carrying green as decoration would spend the only colour the player has to find. Exactly
+    # --- the call the Data Center makes about teal and violet, and Development about amber.
+    "q": (0x16, 0x18, 0x1E, 255),  # cloud floor base
+    "Q": (0x28, 0x2C, 0x34, 255),  # cloud floor grid
+    "f": (0x3A, 0x3F, 0x49, 255),  # cloud floor speck
+    "N": (0x2C, 0x30, 0x3A, 255),  # cloud chassis dark
+    "M": (0x4B, 0x52, 0x5F, 255),  # cloud chassis mid
+    "L": (0x7B, 0x86, 0x97, 255),  # cloud chassis light
+    "F": (0xE8, 0xDC, 0xBE, 255),  # sodium status light — warm white, never green
 }
 
 
@@ -355,7 +372,7 @@ RECURSION = [
 # --- sprite would be a plate pointing the wrong way for most of the fight.
 # ---
 # --- Data Center chassis greys throughout, with the cold status light for the band. No
-# --- teal and no red: this floor's throughput zones own that gradient and an enemy glowing
+# --- teal and no violet: this floor's throughput zones own that gradient and an enemy glowing
 # --- somewhere along it would be a second thing on screen claiming to mean heat.
 LOAD_BALANCER = [
     "................",
@@ -672,6 +689,84 @@ def cascade_node_sprite() -> list[str]:
 
 
 CASCADE_NODE = cascade_node_sprite()
+
+
+def orchestrator_sprite() -> list[str]:
+    """Cloud Operations' boss, 24x24 — a control unit that is only ever half here.
+
+    All four bosses have to read apart at a glance in a screenshot, and the three before it are a
+    scrap machine, a loose process, and a rack unit. This one is the *thing that decides where the
+    rack unit is*, which is a different kind of object and gets a different silhouette: an outer
+    ring that stays put and an inner core that does not fill it. The gap between them is the whole
+    read. A player looking at it can see there is a slot the core is sitting in and that the core
+    could be sitting in a different one, which is exactly the fight.
+
+    Bilaterally symmetrical and hard-edged like the Data Center's node, because both are
+    infrastructure rather than creatures — but where that one is a solid box of vent slots, this is
+    mostly outline. The two are the same family and not the same thing.
+
+    Neutral greys with a single warm status pair, for the reason every boss sprite in this project
+    is neutral: `modulate` multiplies, and a colour baked in here would fight whatever tint the
+    controller wants to put on top. `Failover` does not tint at all today, and the sprite should
+    not be the reason it cannot start.
+    """
+    size = 24
+    grid = [["."] * size for _ in range(size)]
+
+    # The outer ring: a square bracket open at the corners, so it reads as a mount rather than a
+    # crate. Open corners also keep the silhouette from being a filled rectangle at distance.
+    for x in range(6, 18):
+        grid[2][x] = "o"
+        grid[3][x] = "d"
+        grid[20][x] = "d"
+        grid[21][x] = "o"
+    for y in range(6, 18):
+        grid[y][2] = "o"
+        grid[y][3] = "d"
+        grid[y][20] = "d"
+        grid[y][21] = "o"
+
+    # Four corner brackets, which is what makes the ring a frame with something mounted in it.
+    for a, b in ((4, 4), (4, 19), (19, 4), (19, 19)):
+        grid[a][b] = "o"
+    for x in range(4, 7):
+        grid[4][x] = "m"
+        grid[19][x] = "m"
+        grid[4][23 - x] = "m"
+        grid[19][23 - x] = "m"
+
+    # The core: a smaller solid block, deliberately not centred in the frame's full width. It sits
+    # in a slot, and a slot has room beside it.
+    for y in range(7, 17):
+        for x in range(7, 17):
+            grid[y][x] = "m"
+    for y in range(7, 17):
+        grid[y][7] = "o"
+        grid[y][16] = "o"
+    for x in range(7, 17):
+        grid[7][x] = "o"
+        grid[16][x] = "o"
+    for y in range(8, 16):
+        for x in range(8, 16):
+            grid[y][x] = "d" if (y + x) % 4 == 0 else "m"
+
+    # Two vent slots across the core's face, matching the Data Center node's markings so the two
+    # bosses are visibly the same manufacturer.
+    for x in range(9, 15):
+        grid[10][x] = "o"
+        grid[13][x] = "o"
+    for x in range(10, 14):
+        grid[11][x] = "l"
+        grid[14][x] = "l"
+
+    # The status pair: the brightest thing on it, dead centre, and exactly where its hitbox is.
+    grid[12][11] = "Y"
+    grid[12][12] = "Y"
+
+    return ["".join(row) for row in grid]
+
+
+ORCHESTRATOR = orchestrator_sprite()
 
 # --- Synchronization terminal: a squat server box with a status light.
 BOSS_TERMINAL = [
@@ -1819,12 +1914,184 @@ DATA_FLOOR_LAYOUT = [
 ]
 
 
+def cable_duct_tile() -> list[str]:
+    """The 16x16 tile a `CableDuct` repeats: a cable tray, knee high.
+
+    One tile rather than a 4x4 sheet, and unthemed rather than taken from the floor's wall sheet.
+    Both are the same decision. A duct blocks the chassis and not the shot, which is a rule the
+    player has to read off the thing itself in the half second before they try to drive over it —
+    and a duct that borrowed the wall texture would be a wall that bullets go through, which is the
+    worst possible thing for a piece of level geometry to look like.
+
+    So it is drawn to be unlike the three things it will always be seen beside, and each in a
+    different register, because on this floor a single register is not enough to carry a difference:
+
+    * **The floor** is dark and busy. The duct is the lightest solid value on the level, and flat.
+    * **The wall** is a grid of boxes — rack bays, blanking plates, grilles. The duct has one
+      unbroken face with a lit rail along its top edge, which is what says raised rather than
+      recessed. A hole in the floor would be somewhere a shot also stops.
+    * **A throughput zone** is horizontal louvre bars in teal-to-violet (see `ThermalZone`). The duct
+      deliberately carries no stripes at all for that reason — it was drawn with cable runs down it
+      first, and beside a zone the two patterns read as the same kind of thing, which is the one
+      mistake that actually matters here. What is left is a bolt line, which is dots rather than
+      lines and steel rather than colour.
+
+    Steel only, per the Data Center palette note. The zones own every warm value on this floor and
+    nothing else may borrow one."""
+    grid = _blank_panel("j")
+    for x in range(TILE):
+        grid[0][x] = "o"          # the seam against the floor
+        grid[1][x] = "H"
+        grid[TILE - 3][x] = "H"
+        grid[TILE - 2][x] = "h"   # the shadow the tray casts, so it sits *on* the floor
+        grid[TILE - 1][x] = "o"
+
+    # The bolt line down the middle of the tray. Dots rather than a run, so nothing here can be
+    # mistaken for a zone's louvres at a glance.
+    for x in range(3, TILE, 8):
+        for y in (7, 8):
+            grid[y][x] = "h"
+            grid[y][x + 1] = "h"
+        grid[7][x] = "o"
+
+    return grid
+
+
 def data_wall_tile() -> list[str]:
     return compose_sheet(DATA_WALL_LAYOUT, data_wall_panel)
 
 
 def data_floor_tile() -> list[str]:
     return compose_sheet(DATA_FLOOR_LAYOUT, data_floor_panel)
+
+
+# --- Cloud Operations' environment ------------------------------------------------------
+# ---
+# --- The read is a warehouse rather than a machine room. The Data Center is a raised
+# --- perforated floor you can see the airflow through; this is sealed concrete with aisle
+# --- markings painted on it, and walls of blades that are identical because at this scale
+# --- everything is. Flatter and lighter than anything before it, for two reasons: the floor
+# --- that precedes it is the darkest in the game, and the pads painted on top of this one have
+# --- to be the brightest thing in the room.
+
+CLOUD_WALL_LAYOUT = [
+    ["blades", "flat", "trunk", "flat"],
+    ["flat", "blades", "flat", "placard"],
+    ["trunk", "flat", "blades", "flat"],
+    ["flat", "placard", "flat", "blades"],
+]
+
+CLOUD_FLOOR_LAYOUT = [
+    ["slab", "plain", "aisle", "plain"],
+    ["plain", "anchor", "plain", "slab"],
+    ["aisle", "plain", "slab", "plain"],
+    ["plain", "slab", "plain", "anchor"],
+]
+
+
+def _cloud_wall_base() -> list[list[str]]:
+    """The Cloud Operations bevel: lit top, shaded bottom, same read as all three floors before
+    it. A wall has to be obviously a wall before it is obviously anywhere in particular."""
+    grid = _blank_panel("M")
+    for x in range(TILE):
+        grid[0][x] = "o"
+        grid[1][x] = "L"
+        grid[TILE - 2][x] = "N"
+        grid[TILE - 1][x] = "o"
+    for y in range(TILE):
+        grid[y][0] = "o"
+        grid[y][TILE - 1] = "o"
+    return grid
+
+
+def cloud_wall_panel(kind: str) -> list[list[str]]:
+    """One 16x16 Cloud Operations wall panel."""
+    grid = _cloud_wall_base()
+
+    if kind == "blades":
+        # A stack of thin horizontal blades, one lit. Deliberately *lines* where the Data
+        # Center's rack is a grid of squares: the two floors' walls have to read apart in
+        # peripheral vision, and stripe-versus-grid does that at any size.
+        for y in range(3, 13):
+            for x in range(3, 13):
+                grid[y][x] = "N"
+        for y in range(3, 13):
+            if y % 2 == 1:
+                for x in range(4, 12):
+                    grid[y][x] = "M"
+                grid[y][11] = "F" if y == 7 else "M"
+    elif kind == "flat":
+        # A sealed blanking panel. Most of a wall is quiet, and at this scale most of a hall is
+        # capacity nobody has filled yet.
+        for y in range(4, 12):
+            for x in range(3, 13):
+                grid[y][x] = "N"
+        for x in range(4, 12):
+            grid[4][x] = "M"
+    elif kind == "trunk":
+        # Overhead fibre trunking running the length of the aisle, with a drop into the row.
+        for x in range(1, TILE - 1):
+            grid[3][x] = "L"
+            grid[4][x] = "N"
+            grid[5][x] = "M"
+        for y in range(6, TILE - 2):
+            grid[y][7] = "N"
+            grid[y][8] = "M"
+    elif kind == "placard":
+        # A region placard: the one bright rectangle on the wall. This floor is the first place
+        # in the game where *where you are* is a thing the building itself labels.
+        for y in range(5, 11):
+            for x in range(4, 12):
+                grid[y][x] = "N"
+        for x in range(5, 11):
+            grid[6][x] = "F"
+            grid[9][x] = "M"
+        for x in range(5, 9):
+            grid[7][x] = "L"
+
+    return grid
+
+
+def cloud_floor_panel(kind: str) -> list[list[str]]:
+    """One 16x16 Cloud Operations floor panel: sealed slab with painted markings.
+
+    No perforation anywhere, which is the whole difference from the floor before it. A Data
+    Center floor is a grid of holes because the heat goes down through it; this hall moves its
+    air overhead, so the ground is just ground — and ground is what the pads need it to be."""
+    grid = _blank_panel("q")
+    for x in range(TILE):
+        grid[0][x] = "Q"
+    for y in range(TILE):
+        grid[y][0] = "Q"
+
+    if kind == "slab":
+        # A poured slab with its control joints. Big, quiet, and the most common tile.
+        for x in range(1, TILE):
+            grid[TILE - 1][x] = "Q"
+        for y in range(1, TILE):
+            grid[y][TILE - 1] = "Q"
+    elif kind == "aisle":
+        # Painted aisle marking: the line down the middle of a cold aisle. The only strong
+        # graphic on the ground, kept to two rows of the layout so it reads as a route rather
+        # than as texture.
+        for x in range(1, TILE):
+            grid[7][x] = "f"
+            grid[8][x] = "f"
+    elif kind == "anchor":
+        # Rack anchor bolts, sunk into the slab.
+        for x, y in ((4, 4), (11, 4), (4, 11), (11, 11)):
+            grid[y][x] = "Q"
+            grid[y][x + 1] = "f"
+
+    return grid
+
+
+def cloud_wall_tile() -> list[str]:
+    return compose_sheet(CLOUD_WALL_LAYOUT, cloud_wall_panel)
+
+
+def cloud_floor_tile() -> list[str]:
+    return compose_sheet(CLOUD_FLOOR_LAYOUT, cloud_floor_panel)
 
 
 def dev_wall_tile() -> list[str]:
@@ -1918,6 +2185,7 @@ SPRITES = {
     "art/bosses/merge_conflict.png": MERGE_CONFLICT,
     "art/bosses/runtime_error.png": RUNTIME_ERROR,
     "art/bosses/cascade_node.png": CASCADE_NODE,
+    "art/bosses/orchestrator.png": ORCHESTRATOR,
     "art/bosses/boss_terminal.png": BOSS_TERMINAL,
     "art/effects/projectile_boss_red.png": BOSS_RED,
     "art/effects/projectile_boss_green.png": BOSS_GREEN,
@@ -1943,7 +2211,10 @@ def main() -> int:
     write_png(os.path.join(root, "art/environments/dev_wall.png"), dev_wall_tile())
     write_png(os.path.join(root, "art/environments/data_wall.png"), data_wall_tile())
     write_png(os.path.join(root, "art/environments/data_floor.png"), data_floor_tile())
+    write_png(os.path.join(root, "art/environments/cable_duct.png"), cable_duct_tile())
     write_png(os.path.join(root, "art/environments/dev_floor.png"), dev_floor_tile())
+    write_png(os.path.join(root, "art/environments/cloud_wall.png"), cloud_wall_tile())
+    write_png(os.path.join(root, "art/environments/cloud_floor.png"), cloud_floor_tile())
     return 0
 
 

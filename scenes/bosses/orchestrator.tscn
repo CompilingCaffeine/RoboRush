@@ -1,0 +1,11 @@
+[gd_scene load_steps=3 format=3]
+
+; Cloud Operations' boss. The controller owns the plates and the one core it moves between them;
+; see `orchestrator.gd` for the fight and `orchestrator_core.tscn` for the body.
+
+[ext_resource type="Script" path="res://scenes/bosses/orchestrator.gd" id="1_boss"]
+[ext_resource type="Resource" path="res://data/bosses/orchestrator.tres" id="2_config"]
+
+[node name="Orchestrator" type="Node2D"]
+script = ExtResource("1_boss")
+config = ExtResource("2_config")

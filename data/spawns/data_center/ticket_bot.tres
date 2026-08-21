@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="EnemySpawn" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/enemy_spawn.gd" id="1_spawn"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/ticket_bot.tscn" id="2_scene"]
+
+[resource]
+script = ExtResource("1_spawn")
+scene = ExtResource("2_scene")
+; The Data Center's own weight for an enemy three floors share. A shared `EnemySpawn` is one number
+; that has to be right for every floor listing it, and the Help Desk's filler cannot also be the
+; third floor's staple: at 2.0 the Ticket Bot was 7.6 of this floor's 17 enemies, more than the two
+; enemies the floor was built around put together. It is kept rather than dropped because the roster
+; still needs something mild to open with, and the teaching room forces two of them.
+weight = 0.7
+min_difficulty = 1

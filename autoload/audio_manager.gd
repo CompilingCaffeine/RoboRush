@@ -29,6 +29,7 @@ const LIBRARY := {
 	&"enemy_death": "res://audio/sfx/enemy_death.wav",
 	&"player_hurt": "res://audio/sfx/player_hurt.wav",
 	&"dash": "res://audio/sfx/dash.wav",
+	&"migrate": "res://audio/sfx/migrate.wav",
 	&"room_clear": "res://audio/sfx/room_clear.wav",
 	&"low_integrity": "res://audio/sfx/low_integrity.wav",
 	&"pickup": "res://audio/sfx/pickup.wav",
@@ -64,6 +65,8 @@ const MUSIC_LIBRARY := {
 	&"dev_boss": "res://audio/music/dev_boss.wav",
 	&"data_explore": "res://audio/music/data_explore.wav",
 	&"data_boss": "res://audio/music/data_boss.wav",
+	&"cloud_explore": "res://audio/music/cloud_explore.wav",
+	&"cloud_boss": "res://audio/music/cloud_boss.wav",
 }
 
 ## Seconds to crossfade between tracks. Long enough not to read as a cut, short enough that
@@ -81,6 +84,21 @@ const MIXER_DRAIN_TIMEOUT_MS := 500
 ## Polling interval, short against the shortest mix period worth waiting for.
 const MIXER_POLL_MS := 1
 
+## How long the mixer may go without running before the output is presumed dead.
+##
+## The audio thread mixes on its own clock and does not care how long a game frame took, so this is
+## not a frame-rate measurement: on a healthy driver `get_time_since_last_mix` oscillates inside one
+## mix period and never climbs. Measured here, that is about 3 ms on CoreAudio, 11-37 ms through
+## the Dummy driver the headless suite uses, and a comparable figure on WASAPI. A full second is
+## therefore two orders of magnitude past anything a working driver produces, which is where a
+## watchdog threshold belongs: nowhere near the noise, so a trip means something.
+const OUTPUT_STALL_SECONDS := 1.0
+
+## How long after one recovery attempt before another is allowed. A driver that is going to come
+## back does so on the next mix; one that is not will not be helped by being asked ten times a
+## second, and the log line matters more than the retry.
+const OUTPUT_RECOVERY_COOLDOWN := 5.0
+
 var _streams: Dictionary[StringName, AudioStream] = {}
 var _music_streams: Dictionary[StringName, AudioStream] = {}
 var _pool: Array[AudioStreamPlayer] = []
@@ -93,6 +111,15 @@ var _music_id: StringName = &""
 
 ## 0..1 progress of the current crossfade. Reaches 1 and stays there between changes.
 var _fade := 1.0
+
+## Seconds the mixer has been observed not running, and how long until another recovery may be
+## attempted. See `_step_output_watchdog`.
+var _output_stalled_for := 0.0
+var _output_recovery_cooldown := 0.0
+
+## How many times the output has been re-opened this session. Surfaced by `describe_state` rather
+## than kept private, because a number that is not zero is the whole answer to a bug report.
+var _output_recoveries := 0
 
 
 func _ready() -> void:
@@ -156,10 +183,17 @@ func stop_music() -> void:
 	_music[_music_active].stop()
 
 
+func _process(delta: float) -> void:
+	# Before the fade and outside its early-out, deliberately. The watchdog has to run on every
+	# frame of a session that is *not* changing tracks, which is almost all of them.
+	_step_output_watchdog(delta, AudioServer.get_time_since_last_mix())
+	_step_fade(delta)
+
+
 ## Both music players are driven every frame rather than by a Tween, because a fade that is
 ## interrupted by another fade has to pick up from wherever it got to. A tween would have to
 ## be killed and replaced, and the killed one occasionally lands its final value afterwards.
-func _process(delta: float) -> void:
+func _step_fade(delta: float) -> void:
 	if _fade >= 1.0:
 		return
 	_fade = minf(_fade + delta / MUSIC_FADE_SECONDS, 1.0)
@@ -170,6 +204,60 @@ func _process(delta: float) -> void:
 		player.volume_db = linear_to_db(gain) if gain > 0.001 else SILENT_DB
 		if gain <= 0.001 and player.playing and index != _music_active:
 			player.stop()
+
+
+## Notices that the audio output has stopped running, says so, and asks for it back.
+##
+## **This is a mitigation for a cause that has not been confirmed, and it is written to be honest
+## about that.** The report it exists for was: on Windows, mid-run, the music and every sound effect
+## went at the same moment, nothing was printed, and nothing about the run explained it. Everything
+## above this line was measured and cleared — the crossfade, the loop across its wrap, the sixteen
+## voice pool under a minute of combat-rate playback, and the bus layout the two buses send through.
+## What is left is below all of it: the AudioServer's own output. A driver that has lost its device
+## takes the music and the sound effects together, needs no trigger, and on Windows can do it
+## without raising anything the game would see, which is the whole of the shape reported.
+##
+## So the check is on the one thing that is true of a dead output and false of everything else: the
+## mixer has stopped running. That is a fact, not an inference, and it is measured rather than
+## guessed at — `get_time_since_last_mix` climbing past a second means no audio has been produced
+## for a second, whatever the reason.
+##
+## **The log line is the deliverable; the recovery is a bonus.** Re-selecting the output device is
+## the documented way to make a driver re-open it, and if the failure is a lost device it is the fix.
+## If it is something else, re-selecting the device it already has costs a glitch nobody will hear
+## and the warning still lands — which turns "it went quiet and there was nothing in the console"
+## into a timestamped line naming the cause. That is worth more than the retry.
+##
+## Skipped on the web, where the mixer runs on the same thread as the game: there a long frame really
+## can stall it, so the one platform where this could produce a false positive is the one platform
+## where the failure it looks for cannot happen.
+func _step_output_watchdog(delta: float, seconds_since_mix: float) -> void:
+	if OS.has_feature("web"):
+		return
+
+	_output_recovery_cooldown = maxf(_output_recovery_cooldown - delta, 0.0)
+	if seconds_since_mix < OUTPUT_STALL_SECONDS:
+		_output_stalled_for = 0.0
+		return
+
+	# Counted as well as compared, so a single sampling artefact cannot trip it: the mixer has to
+	# have been missing for a second *and* have been observed missing across a second of frames.
+	_output_stalled_for += delta
+	if _output_stalled_for < OUTPUT_STALL_SECONDS or _output_recovery_cooldown > 0.0:
+		return
+
+	_output_stalled_for = 0.0
+	_output_recovery_cooldown = OUTPUT_RECOVERY_COOLDOWN
+	_output_recoveries += 1
+	push_warning(
+		("AudioManager: the audio output has not mixed for %.1fs (attempt %d). Re-opening '%s'. "
+		+ "If sound does not come back, the driver has gone and the process needs restarting.")
+		% [seconds_since_mix, _output_recoveries, AudioServer.output_device]
+	)
+	# Assigning the device is what asks the driver to re-open it. Assigned rather than toggled
+	# through another name, because a device list read from a broken driver is not something to
+	# trust, and picking a device the player did not choose is a worse outcome than not recovering.
+	AudioServer.output_device = AudioServer.output_device
 
 
 ## Silences everything. Called on the way out, and it is not merely tidy: a stream that is
@@ -224,6 +312,50 @@ func _drain_mixer() -> void:
 		if since < previous:
 			mixes += 1
 		previous = since
+
+
+## What the manager believes it is doing, for the debug overlay.
+##
+## It exists because "the audio cut out" is a report nobody can act on. Silence has two completely
+## different causes and they need opposite fixes: either this file has stopped asking for sound — a
+## track that ended, a fade that stalled, a `stop_music` nothing followed — or it is still asking and
+## nothing downstream is listening, which is the bus layout, the mixer, or the driver. From the
+## player's chair those are the same event. This line tells them apart on sight: if it reads
+## `data_explore PLAYING 7.2s` while the room is silent, the game is fine and the problem is below
+## it; if it reads `STOPPED`, the problem is here.
+##
+## Reported rather than logged, and polled rather than pushed, for the reason every other row in the
+## overlay is: it changes every frame, and something that only prints when it thinks something is
+## wrong cannot report the case where it does not know.
+func describe_state() -> String:
+	var player := _music[_music_active]
+	var track := String(_music_id) if not _music_id.is_empty() else "none"
+	var voices := 0
+	for sfx: AudioStreamPlayer in _pool:
+		if sfx.playing:
+			voices += 1
+	# `mix` is the one that matters when everything has gone quiet at once: it is milliseconds since
+	# the audio output last ran, so a healthy driver holds it in the tens and a dead one lets it
+	# climb without bound. `recovered` counts what the watchdog has had to do about it.
+	#
+	# `lat` catches the failure `mix` cannot see, and it is a different failure with a different
+	# feel: the driver is still mixing on time, but the audio it has been handed is queued behind
+	# a backlog that keeps growing, so every sound arrives later than the last. Nothing goes quiet
+	# and nothing warns — the shots just drift out of sync with the firing and keep drifting. Two
+	# numbers apart tell it from a healthy output on a high-latency device: it is the *growth* that
+	# is the fault, so a number sitting at 30 ms is fine and the same number climbing is not.
+	var recovered := "" if _output_recoveries == 0 else "  recovered %d" % _output_recoveries
+	return "%s %s %.1fs  fade %.2f  sfx %d/%d  mix %.0fms  lat %.0fms%s" % [
+		track,
+		"PLAYING" if player.playing else "STOPPED",
+		player.get_playback_position(),
+		_fade,
+		voices,
+		_pool.size(),
+		AudioServer.get_time_since_last_mix() * 1000.0,
+		AudioServer.get_output_latency() * 1000.0,
+		recovered,
+	]
 
 
 func set_bus_volume_db(bus: StringName, volume_db: float) -> void:

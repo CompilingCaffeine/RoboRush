@@ -18,6 +18,11 @@ script = ExtResource("2_entry")
 id = &"data_center"
 config_path = "res://data/floors/floor_3_data_center.tres"
 
+[sub_resource type="Resource" id="Resource_floor_4"]
+script = ExtResource("2_entry")
+id = &"cloud_ops"
+config_path = "res://data/floors/floor_4_cloud_ops.tres"
+
 [resource]
 script = ExtResource("1_run")
 id = &"main_campaign"
@@ -26,7 +31,13 @@ display_name = "RoboRush"
 ; 3 Cascade Failure now draws from three, so the same number no longer reproduces the same run —
 ; which is the whole contract this field carries. In-flight checkpoints are rejected on the
 ; mismatch rather than resumed into a run they no longer describe.
-content_version = 2
-floors = Array[FloorEntry]([SubResource("Resource_floor_1"), SubResource("Resource_floor_2"), SubResource("Resource_floor_3")])
+;
+; And to 3 for Cloud Operations, which is a larger change to what a seed means than the last one: a
+; run is four floors instead of three, so victory has moved, and every floor now draws its boss from
+; four rather than three.
+content_version = 3
+floors = Array[FloorEntry]([SubResource("Resource_floor_1"), SubResource("Resource_floor_2"), SubResource("Resource_floor_3"), SubResource("Resource_floor_4")])
 target_floor_count = 6
+; Still false: four of six authored, and an incomplete campaign should play and report what is
+; missing rather than refuse to start. Flipping this is the last act of the campaign, not an early one.
 require_complete = false

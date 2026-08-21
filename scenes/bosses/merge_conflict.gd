@@ -456,8 +456,13 @@ func _begin_charge() -> void:
 	_charge_hit_player = false
 
 
-## The charge is the only attack that damages by contact, and it hits once. A charge that
-## ground the player down for every frame of overlap would be unreadable.
+## The charge is the only *attack* that damages by contact, and it hits once. A charge that ground
+## the player down for every frame of overlap would be unreadable.
+##
+## Distinct from the body simply hurting to stand in, which every part now does — see
+## `BossPart._step_contact_damage`. That is a fact about the boss; this is a thing it did, with a
+## wider radius and its own shove along the line it was travelling. The player's own damage window
+## is longer than either cooldown, so a charge that connects is never billed twice.
 func _step_charge(delta: float) -> void:
 	if _charge_left <= 0.0:
 		return

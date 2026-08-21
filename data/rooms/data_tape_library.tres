@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="1_template"]
+
+[resource]
+script = ExtResource("1_template")
+id = &"data_tape_library"
+type = 1
+obstacles = Array[Rect2i]([])
+enemy_spawns = Array[Vector2i]([Vector2i(1, 1), Vector2i(24, 1), Vector2i(1, 10), Vector2i(24, 10), Vector2i(13, 6)])
+; The duct idea taken as far as it goes: a lattice of shuttle rails with no cover anywhere in it.
+; Everything in this room can see everything else from the moment the door shuts, and almost none of
+; it can go straight at anything. It is the most restrictive floor on the level and the most open
+; sightline, at the same time, which is a combination the game has not had a room for.
+;
+; It is also the room the floor's two enemies were waiting for. The Load Balancer is answered by
+; getting inside about a hundred pixels and going round it, and here the rails decide which way
+; round is even available — the fight becomes a question about the geometry rather than about the
+; angle. The Stale Replica walks the route the player walked, and a route through a lattice is a
+; route that comes back at them along a line they picked themselves. Neither needed a line of code
+; for either; both fall out of the ground having a shape.
+;
+; No obstacles at all, deliberately, and for `data_grid_floor`'s reason turned inside out: that room
+; removes cover so the only question is where you stand, and this one removes cover so the only
+; question is how you get there.
+ducts = Array[Rect2i]([Rect2i(3, 2, 5, 1), Rect2i(10, 2, 6, 1), Rect2i(18, 2, 5, 1), Rect2i(3, 9, 5, 1), Rect2i(10, 9, 6, 1), Rect2i(18, 9, 5, 1), Rect2i(7, 4, 1, 4), Rect2i(18, 4, 1, 4), Rect2i(11, 4, 1, 2), Rect2i(14, 6, 1, 2)])
+thermal_zones = Array[Rect2i]([Rect2i(8, 4, 3, 4), Rect2i(15, 4, 3, 4)])
+reward_spawn = Vector2i(13, 6)
+difficulty = 3
+floor_tags = Array[StringName]([&"data_center"])
+min_floor = 3
+max_floor = 3

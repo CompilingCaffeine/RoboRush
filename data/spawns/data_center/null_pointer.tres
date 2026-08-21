@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="EnemySpawn" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/enemy_spawn.gd" id="1_spawn"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/null_pointer.tscn" id="2_scene"]
+
+[resource]
+script = ExtResource("1_spawn")
+scene = ExtResource("2_scene")
+; See `ticket_bot.tres` beside this one. Slightly up on the shared 1.0, for the Firewall Node's
+; reason: it marks the ground under the player and charges them for still being on it, which is this
+; floor's sentence with a different subject.
+weight = 1.2
+min_difficulty = 2

@@ -69,7 +69,7 @@ func _test_the_shipped_campaign_is_playable() -> void:
 		],
 	)
 	check(
-		_mentions(report.warnings, "floors 4-6 are missing"),
+		_mentions(report.warnings, "floors 5-6 are missing"),
 		"which names the floors still to be written",
 	)
 
@@ -308,7 +308,15 @@ func _test_the_validator_counts_the_reward_budget() -> void:
 			"budget_%d" % index,
 			StringName("budget_%d" % index),
 			index + 1,
-			func(floor_config: FloorConfig) -> void: floor_config.item_pool = starved,
+			# The boss pool is trimmed to two here as well as the item pool being starved, because
+			# the second half of this test is about a *boss* shortfall and it used to get one for
+			# free: these floors are Help Desk copies, and the Help Desk shipped with exactly two
+			# bosses. It has four now, four floors with four distinct bosses is legal, and the
+			# check below stopped describing anything. A test about a rule should build the
+			# condition the rule is for rather than inherit it from content that can move.
+			func(floor_config: FloorConfig) -> void:
+				floor_config.item_pool = starved
+				floor_config.boss_pool = floor_config.boss_pool.slice(0, 2),
 		)
 		if path.is_empty():
 			return
@@ -347,18 +355,18 @@ func _test_the_validator_counts_the_reward_budget() -> void:
 		padded_entries.append([StringName("padded_%d" % index), path])
 
 	# Asserted against the capacity rule alone rather than against overall validity. These floors
-	# are Help Desk copies standing in for floors 3 and 4, whose templates stop at floor 2 and
-	# whose two bosses cannot cover four floors — real errors, reported correctly, and nothing to
-	# do with whether a repeatable item fills an offer.
+	# are Help Desk copies standing in for floors 3 and 4, whose templates stop at floor 2 — a real
+	# error, reported correctly, and nothing to do with whether a repeatable item fills an offer.
 	var padded := CampaignValidator.validate(_campaign(padded_entries))
 	check(
 		not _mentions(padded.errors, "come up empty")
 			and _mentions(padded.warnings, "repeatable items"),
 		"but one repeatable item turns the shortfall into a warning:\n%s" % padded.describe(),
 	)
-	# The other thing four floors and two bosses means. The campaign policy is one distinct boss
-	# per floor, so this is refused rather than noted: `_draw_boss_encounter` no longer falls back
-	# to the full pool, which makes an under-supplied campaign a run that breaks at floor 3.
+	# The other thing four floors and two bosses means, from the `starved` set above, whose pools
+	# were trimmed to two for exactly this. The campaign policy is one distinct boss per floor, so
+	# this is refused rather than noted: `_draw_boss_encounter` no longer falls back to the full
+	# pool, which makes an under-supplied campaign a run that breaks at floor 3.
 	check(
 		_mentions(report.errors, "distinct bosses"),
 		"and four floors sharing two bosses cannot each be given one of their own",

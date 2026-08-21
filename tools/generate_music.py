@@ -477,6 +477,94 @@ def data_boss_track(noise: random.Random) -> list[float]:
     ], 32, beat)
 
 
+def cloud_explore_track(noise: random.Random) -> list[float]:
+    """Cloud Operations' room-clearing loop, and the first track in the game built out of an
+    idea rather than a mood.
+
+    The floor's mechanic is that a place can also be a different place, so the melody is a call
+    and an answer: a three-note figure low, then the *same figure* an octave up, then a tail
+    that belongs to neither. Nothing is transposed for colour — it is the identical shape in a
+    different register, which is what a migration is. Played once it sounds like a sequence.
+    Played round the loop it stops being obvious which of the two is the original, which is the
+    point.
+
+    Forty-eight beats rather than the thirty-two every track before it runs to. The README has
+    listed short music as a known limitation since milestone 6 and the only cost of fixing it is
+    writing more bars, so this floor writes more bars. At 126 it comes out near twenty-three
+    seconds, the longest loop in the game.
+
+    A minor with a raised sixth — F# instead of F. One note, and it is what stops the hall
+    sounding like a crypt: the sixth is the interval that decides whether a minor key is sad or
+    merely spacious, and this floor is enormous rather than sad.
+    """
+    beat = 60.0 / 126.0
+
+    # The call, its answer an octave up, and a tail that resolves neither. Four of these.
+    call = [("A4", 1), ("C5", 1), ("E5", 2)]
+    answer = [("A5", 1), ("C6", 1), ("E6", 2)]
+    lead = (
+        call + answer + [("G5", 2), ("E5", 2)]
+        + call + answer + [("F#5", 2), ("D5", 2)]
+        + call + answer + [("E5", 2), ("C5", 2)]
+        + call + answer + [("D5", 2), ("A4", 2)]
+    )
+    # Two bars a chord, held. The ground does not move; only what is standing on it does.
+    bass = []
+    for root in ("A2", "A2", "G2", "G2", "A2", "A2", "F#2", "F#2", "A2", "A2", "E2", "E2"):
+        bass.append((root, 4))
+    # An eighth-note pulse rather than the Data Center's sixteenths: this hall's air moves
+    # overhead and slowly, and the floor before it already owns the sound of fans at full tilt.
+    arp = [("A5", 0.5), ("E5", 0.5)] * 48
+    drums = "k...h...k...h..." * 12
+
+    return mix([
+        render_melodic(lead, beat, lead_voice),
+        render_melodic(bass, beat, bass_voice),
+        render_melodic(arp, beat, arp_voice),
+        render_drums(drums, beat, noise),
+    ], 48, beat)
+
+
+def cloud_boss_track(noise: random.Random) -> list[float]:
+    """Failover. The explore loop's call and answer, with the answer arriving first.
+
+    Same two registers and very nearly the same figure, reordered so the high line leads and the
+    low one catches up half a beat late. That is the fight: the boss commits to being somewhere
+    else and the player is trying to get there before it does. A listener does not have to know
+    any of that — what it sounds like is a track permanently a fraction ahead of itself, which is
+    the useful part.
+
+    Also forty-eight beats, at 168. It ends on the tonic under a held fifth rather than climbing
+    like the Data Center's boss does, because this fight is not a runaway; it is the same event
+    three times, and the loop should be able to come round without having escalated.
+    """
+    beat = 60.0 / 168.0
+
+    # The answer, then the call, then the gap the player is running through.
+    ahead = [("A5", 0.5), ("C6", 0.5), ("E6", 1)]
+    behind = [("A4", 0.5), ("C5", 0.5), ("E5", 1)]
+    lead = (
+        ahead + behind + [("G5", 1), ("E5", 1)]
+        + ahead + behind + [("F#5", 1), ("D5", 1)]
+        + ahead + behind + [("E6", 1), ("B5", 1)]
+        + ahead + behind + [("A5", 2)]
+    ) * 2
+    bass = [
+        ("A2", 0.5), ("A2", 0.5), ("E3", 0.5), ("A2", 0.5),
+        ("G2", 0.5), ("G2", 0.5), ("D3", 0.5), ("G2", 0.5),
+        ("F#2", 0.5), ("F#2", 0.5), ("C#3", 0.5), ("F#2", 0.5),
+        ("A2", 0.5), ("A2", 0.5), ("E3", 0.5), ("E3", 0.5),
+    ] * 6
+    drums = "k.s.h.s.k.s.h.hh" * 12
+
+    return mix([
+        render_melodic(lead, beat, lead_voice),
+        render_melodic(bass, beat, bass_voice),
+        render_melodic([("A6", 0.25), ("E6", 0.25)] * 96, beat, arp_voice),
+        render_drums(drums, beat, noise),
+    ], 48, beat)
+
+
 TRACKS = {
     "audio/music/menu.wav": menu_track,
     "audio/music/explore.wav": explore_track,
@@ -485,6 +573,8 @@ TRACKS = {
     "audio/music/dev_boss.wav": dev_boss_track,
     "audio/music/data_explore.wav": data_explore_track,
     "audio/music/data_boss.wav": data_boss_track,
+    "audio/music/cloud_explore.wav": cloud_explore_track,
+    "audio/music/cloud_boss.wav": cloud_boss_track,
 }
 
 

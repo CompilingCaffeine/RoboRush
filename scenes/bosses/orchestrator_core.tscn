@@ -1,0 +1,65 @@
+[gd_scene load_steps=6 format=3]
+
+; The Orchestrator's one body. The same `boss_part.gd` as all three bosses before it — a part is a
+; damage receiver that forwards its hits to the controller, and that job does not change between
+; fights — with its own texture and its own hitbox, which do.
+;
+; A fourth scene rather than a `configure(texture, radius)` call on a shared one, for the reason
+; `cascade_node.tscn` gives: the CircleShape2D below is a sub-resource, and sub-resources are shared
+; between every instance a PackedScene produces. Resizing one at runtime would quietly resize the
+; other three bosses' hitboxes with it.
+
+[ext_resource type="Script" path="res://scenes/bosses/boss_part.gd" id="1_part"]
+[ext_resource type="Texture2D" path="res://art/bosses/orchestrator.png" id="2_tex"]
+[ext_resource type="Script" path="res://scripts/components/health_component.gd" id="3_health"]
+[ext_resource type="Script" path="res://scripts/components/hurt_flash.gd" id="4_flash"]
+[ext_resource type="Script" path="res://scripts/components/status_effect_controller.gd" id="99_status"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_orchestrator"]
+; Ten, matched to the 24x24 sprite's inner core rather than to its outer frame. The frame is a mount
+; and the core is the machine, and a hitbox covering the mount would let the player hit the empty gap
+; between them — which is the one part of this sprite that is deliberately drawn as *not there*.
+;
+; There is only ever one of these on screen and it does not move except by failing over, so unlike
+; Runtime Error's body it is not meant to be hard to hit. This fight is not about landing the shot.
+radius = 10.0
+
+[node name="OrchestratorCore" type="CharacterBody2D"]
+collision_layer = 4
+collision_mask = 1
+motion_mode = 1
+script = ExtResource("1_part")
+; Matched to the collision circle. Contact damage exists on every boss body since the beta reported
+; that standing inside one was free; here it also has a job in the fight, because the plate the boss
+; is standing on is a place the player sometimes has to be.
+contact_damage = 1.0
+contact_radius = 10.0
+contact_interval = 1.0
+
+[node name="Shape" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_orchestrator")
+
+[node name="Sprite" type="Sprite2D" parent="."]
+unique_name_in_owner = true
+texture = ExtResource("2_tex")
+
+[node name="Health" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("3_health")
+invulnerability_seconds = 0.0
+
+[node name="HurtFlash" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("4_flash")
+target_path = NodePath("../Sprite")
+
+[node name="Status" type="Node2D" parent="."]
+unique_name_in_owner = true
+; Resistant at the same 0.65 the other three bosses use. What a status does here is unusually
+; limited and that is worth knowing rather than fixing: this body does not walk anywhere, so chill
+; and freeze have almost nothing to slow. Burn is not resisted, for the reason it is not on the
+; others — a part forwards every hit to the controller, so damage over time fills the pool exactly
+; as a rivet does, and filling the pool is how the player forces the fight forward.
+script = ExtResource("99_status")
+indicator_radius = 14.0
+control_resistance = 0.65

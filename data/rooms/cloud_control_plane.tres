@@ -1,0 +1,52 @@
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="1_template"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/firewall_node.tscn" id="2_forced"]
+[ext_resource type="Script" path="res://scripts/resources/migration_link.gd" id="90_link"]
+
+[sub_resource type="Resource" id="Resource_link_0"]
+script = ExtResource("90_link")
+a = Rect2i(5, 5, 2, 2)
+b = Rect2i(12, 5, 2, 2)
+
+[sub_resource type="Resource" id="Resource_link_1"]
+script = ExtResource("90_link")
+a = Rect2i(14, 9, 2, 2)
+b = Rect2i(21, 9, 2, 2)
+
+[resource]
+script = ExtResource("1_template")
+id = &"cloud_control_plane"
+type = 1
+; The room the floor is built to end on. Three regions, two links, and no way to walk
+; between any of them.
+;
+; The links are deliberately not interchangeable: one joins left to middle and the other
+; joins middle to right, so getting from the left region to the right is two migrations
+; through a middle region with a Firewall Node standing in it. There is no route that
+; avoids the fight in the centre, and no way to fight it from either side, because a duct
+; passes shots but the player has to *be* somewhere to shoot from.
+;
+; Difficulty 4, which on this floor means the single furthest combat room from the start —
+; about a quarter of runs. That is deliberate rarity and it is also the number Floor 3's
+; generator bug used to make zero: `_capped_by_distance` measured its maximum over every
+; room including the boss's dead end, so no combat room ever scored a full one and the top
+; of every floor's ladder was unreachable. This room is only authorable because that is
+; fixed.
+obstacles = Array[Rect2i]([])
+; The middle region's point comes first so that it is the forced one — `forced_enemies` pairs
+; by index, so the order here is load-bearing rather than cosmetic. Its Firewall Node does not
+; move, which is what makes the centre something to be got past rather than something that
+; follows. The other four are weighted rolls in the outer regions.
+enemy_spawns = Array[Vector2i]([Vector2i(12, 2), Vector2i(4, 2), Vector2i(4, 9), Vector2i(21, 2), Vector2i(21, 6)])
+forced_enemies = Array[PackedScene]([ExtResource("2_forced")])
+; Single-tile ducts at x8 and x17, full height. Neither touches a doorway: the top and
+; bottom doors open into the middle region and the side doors into the outer two, so
+; whichever way the floor attaches this room, the player arrives somewhere with a pad.
+ducts = Array[Rect2i]([Rect2i(8, 0, 1, 12), Rect2i(17, 0, 1, 12)])
+pad_links = Array[MigrationLink]([SubResource("Resource_link_0"), SubResource("Resource_link_1")])
+reward_spawn = Vector2i(12, 10)
+difficulty = 4
+floor_tags = Array[StringName]([&"cloud_ops"])
+min_floor = 4
+max_floor = 4

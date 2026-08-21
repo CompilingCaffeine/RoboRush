@@ -1,0 +1,28 @@
+[gd_scene load_steps=4 format=3]
+
+; A duct is a wall block on the duct layer with its own sheet. See `cable_duct.gd` for why the
+; texture is authored here and never taken from the floor's theme.
+
+[ext_resource type="Script" path="res://scenes/rooms/cable_duct.gd" id="1_duct"]
+[ext_resource type="Texture2D" path="res://art/environments/cable_duct.png" id="2_duct_tex"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_duct"]
+size = Vector2(16, 16)
+
+[node name="CableDuct" type="StaticBody2D"]
+; Layer 7 ("duct"), which is `Teams.LAYER_DUCT`. Bodies mask it through `Teams.body_mask`;
+; projectiles and beams trace against the world layer alone and therefore cross it.
+collision_layer = 64
+collision_mask = 0
+script = ExtResource("1_duct")
+
+[node name="Sprite" type="Sprite2D" parent="."]
+texture_repeat = 2
+centered = false
+texture = ExtResource("2_duct_tex")
+region_enabled = true
+region_rect = Rect2(0, 0, 16, 16)
+
+[node name="Shape" type="CollisionShape2D" parent="."]
+position = Vector2(8, 8)
+shape = SubResource("RectangleShape2D_duct")
