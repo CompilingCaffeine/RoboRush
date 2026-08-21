@@ -3,11 +3,13 @@ extends Node
 ##
 ##     godot --headless --fixed-fps 60 res://tests/test_runner.tscn
 ##
-## `--fixed-fps` is not decoration. The suites assert against real physics frames, and the
-## engine paces those frames in real time, so the run spends essentially all of its wall clock
-## asleep: 7137 frames at 60Hz is 119 seconds during which nothing computes. The flag pins the
-## delta at 1/60 — every frame-counting assertion keeps exactly the meaning it had — and drops
-## the pacing. The same 1496 checks take under two seconds with it and two minutes without.
+## `--fixed-fps` is required, not decoration. The suites assert against real physics frames, and
+## the engine paces those frames in real time, so the run spends essentially all of its wall clock
+## asleep — thousands of frames at 60Hz, during which nothing computes. The flag pins the delta at
+## 1/60 — every frame-counting assertion keeps exactly the meaning it had — and drops the pacing.
+## The same 3278 checks take under sixteen seconds with it, and without it never finish at all:
+## `SUITE_TIMEOUT_SECONDS` trips partway through and reports a healthy suite as a hang. That is
+## why omitting the flag is a broken run rather than a slow one, and why the watchdog says so.
 ##
 ## Exits 0 only if at least one suite ran, every suite ran at least one check, and no
 ## check failed. The "at least one check" rule is deliberate: a suite that crashes
@@ -50,6 +52,13 @@ var _finished := false
 var _running_suite := ""
 var _suite_deadline := 0
 
+## When the run started, in milliseconds and in physics frames. Members rather than locals in
+## `_ready` because the watchdog needs them: comparing the two says whether the engine is sleeping
+## between frames, which is the difference between a suite that is stuck and a suite that is merely
+## being paced in real time. See `_is_real_time_paced`.
+var _start_msec := 0
+var _start_frames := 0
+
 
 func _ready() -> void:
 	# The watchdog has to tick while the tree is paused. GameManager pauses on victory and on
@@ -72,7 +81,8 @@ func _ready() -> void:
 	SaveManager.best = BestRunStats.new()
 	SaveManager.apply_settings()
 
-	var start := Time.get_ticks_msec()
+	_start_msec = Time.get_ticks_msec()
+	_start_frames = Engine.get_physics_frames()
 	var suites: Array[TestCase] = []
 	var failures: PackedStringArray = []
 
@@ -129,18 +139,19 @@ func _ready() -> void:
 			+ "was neither added to a tree nor freed."
 		)
 
-	var elapsed := (Time.get_ticks_msec() - start) / 1000.0
+	var elapsed := (Time.get_ticks_msec() - _start_msec) / 1000.0
+	var frames := Engine.get_physics_frames() - _start_frames
 	_finished = true
 	if failures.is_empty():
 		print("PASS  %d suites, %d checks in %.1fs" % [suites.size(), total_checks, elapsed])
-		_warn_if_paced(elapsed)
+		_warn_if_paced(elapsed, frames)
 		get_tree().quit(0)
 		return
 
 	printerr("FAIL  %d problems across %d checks:" % [failures.size(), total_checks])
 	for failure: String in failures:
 		printerr("  - %s" % failure)
-	_warn_if_paced(elapsed)
+	_warn_if_paced(elapsed, frames)
 	get_tree().quit(1)
 
 
@@ -154,6 +165,16 @@ func _process(_delta: float) -> void:
 		% [_running_suite, SUITE_TIMEOUT_SECONDS]
 		+ "usually awaiting a signal that no longer fires."
 	)
+	# The other reason, and the more likely one when the whole suite is healthy: the run was never
+	# given `--fixed-fps`, so it is being paced in real time and a suite that computes for two
+	# seconds sits here for two minutes. Saying only "it stopped making progress" sends the reader
+	# looking for a hung await in a suite that does not have one — which is exactly the wrong
+	# place, and there is no way to tell from the message that it is.
+	if _is_real_time_paced():
+		printerr(
+			"      This run is being paced in real time, which is on its own enough to cause "
+			+ "the above: rerun with `--fixed-fps 60` before believing the suite is stuck."
+		)
 	get_tree().quit(1)
 
 
@@ -167,13 +188,49 @@ func _orphan_count() -> int:
 ## The usage line above is only useful to somebody reading this file. This is for everybody
 ## else: the flag is worth two orders of magnitude, and the run most in need of being told is
 ## the one that has just spent two minutes not being told.
-func _warn_if_paced(elapsed: float) -> void:
-	if elapsed < 10.0:
+##
+## What it must not do is say it to a run that already passed the flag. It did, for as long as it
+## decided from the wall clock alone — the suite grew past the ten-second threshold and every
+## correct run started being told to fix itself. That is worse than saying nothing, because the
+## reader who follows the advice, sees the time not move, and concludes the flag does nothing is
+## the reader who then runs without it and gets a passing suite reported as a hang.
+##
+## So it measures the claim rather than inferring it. `--fixed-fps` stops the engine sleeping
+## between frames, and nothing else here does: at real-time pacing the run simulates one physics
+## frame per tick of the clock, and with the flag it simulates as many as the CPU can compute.
+## Comparing frames against seconds tells those apart directly, whatever the suite's size or the
+## host's speed, neither of which this function should have an opinion about.
+func _warn_if_paced(elapsed: float, frames: int) -> void:
+	if elapsed < 10.0 or not _is_real_time_paced():
 		return
 	print(
-		"      (most of those %.0fs was real-time pacing, not work — rerun with " % elapsed
-		+ "`--fixed-fps 60` for the same checks in under two seconds.)"
+		"      (most of those %.0fs was real-time pacing, not work: %d physics frames at %.0f/s. "
+		% [elapsed, frames, float(frames) / maxf(elapsed, 0.001)]
+		+ "Rerun with `--fixed-fps 60` to spend the time computing instead of sleeping.)"
 	)
+
+
+## Whether the engine is sleeping between frames — that is, whether this run was started without
+## `--fixed-fps`. True is the slow, default case.
+##
+## Measured rather than read off the command line, because `OS.get_cmdline_args()` does not report
+## engine flags: `--headless` and `--fixed-fps` are both consumed before a script can see them, so
+## asking whether the flag was passed is not a question this process can answer. Asking what the
+## flag *does* is. It stops the engine waiting out the remainder of each frame, and nothing else
+## here does, so a paced run advances one physics frame per tick of the wall clock and an unpaced
+## one advances as fast as the CPU manages — a ratio, not a duration, which is what keeps this
+## independent of how large the suite has grown and how quick the host is.
+func _is_real_time_paced() -> bool:
+	var elapsed := (Time.get_ticks_msec() - _start_msec) / 1000.0
+	var frames := Engine.get_physics_frames() - _start_frames
+	if elapsed < 1.0 or frames <= 0:
+		return false  # Too early to tell, and nothing is worth saying about a run this short.
+
+	# Well clear of 1.0, so a host slow enough to miss its own tick rate is not accused of pacing,
+	# and far below the hundredfold the flag actually buys.
+	const PACED_RATIO := 1.5
+
+	return float(frames) / elapsed <= float(Engine.physics_ticks_per_second) * PACED_RATIO
 
 
 ## Catches the run being ended by something other than this function.

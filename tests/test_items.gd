@@ -591,7 +591,7 @@ func _test_the_worst_legal_build_is_bounded() -> void:
 	check(
 		rate < ceiling,
 		"and %.2fx fire rate, under the same ceiling (raw would be %.1fx)" % [
-			rate, ceiling, inventory.get_raw_fire_rate_multiplier(),
+			rate, inventory.get_raw_fire_rate_multiplier(),
 		],
 	)
 

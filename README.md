@@ -39,8 +39,15 @@ title screen; the first launch shows the controls card before it.
 Run the tests (exits non-zero on failure):
 
 ```bash
-godot --headless res://tests/test_runner.tscn
+godot --headless --fixed-fps 60 res://tests/test_runner.tscn
 ```
+
+`--fixed-fps 60` is required, not an optimisation. The suites assert against real physics
+frames and the engine paces those in real time, so without it the run spends almost all its
+wall clock asleep — and long enough that the runner's own sixty-second per-suite budget trips,
+reporting a passing suite as a hang and abandoning every suite after it. With the flag the
+delta is pinned at 1/60, every frame-counting assertion keeps its meaning, and the full run is
+about fifteen seconds. `tools/ci/build_web.sh` passes it for the same reason.
 
 If assets show as missing after a fresh clone, import them once:
 
