@@ -77,12 +77,35 @@ extends Resource
 
 ## Seconds a dropped zone takes to fill before it vents. The player's whole warning, and it is the
 ## same warning the floor has been giving them for nine rooms: a patch of ground going from teal
-## to red. See `ThermalZone.spawn_vent`.
+## to violet. See `ThermalZone.spawn_vent`.
 @export var vent_seconds: float = 1.6
 
 ## The footprint of one vent, in tiles. Read against `Room.TILE_SIZE`, so a vent lines up with the
-## floor it is painted on exactly as a room's own zones do.
+## floor it is painted on exactly as a room's own zones do. The same footprint for all three vent
+## sources below: three patches of ground that mean the same thing should be the same size.
 @export var vent_tiles := Vector2i(3, 3)
+
+## Seconds between the vents the rack aims at the player, wherever they are standing.
+##
+## **Not divided by load**, unlike `vent_interval`, and that is the whole of how this stays fair.
+## The rack's own vents concentrate as it fails; these are a flat, unescalating pressure underneath
+## them, so the last phase is the same fight as the first with fewer bodies in it rather than a
+## fight with four times as much aimed heat. `CascadeFailure._step_aimed_vent` is where that is
+## enforced, and `tests/test_cascade_failure.gd` measures the total rate at both extremes.
+##
+## Three seconds against `vent_seconds`'s 1.6 means the ground under the player is cold roughly
+## half the time — enough that standing still is never a strategy and moving is never frantic.
+@export var aimed_vent_interval: float = 3.0
+
+## Seconds between the vents it drops at a random point inside the arena. Not divided by load, for
+## the reason above.
+##
+## The half of the change that the aimed vent cannot do on its own. A boss that only ever heated
+## the ring and the player's feet leaves the corners of a 416x192 room permanently cold, and a
+## permanently cold corner on the floor about not standing still is a place to stand: walk out
+## wide, wait for the ring to come to you, shoot it from safety. Scattering breaks that without
+## aiming at anybody — it is weather, and the player reads it the same way they read the rest.
+@export var scatter_vent_interval: float = 2.4
 
 @export_group("Load packets")
 
@@ -109,6 +132,6 @@ extends Resource
 @export var line_color: Color = Color(0.42, 0.52, 0.60, 0.55)
 
 ## The packet itself. Near-white, like every other thing on this floor that is not heat: the
-## teal-to-red ramp belongs to the vents, and a hazard borrowing a colour off that ramp would be
+## teal-to-violet ramp belongs to the vents, and a hazard borrowing a colour off that ramp would be
 ## claiming to be something the player already knows how to read.
 @export var packet_color: Color = Color(0.94, 0.97, 1.0, 0.95)

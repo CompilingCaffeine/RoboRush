@@ -25,7 +25,7 @@ var _time := 0.0
 func _ready() -> void:
 	add_to_group(Teams.GROUP_ENEMY)
 	collision_layer = Teams.body_layer(Teams.Id.ENEMY)
-	collision_mask = Teams.LAYER_WORLD
+	collision_mask = Teams.body_mask()
 	_health.damaged.connect(_on_damaged)
 	_health.died.connect(_on_died)
 	HostileRegistry.register(self, Teams.Id.ENEMY, _health)

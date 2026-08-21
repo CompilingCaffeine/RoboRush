@@ -59,7 +59,7 @@ PALETTE = {
     "Z": (0x25, 0x2A, 0x3E, 255),  # dev floor grid
     "t": (0x34, 0x3B, 0x56, 255),  # dev floor speck
     # --- The Data Center. Cold steel, and deliberately narrow: this floor's throughput zones
-    # --- paint themselves teal when cold and red when hot (see ThermalZone), and a floor that
+    # --- paint themselves teal when cold and violet when hot (see ThermalZone), and a floor that
     # --- carried either colour as decoration would make the one gradient the player's survival
     # --- depends on reading into just another marking. Same call the Development floor's hazard
     # --- tape makes about amber, one floor later and for the same reason.
@@ -355,7 +355,7 @@ RECURSION = [
 # --- sprite would be a plate pointing the wrong way for most of the fight.
 # ---
 # --- Data Center chassis greys throughout, with the cold status light for the band. No
-# --- teal and no red: this floor's throughput zones own that gradient and an enemy glowing
+# --- teal and no violet: this floor's throughput zones own that gradient and an enemy glowing
 # --- somewhere along it would be a second thing on screen claiming to mean heat.
 LOAD_BALANCER = [
     "................",
@@ -1819,6 +1819,49 @@ DATA_FLOOR_LAYOUT = [
 ]
 
 
+def cable_duct_tile() -> list[str]:
+    """The 16x16 tile a `CableDuct` repeats: a cable tray, knee high.
+
+    One tile rather than a 4x4 sheet, and unthemed rather than taken from the floor's wall sheet.
+    Both are the same decision. A duct blocks the chassis and not the shot, which is a rule the
+    player has to read off the thing itself in the half second before they try to drive over it —
+    and a duct that borrowed the wall texture would be a wall that bullets go through, which is the
+    worst possible thing for a piece of level geometry to look like.
+
+    So it is drawn to be unlike the three things it will always be seen beside, and each in a
+    different register, because on this floor a single register is not enough to carry a difference:
+
+    * **The floor** is dark and busy. The duct is the lightest solid value on the level, and flat.
+    * **The wall** is a grid of boxes — rack bays, blanking plates, grilles. The duct has one
+      unbroken face with a lit rail along its top edge, which is what says raised rather than
+      recessed. A hole in the floor would be somewhere a shot also stops.
+    * **A throughput zone** is horizontal louvre bars in teal-to-violet (see `ThermalZone`). The duct
+      deliberately carries no stripes at all for that reason — it was drawn with cable runs down it
+      first, and beside a zone the two patterns read as the same kind of thing, which is the one
+      mistake that actually matters here. What is left is a bolt line, which is dots rather than
+      lines and steel rather than colour.
+
+    Steel only, per the Data Center palette note. The zones own every warm value on this floor and
+    nothing else may borrow one."""
+    grid = _blank_panel("j")
+    for x in range(TILE):
+        grid[0][x] = "o"          # the seam against the floor
+        grid[1][x] = "H"
+        grid[TILE - 3][x] = "H"
+        grid[TILE - 2][x] = "h"   # the shadow the tray casts, so it sits *on* the floor
+        grid[TILE - 1][x] = "o"
+
+    # The bolt line down the middle of the tray. Dots rather than a run, so nothing here can be
+    # mistaken for a zone's louvres at a glance.
+    for x in range(3, TILE, 8):
+        for y in (7, 8):
+            grid[y][x] = "h"
+            grid[y][x + 1] = "h"
+        grid[7][x] = "o"
+
+    return grid
+
+
 def data_wall_tile() -> list[str]:
     return compose_sheet(DATA_WALL_LAYOUT, data_wall_panel)
 
@@ -1943,6 +1986,7 @@ def main() -> int:
     write_png(os.path.join(root, "art/environments/dev_wall.png"), dev_wall_tile())
     write_png(os.path.join(root, "art/environments/data_wall.png"), data_wall_tile())
     write_png(os.path.join(root, "art/environments/data_floor.png"), data_floor_tile())
+    write_png(os.path.join(root, "art/environments/cable_duct.png"), cable_duct_tile())
     write_png(os.path.join(root, "art/environments/dev_floor.png"), dev_floor_tile())
     return 0
 

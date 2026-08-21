@@ -28,6 +28,13 @@ collision_layer = 4
 collision_mask = 1
 motion_mode = 1
 script = ExtResource("1_part")
+; Matched to the collision circle above. The interval is longer than the other two bosses' —
+; four of these sweep the arena on a turning ring and the last one walks at the player on
+; purpose, so a robot caught by the formation is caught repeatedly rather than once, and the
+; fight already charges for standing still through the ground it is standing on.
+contact_damage = 1.0
+contact_radius = 8.0
+contact_interval = 1.4
 
 [node name="Shape" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_cascade_node")

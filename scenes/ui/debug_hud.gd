@@ -19,6 +19,7 @@ const HINT_COLOR := Color("6d7a8c")
 
 const ROWS: Array[String] = [
 	"FPS",
+	"AUDIO",
 	"POS",
 	"VEL",
 	"SPEED",
@@ -102,6 +103,10 @@ func _refresh() -> void:
 	var player_velocity := _player.velocity
 
 	_set_value("FPS", "%d" % Engine.get_frames_per_second())
+	# Second row deliberately, right under the frame rate: the two questions asked when something
+	# "went wrong and then stopped" are almost always whether the game was keeping up and whether it
+	# still thinks it is playing anything. See `AudioManager.describe_state`.
+	_set_value("AUDIO", AudioManager.describe_state())
 	_set_value("POS", "%.0f, %.0f" % [player_position.x, player_position.y])
 	_set_value("VEL", "%+.0f, %+.0f" % [player_velocity.x, player_velocity.y])
 	_set_value("SPEED", "%.0f px/s" % player_velocity.length())

@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="EnemySpawn" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/enemy_spawn.gd" id="1_spawn"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/firewall_node.tscn" id="2_scene"]
+
+[resource]
+script = ExtResource("1_spawn")
+scene = ExtResource("2_scene")
+; See `ticket_bot.tres` beside this one. Slightly up on the shared 1.0, because an enemy that charges
+; for holding a position is the roster saying what the floor says — and because two of this floor's
+; rooms are now built around one standing somewhere the player has to come to.
+weight = 1.1
+min_difficulty = 2

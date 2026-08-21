@@ -12,6 +12,7 @@ extends TestCase
 
 const FLOOR_CONFIG_PATH := "res://data/floors/floor_1_help_desk.tres"
 const FLOOR_2_CONFIG_PATH := "res://data/floors/floor_2_development.tres"
+const FLOOR_3_CONFIG_PATH := "res://data/floors/floor_3_data_center.tres"
 const CAMPAIGN_PATH := "res://data/runs/main_campaign.tres"
 
 ## Seeds to sweep. Enough that a rare structural bug has to be very rare to survive.
@@ -41,9 +42,15 @@ func run() -> void:
 	_test_generator_refuses_impossible_configs()
 	_test_forced_enemies_never_exceed_their_spawn_points()
 	_test_combat_templates_skew_easier_near_the_start()
+	_test_every_authored_combat_room_reaches_a_player()
+	_test_every_rostered_enemy_reaches_a_player()
+	_test_the_data_centers_own_enemies_turn_up_in_it()
+	_test_no_template_can_strand_a_chassis()
 	_test_each_floor_looks_and_sounds_like_itself()
+	await _test_a_duct_stops_a_chassis_and_not_a_shot()
 	await _test_a_run_never_fights_the_same_boss_twice()
 	await _test_walking_into_a_room_buys_a_moment_of_grace()
+	await _test_the_doorway_window_is_not_shown()
 	await _test_a_room_wears_its_floors_theme()
 	await _test_repair_cells_drop_on_every_third_clear()
 	await _test_boss_defeat_advances_to_the_next_floor_and_only_the_last_wins()
@@ -445,6 +452,332 @@ func _test_combat_templates_skew_easier_near_the_start() -> void:
 	)
 
 
+## Authored content that never ships is the most expensive kind of bug in this project, because it
+## is invisible from both ends: the data is there and correct, the generator throws no error, and
+## the only symptom is a floor that feels thinner than it reads.
+##
+## It had happened on every floor at once. `_capped_by_distance` scales a room's allowance by how far
+## it is from the start as a fraction of the floor's maximum distance — but the maximum was taken
+## over *every* room, and the three special rooms are attached last as dead ends with the boss
+## deliberately claiming the furthest cell. No combat room could ever score a full one, so no combat
+## room could ever draw the top of its floor's ladder. Measured over four hundred floors: the Help
+## Desk's `combat_ring` drew 0.23 times per floor, Development's `dev_server_ring` 0.26, and the Data
+## Center's `data_grid_floor` — the room its whole floor is built to end on — three times in four
+## hundred.
+##
+## So this sweeps the shipped campaign and asks the only question that would have caught it: does
+## every combat template a floor lists actually turn up? A twentieth of a floor is the bar, which is
+## far below where any of them should sit and far above zero.
+func _test_every_authored_combat_room_reaches_a_player() -> void:
+	var campaign := load(CAMPAIGN_PATH) as RunDefinition
+	if not require(campaign, "the campaign loads"):
+		return
+
+	for index: int in campaign.size():
+		var config := campaign.load_floor(index)
+		if config == null:
+			continue
+
+		var draws: Dictionary[StringName, int] = {}
+		for template: RoomTemplate in config.combat_templates:
+			draws[template.id] = 0
+		var floors := 0
+		for offset: int in SEED_COUNT:
+			var layout := FloorGenerator.generate(config, 900000 + offset * 7919)
+			if layout == null:
+				continue
+			floors += 1
+			for room: RoomPlan in layout.rooms:
+				if room.type == RoomTemplate.Type.COMBAT and room.template != null:
+					draws[room.template.id] = draws.get(room.template.id, 0) + 1
+
+		if not require(floors > 0, "floor %d generates" % (index + 1)):
+			continue
+		for id: StringName in draws:
+			check(
+				float(draws[id]) / float(floors) >= 0.05,
+				"'%s' reaches a player on floor %d (%.2f rooms per floor)"
+					% [id, index + 1, float(draws[id]) / float(floors)],
+			)
+
+
+## The same question about the other half of a floor's content. A roster entry is a decision about
+## what this floor is *about*, and one drawn less than once per floor is an enemy most players will
+## finish the level without meeting.
+##
+## Simulated rather than played: the rolls `Room.populate` makes are reproduced exactly — forced
+## entries first, `FloorConfig.pick_enemy` for the rest, one shared encounter stream per floor — which
+## is the whole of what decides a floor's population. Building ten rooms of real enemies a hundred and
+## twenty times over would measure the same numbers and take a minute doing it.
+func _test_every_rostered_enemy_reaches_a_player() -> void:
+	var campaign := load(CAMPAIGN_PATH) as RunDefinition
+	if not require(campaign, "the campaign loads"):
+		return
+
+	for index: int in campaign.size():
+		var config := campaign.load_floor(index)
+		if config == null:
+			continue
+		var tally := _sweep_population(config)
+		if not require(tally["floors"] > 0, "floor %d generates" % (index + 1)):
+			continue
+		var counts: Dictionary[String, int] = tally["counts"]
+		for spawn: EnemySpawn in config.enemy_spawns:
+			if spawn == null or spawn.scene == null:
+				continue
+			var name := spawn.scene.resource_path.get_file().get_basename()
+			check(
+				float(counts.get(name, 0)) / float(tally["floors"]) >= 1.0,
+				"floor %d puts at least one '%s' on the ground per floor (%.2f)"
+					% [index + 1, name, float(counts.get(name, 0)) / float(tally["floors"])],
+			)
+
+
+## The bug report this floor's rebalance came from, as a check: *"I often go through it without
+## encountering many of the new enemies."*
+##
+## The Load Balancer and the Stale Replica are the two enemies the Data Center exists to introduce —
+## nothing else in the campaign lists either — and a floor whose own enemies are optional is a floor
+## teaching nothing. They were: at a shared weight of 1.0 and 0.9 against a roster totalling 7.3,
+## each came to about 1.4 per floor and was missing entirely from more than a fifth of them.
+##
+## Nine floors in ten is the bar, and it is deliberately about *presence* rather than about count.
+## How many of a thing a floor holds is tuning and will move; whether the floor's own idea is in it
+## at all is a promise.
+func _test_the_data_centers_own_enemies_turn_up_in_it() -> void:
+	var config := load(FLOOR_3_CONFIG_PATH) as FloorConfig
+	if not require(config, "floor_3_data_center.tres loads as a FloorConfig"):
+		return
+
+	var tally := _sweep_population(config)
+	if not require(tally["floors"] > 0, "the Data Center generates"):
+		return
+	var present: Dictionary[String, int] = tally["present"]
+	for name: String in ["load_balancer", "stale_replica"]:
+		check(
+			float(present.get(name, 0)) / float(tally["floors"]) >= 0.9,
+			"the Data Center puts a '%s' in front of the player (%.0f%% of floors)"
+				% [name, 100.0 * float(present.get(name, 0)) / float(tally["floors"])],
+		)
+
+
+## Reproduces `Room.populate`'s draws across `SEED_COUNT` floors. Returns the number of floors swept,
+## how many of each enemy were placed in total, and how many floors held at least one of each.
+func _sweep_population(config: FloorConfig) -> Dictionary:
+	var counts: Dictionary[String, int] = {}
+	var present: Dictionary[String, int] = {}
+	var floors := 0
+	for offset: int in SEED_COUNT:
+		var seed_value := 900000 + offset * 7919
+		var layout := FloorGenerator.generate(config, seed_value)
+		if layout == null:
+			continue
+		floors += 1
+		# One stream for the whole floor, drawn in room order, exactly as `FloorController` does.
+		var rng := RandomNumberGenerator.new()
+		rng.seed = seed_value
+		var here: Dictionary[String, bool] = {}
+		for room: RoomPlan in layout.rooms:
+			if room.template == null:
+				continue
+			var forced := room.template.forced_enemies
+			for point: int in room.template.enemy_spawns.size():
+				var scene: PackedScene = forced[point] if point < forced.size() else null
+				if scene == null:
+					scene = config.pick_enemy(room.template.difficulty, rng)
+				if scene == null:
+					continue
+				var name := scene.resource_path.get_file().get_basename()
+				counts[name] = counts.get(name, 0) + 1
+				here[name] = true
+		for name: String in here:
+			present[name] = present.get(name, 0) + 1
+	return {"floors": floors, "counts": counts, "present": present}
+
+
+## Spec section 6.6: never trap the player in geometry. Every template in the campaign, flood-filled.
+##
+## It became worth asserting when `CableDuct` arrived. A wall is easy to reason about because it also
+## stops the shot, so a template author looking at a sealed pocket sees a sealed pocket; a duct is
+## transparent to everything except a chassis, so the same mistake looks like open floor on screen
+## and reads like open floor in the data. The failure it produces is the worst one this game has: a
+## robot in a room it cannot leave, in a room whose door has already locked behind it.
+##
+## Three claims, and the first is the one that matters. The template's walkable tiles must be a
+## *single* connected region — not "the doors connect to each other", which a sealed pocket in a
+## corner would also satisfy, and which is exactly where the loot spawner would eventually drop a
+## repair cell nobody can reach.
+func _test_no_template_can_strand_a_chassis() -> void:
+	var campaign := load(CAMPAIGN_PATH) as RunDefinition
+	if not require(campaign, "the campaign loads"):
+		return
+
+	var checked := 0
+	var seen: Dictionary[StringName, bool] = {}
+	for index: int in campaign.size():
+		var config := campaign.load_floor(index)
+		if config == null:
+			continue
+		var templates: Array[RoomTemplate] = []
+		templates.append_array(config.start_templates)
+		templates.append_array(config.combat_templates)
+		templates.append_array(config.treasure_templates)
+		templates.append_array(config.shop_templates)
+		templates.append_array(config.boss_templates)
+		for template: RoomTemplate in templates:
+			if template == null or seen.has(template.id):
+				continue
+			seen[template.id] = true
+			checked += 1
+			_check_template_is_one_room(template)
+	check(checked > 0, "there were templates to walk (%d)" % checked)
+
+
+func _check_template_is_one_room(template: RoomTemplate) -> void:
+	var tiles := Room.INTERIOR_TILES
+	var solid: Dictionary[Vector2i, bool] = {}
+	for blocked: Array[Rect2i] in [template.obstacles, template.ducts]:
+		for rect: Rect2i in blocked:
+			for y: int in rect.size.y:
+				for x: int in rect.size.x:
+					solid[rect.position + Vector2i(x, y)] = true
+
+	var free: Array[Vector2i] = []
+	for y: int in tiles.y:
+		for x: int in tiles.x:
+			if not solid.has(Vector2i(x, y)):
+				free.append(Vector2i(x, y))
+	if not require(not free.is_empty(), "%s has floor in it at all" % template.id):
+		return
+
+	var reached: Dictionary[Vector2i, bool] = {free[0]: true}
+	var pending: Array[Vector2i] = [free[0]]
+	while not pending.is_empty():
+		var tile: Vector2i = pending.pop_back()
+		for step: Vector2i in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+			var next := tile + step
+			if next.x < 0 or next.y < 0 or next.x >= tiles.x or next.y >= tiles.y:
+				continue
+			if solid.has(next) or reached.has(next):
+				continue
+			reached[next] = true
+			pending.append(next)
+
+	check(
+		reached.size() == free.size(),
+		"%s is one connected room (%d of %d walkable tiles reachable)"
+			% [template.id, reached.size(), free.size()],
+	)
+
+	# Every doorway a floor could open in this room, whichever walls the layout happens to give it.
+	#
+	# Pinched is allowed; sealed is not. `data_hot_aisle` deliberately narrows both of its vertical
+	# doorways to a single tile on each side of a central block, and a single tile is sixteen pixels
+	# against a ten-pixel robot — tight on purpose and passable. What must never happen is a doorway
+	# with no walkable tile left in it at all, which is a door that opens onto a wall.
+	var door := Room.DOOR_TILES
+	var walls := {
+		"top": [], "bottom": [], "left": [], "right": [],
+	}
+	for offset: int in door:
+		var x := tiles.x / 2 - door / 2 + offset
+		var y := tiles.y / 2 - door / 2 + offset
+		walls["top"].append(Vector2i(x, 0))
+		walls["bottom"].append(Vector2i(x, tiles.y - 1))
+		walls["left"].append(Vector2i(0, y))
+		walls["right"].append(Vector2i(tiles.x - 1, y))
+	for side: String in walls:
+		var open_tiles := 0
+		for mouth: Vector2i in walls[side]:
+			if reached.has(mouth):
+				open_tiles += 1
+		check(
+			open_tiles > 0,
+			"%s leaves a way in through its %s doorway (%d of %d tiles)"
+				% [template.id, side, open_tiles, door],
+		)
+
+	for spawn: Vector2i in template.enemy_spawns:
+		check(reached.has(spawn), "%s enemy spawn %v stands on reachable floor" % [template.id, spawn])
+	check(
+		reached.has(template.reward_spawn),
+		"%s reward spawn %v stands on reachable floor" % [template.id, template.reward_spawn],
+	)
+	for stand: Vector2i in template.shop_stands:
+		check(reached.has(stand), "%s shop stand %v stands on reachable floor" % [template.id, stand])
+
+
+## `CableDuct`'s whole reason to exist, as the two queries the game actually makes.
+##
+## The mechanic is a difference between two collision masks and nothing else, which makes it exactly
+## the kind of thing that is one edited scene away from silently becoming a wall — or, worse, from
+## becoming nothing at all, at which point the room templates built on it are open floor with a
+## decoration on it and the floor is easier than it reads.
+##
+## So both halves are asserted against a wall block standing beside the duct, in the same arena, at
+## the same distance. A duct that has quietly become a wall fails the second check; a duct that has
+## quietly become scenery fails the first; and the wall's own two checks are what say the arena is
+## wired up at all rather than the queries silently missing everything.
+func _test_a_duct_stops_a_chassis_and_not_a_shot() -> void:
+	var arena := Node2D.new()
+	add_child(arena)
+
+	var duct: CableDuct = load("res://scenes/rooms/cable_duct.tscn").instantiate()
+	duct.size = Vector2i(16, 64)
+	duct.position = Vector2(0.0, -32.0)
+	arena.add_child(duct)
+
+	var wall: WallBlock = load("res://scenes/rooms/wall_block.tscn").instantiate()
+	wall.size = Vector2i(16, 64)
+	wall.position = Vector2(200.0, -32.0)
+	arena.add_child(wall)
+
+	var player: Player = PLAYER_SCENE.instantiate()
+	player.position = Vector2(-40.0, 0.0)
+	arena.add_child(player)
+	await advance_physics(2)
+
+	var space := arena.get_world_2d().direct_space_state
+
+	# The two predicates, named as the game names them. `Enemy.has_line_of_sight`, `FirewallNode`'s
+	# beams and `Projectile._cast_to_wall` all trace against the world layer; every body on the floor
+	# masks `Teams.body_mask`, and the loot spawner and the Pop Up Drone ask the same question of the
+	# ground before they use it.
+	for pair: Array in [[duct.position.x + 8.0, "a duct", false], [wall.position.x + 8.0, "a wall", true]]:
+		var x: float = pair[0]
+		var label: String = pair[1]
+		var stops_shots: bool = pair[2]
+		var from := Vector2(x - 40.0, 0.0)
+		var to := Vector2(x + 40.0, 0.0)
+
+		var chassis := PhysicsRayQueryParameters2D.create(from, to, Teams.body_mask())
+		check(
+			not space.intersect_ray(chassis).is_empty(),
+			"%s stops a chassis" % label,
+		)
+
+		var shot := PhysicsRayQueryParameters2D.create(from, to, Teams.LAYER_WORLD)
+		var blocked := not space.intersect_ray(shot).is_empty()
+		check(
+			blocked == stops_shots,
+			"%s %s a shot" % [label, "stops" if stops_shots else "lets through"],
+		)
+
+	# And the robot itself, with its own mask, rather than a ray standing in for it. `test_move`
+	# answers the question `move_and_slide` would answer a frame later, without needing input.
+	check(
+		player.test_move(player.global_transform, Vector2(60.0, 0.0)),
+		"the robot cannot drive across a duct",
+	)
+	check(
+		not player.test_move(player.global_transform, Vector2(0.0, 60.0)),
+		"and can drive past the end of one",
+	)
+
+	arena.queue_free()
+	await advance_physics(2)
+
+
 func _average(values: Array[int]) -> float:
 	var total := 0
 	for value: int in values:
@@ -651,6 +984,63 @@ func _test_walking_into_a_room_buys_a_moment_of_grace() -> void:
 	await advance_physics(1)
 
 
+## The other half of the doorway window: the player must not be able to *see* it.
+##
+## The window itself is worth having — the check above says why — but the flash that came with it
+## was not. `PlayerVisuals` strobes the robot at twelve hertz while it is immune, which is the right
+## readout for a window the player has to play around and the wrong one for a window they are handed
+## for walking through a door. Forty rooms a run, it read as the game glitching on every transition.
+##
+## Two claims, and the second is the one that keeps this from being a licence to delete the flash
+## outright. A doorway window is silent; a window the player is still holding from a *hit* survives
+## being carried through a door, because that one has a deadline they are meant to be watching.
+func _test_the_doorway_window_is_not_shown() -> void:
+	var arena := Node2D.new()
+	add_child(arena)
+	var floor_node: FloorController = FLOOR_SCENE.instantiate()
+	arena.add_child(floor_node)
+
+	var player: Player = PLAYER_SCENE.instantiate()
+	arena.add_child(player)
+	await advance_physics(1)
+
+	RunManager.begin_run(20260817)
+	if not require(floor_node.build(player, 20260817), "the floor builds"):
+		arena.queue_free()
+		await advance_physics(1)
+		return
+
+	var health := player.get_health_component()
+	var destinations: Array[int] = []
+	for plan: RoomPlan in floor_node.layout.rooms:
+		if plan.id != floor_node.current_room_id:
+			destinations.append(plan.id)
+	if not require(destinations.size() >= 2, "the floor has two rooms to walk into"):
+		arena.queue_free()
+		await advance_physics(1)
+		return
+
+	health.grant_invulnerability(0.0)
+	await advance_physics(int(player.config.room_entry_grace * 60.0) + 4)
+
+	floor_node._enter_room(destinations[0])
+	check(health.is_invulnerable(), "walking through a door still grants the window")
+	check(not player.should_flash(), "and the robot does not strobe about it")
+
+	# Now the same doorway, entered by a robot that has just been hit. The window it is watching is
+	# its own, and carrying it through a door must not turn the readout off.
+	health.grant_invulnerability(0.0)
+	await advance_physics(int(player.config.room_entry_grace * 60.0) + 4)
+	check(health.apply_damage(DamageInfo.new(1.0)), "a hit lands once the window has shut")
+	check(player.should_flash(), "and that window is shown")
+
+	floor_node._enter_room(destinations[1])
+	check(player.should_flash(), "carrying it through a door does not silence it")
+
+	arena.queue_free()
+	await advance_physics(1)
+
+
 func _test_a_room_wears_its_floors_theme() -> void:
 	var second := load(FLOOR_2_CONFIG_PATH) as FloorConfig
 	if second == null or second.theme == null:
@@ -682,16 +1072,18 @@ func _test_a_room_wears_its_floors_theme() -> void:
 	var obstacles := room.get_node("%Obstacles").get_children()
 	check(not walls.is_empty() and not obstacles.is_empty(), "the room built walls and obstacles")
 
+	# Ducts are skipped, and the skip is the rule rather than an exemption: a `CableDuct` is the one
+	# piece of level geometry that must *never* wear the floor's wall sheet, because looking like the
+	# wall beside it is exactly what a thing bullets pass through must not do. See `CableDuct`.
+	var themed := 0
 	var wrong := 0
 	for block: Node in walls + obstacles:
+		if block is CableDuct:
+			continue
+		themed += 1
 		if (block as WallBlock).get_node("Sprite").texture != second.theme.wall_texture:
 			wrong += 1
-	check(
-		wrong == 0,
-		"every wall and obstacle wears it too (%d of %d did not)" % [
-			wrong, walls.size() + obstacles.size(),
-		],
-	)
+	check(wrong == 0, "every wall and obstacle wears it too (%d of %d did not)" % [wrong, themed])
 	room.queue_free()
 	await advance_physics(2)
 

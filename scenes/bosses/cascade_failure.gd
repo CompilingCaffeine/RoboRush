@@ -5,7 +5,7 @@ extends Boss
 ## The Scrap King asks the player to **notice**. Runtime Error asks them to **predict**. This one
 ## asks them to **keep moving**, which is the only thing Floor 3 has been teaching since its first
 ## room — and it asks in the floor's own words. Every hazard it puts on the ground is a
-## `ThermalZone`, the same class the Data Center's rooms are built from, so the teal-to-red ramp
+## `ThermalZone`, the same class the Data Center's rooms are built from, so the teal-to-violet ramp
 ## the player has been reading for nine rooms means here exactly what it meant there: this ground
 ## is about to vent. What changes is who is heating it. On the floor, the player is; in this room,
 ## the rack is.
@@ -23,6 +23,30 @@ extends Boss
 ## behind one body. That is a climax rather than an unwinnable room, and it is arithmetic rather
 ## than tuning.
 ##
+## ## Three places heat comes from
+##
+## The rack vents where its bodies are. It also **aims** — a patch centred on wherever the robot is
+## standing, every `aimed_vent_interval` — and it **scatters**, a patch at a random point in the
+## arena every `scatter_vent_interval`.
+##
+## The first of those is what makes the fight's own sentence true. "Keep moving" was the floor's
+## lesson and the boss's stated job, and the boss was not actually asking it: heat only ever landed
+## on the ring, so a player who found a spot the ring did not sweep could stand in it and shoot. The
+## aimed vent removes standing still as an option anywhere in the room, and it removes it the way
+## this floor removes things — by painting the ground and counting down, never by landing a hit the
+## player could not have walked out of.
+##
+## The second closes the corners. A 416x192 room has ground the ellipse cannot reach, and heat that
+## only ever appears where the boss is or where the player is leaves that ground safe by
+## construction. The scatter is weather: it is aimed at nobody, it is read the same way as
+## everything else, and it means the answer to this fight is a route rather than a spot.
+##
+## **Neither of them is divided by load**, and that is deliberate. The whole escalation of this
+## fight is the rack concentrating what it already had; two sources that quadrupled alongside it
+## would make the last phase a different, worse fight — four times the aimed heat on a player with
+## one body left to shoot. So the rack's own heat concentrates and these two stay flat, which keeps
+## the arithmetic in the paragraph above true of the *arena* rather than only of the nodes.
+##
 ## **The rack breathes.** The ring contracts to `ring_inhale` of its radius and opens out again on
 ## a seven-second sine. Without it the middle of the arena is permanently safe, and a boss with a
 ## safe centre, on the floor about not standing still, would be a boss arguing with the room it is
@@ -31,8 +55,9 @@ extends Boss
 ##
 ## **There is not one projectile in it**, which is deliberate and is the fight's identity. Both
 ## bosses before it are answered by dodging bullets. This floor's mechanic is positional, so its
-## boss is positional: heat on the ground, and load running along the lines between the nodes. The
-## only two things that can hurt the player are places.
+## boss is positional: heat on the ground, load running along the lines between the nodes, and the
+## nodes themselves, which cost a point to stand inside like every other body in the game
+## (`BossPart._step_contact_damage`). Everything that can hurt the player here is a place.
 ##
 ## ## Why the nodes do not have health of their own
 ##
@@ -133,6 +158,12 @@ var _spin := 0.0
 var _breath := START_BREATH_PHASE
 var _packet_cooldown := 0.0
 
+## Seconds until the rack aims at the player again, and until it scatters again. One clock each for
+## the whole rack rather than one per node, because neither is a thing a *node* does — they are the
+## room being run too hot, and they go on at the same rate whether four bodies are doing it or one.
+var _aimed_left := 0.0
+var _scatter_left := 0.0
+
 
 func _ready() -> void:
 	assert(config != null, "CascadeFailure.config is unset: assign a CascadeFailureConfig.")
@@ -167,6 +198,12 @@ func begin(arena: Rect2) -> void:
 		# Packets likewise: evenly spread around the ring so the lines read as a circulating
 		# current rather than as four things flashing in unison.
 		_packet_progress[slot] = float(slot) / float(_slot_count())
+
+	# A full interval before the first aimed vent and half of one before the first scatter, so the
+	# opening seconds of the fight are the rack introducing itself. A patch appearing under the
+	# player on the frame they walked in would be the fight's fairest mechanic read as its cheapest.
+	_aimed_left = config.aimed_vent_interval
+	_scatter_left = config.scatter_vent_interval * 0.5
 
 	EventBus.boss_phase_changed.emit(int(_phase))
 	_announce_health()
@@ -419,7 +456,15 @@ func _slot_position(slot: int) -> Vector2:
 # --- Vents --------------------------------------------------------------------
 
 
+## The three sources, in the order the player learns them: the bodies, then themselves, then the
+## room. See the class doc for why only the first is scaled by load.
 func _step_vents(delta: float) -> void:
+	_step_node_vents(delta)
+	_step_aimed_vent(delta)
+	_step_scatter_vent(delta)
+
+
+func _step_node_vents(delta: float) -> void:
 	var interval := config.vent_interval / get_load()
 	for slot: int in _living_slots():
 		_vent_left[slot] -= delta
@@ -429,20 +474,54 @@ func _step_vents(delta: float) -> void:
 		_drop_vent(_nodes[slot].global_position)
 
 
+## Heat centred on the robot, on a clock that does not care how the fight is going.
+##
+## The clock runs whether or not there is a player to aim at, and the drop is skipped rather than
+## deferred when there is not. Holding the vent until a player appears would make the first thing a
+## returning robot met a patch that had been waiting for it, which is the one kind of hazard this
+## floor does not have.
+func _step_aimed_vent(delta: float) -> void:
+	_aimed_left -= delta
+	if _aimed_left > 0.0:
+		return
+	_aimed_left = maxf(config.aimed_vent_interval, 0.05)
+	if _player != null:
+		_drop_vent(_player.global_position)
+
+
+## Heat somewhere in the arena, chosen uniformly and aimed at nobody.
+##
+## Drawn from `_body_bounds` rather than from the whole arena so a scattered patch is a whole patch
+## with room around it, the same inset the nodes themselves keep — `_drop_vent` would clamp one at
+## the wall anyway, and a clamp is how a uniform draw quietly becomes a pile-up along the edges.
+func _step_scatter_vent(delta: float) -> void:
+	_scatter_left -= delta
+	if _scatter_left > 0.0:
+		return
+	_scatter_left = maxf(config.scatter_vent_interval, 0.05)
+	_drop_vent(Vector2(
+		randf_range(_body_bounds.position.x, _body_bounds.end.x),
+		randf_range(_body_bounds.position.y, _body_bounds.end.y),
+	))
+
+
 ## Puts one zone on the floor under `at`.
 ##
-## **Every vent is centred on a node**, and that is the fight's fairness rule stated in one line.
-## Nothing this boss puts on the floor is aimed at the player: it heats the ground it is standing
-## on, so every patch was announced by a body already on screen, and it fills from cold over
-## `vent_seconds` — so even the player who was standing exactly where a node was has the whole
-## warning to walk out of it.
+## **Every vent starts cold**, and that is the fight's fairness rule stated in one line. Wherever a
+## patch lands — under a node, under the robot, in an empty corner — it fills from nothing over
+## `vent_seconds` and bites only at the end, so the player who was standing exactly on it has the
+## whole warning to walk out.
 ##
-## Worth being precise about, because the stronger-sounding version — "it never puts heat under the
-## player" — is not true and must not be written down as though it were. A node can be standing on
-## the player; bodies on this team pass through the robot rather than pushing it. What the rule
-## guarantees is not that the ground under your feet is safe, it is that nothing ever *chose* your
-## feet. `NullPointer` is the enemy that does choose them, and it is fair for the same reason this
-## is: the telegraph comes first.
+## That is the rule because it is the only one that survives the boss aiming. The version this file
+## used to state — *nothing it puts on the floor is aimed at the player* — was a stronger promise
+## and a worse fight: it meant a player who found ground the ring did not sweep had nothing to do
+## but stand on it, in the fight whose entire subject is not standing still. The telegraph was
+## always what made the hazard fair; "nowhere near you" was doing no work that `vent_seconds` was
+## not already doing, and it was quietly buying the player a place to stop.
+##
+## `NullPointer` is the enemy that chooses the player's feet, and it is fair for exactly this
+## reason: the telegraph comes first. `tests/test_cascade_failure.gd` measures the telegraph rather
+## than the aim, which is the half that must never be weakened.
 ##
 ## Sized and clamped through the arena rect so a vent at the edge is a whole vent against the wall
 ## rather than half of one outside the room.

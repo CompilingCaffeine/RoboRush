@@ -168,9 +168,22 @@ static func _assign_templates(
 	layout: FloorLayout, config: FloorConfig, rng: RandomNumberGenerator
 ) -> bool:
 	var distances := layout.distances_from(layout.get_start_room())
+
+	# Combat rooms only, and that is the whole of a bug this measured out of the floor for three
+	# floors running. The cap below is a fraction of this number and only combat rooms are capped,
+	# but it used to be taken over *every* room — and the three special rooms are attached last, as
+	# dead ends hanging off combat rooms, with the boss deliberately claiming the furthest cell. So
+	# the maximum was always at least one greater than any combat room could reach, no combat room
+	# ever scored a progress of one, and the top of every floor's template ladder was unreachable.
+	#
+	# It did not look like a bug in the data or in the code. It looked like a floor whose hardest
+	# room was rare: `combat_ring` on the Help Desk drew 0.23 times per floor, Development's
+	# `dev_server_ring` 0.26, and the Data Center's `data_grid_floor` — the room its whole floor is
+	# built to end on — three times in four hundred floors. Authored content that never ships.
 	var max_distance := 0
 	for room: RoomPlan in layout.rooms:
-		max_distance = maxi(max_distance, distances.get(room.id, 0))
+		if room.type == RoomTemplate.Type.COMBAT:
+			max_distance = maxi(max_distance, distances.get(room.id, 0))
 
 	var last_combat_id := &""
 	for room: RoomPlan in layout.rooms:
@@ -197,11 +210,14 @@ static func _assign_templates(
 	return true
 
 
-## Combat rooms near the start draw only from the floor's easier templates; rooms near the
-## boss may draw anything, capped linearly in between. This is what makes "introduce the new
-## enemy near the entrance, save the hardest combinations for the approach to the boss"
-## (README's Floor 2 plan) actually happen, rather than being left to an independent weighted
-## roll that has no idea where in the floor it is running.
+## Combat rooms near the start draw only from the floor's easier templates; the furthest one from
+## the start may draw anything, capped linearly in between. This is what makes "introduce the new
+## enemy near the entrance, save the hardest combinations for the approach to the boss" (README's
+## Floor 2 plan) actually happen, rather than being left to an independent weighted roll that has no
+## idea where in the floor it is running.
+##
+## `max_distance` is the furthest *combat* room rather than the furthest room — see `_assign_templates`
+## for what measuring it the other way silently cost.
 ##
 ## Falls back to the unfiltered pool if the cap would leave nothing eligible — a floor whose
 ## easiest template is still harder than the cap allows must still generate a room.

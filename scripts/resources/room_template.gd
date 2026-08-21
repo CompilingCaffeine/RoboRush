@@ -54,6 +54,17 @@ enum Type {
 ## as unpredictable as before.
 @export var forced_enemies: Array[PackedScene] = []
 
+## Cable ducts, in tile coordinates. Solid to anything that walks and transparent to anything that
+## is fired — see `CableDuct`.
+##
+## A second list rather than a flag on `obstacles`, because the two are read for different reasons
+## and one of them is a safety check. `tests/test_floor.gd` asks whether a template's walkable
+## floor is still one connected piece, and the answer has to count both; it also asks whether an
+## obstacle straddles a doorway, and a duct across a doorway is a different question — it seals a
+## chassis in without sealing the room's line of fire, which is the worse of the two failures and
+## the easier one to author by accident.
+@export var ducts: Array[Rect2i] = []
+
 ## Throughput zones, in tile coordinates: patches of floor that heat up under sustained
 ## stationary fire and vent. Floor 3's signature mechanic — see `ThermalZone`.
 ##

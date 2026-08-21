@@ -36,7 +36,7 @@ extends EnemyConfig
 
 ## The plate at rest, and while it is being hit.
 ##
-## Near-white rather than anything on the teal-to-red ramp. This floor's throughput zones own that
+## Near-white rather than anything on the teal-to-violet ramp. This floor's throughput zones own that
 ## gradient, and an enemy whose armour glowed somewhere along it would be a second thing on screen
 ## claiming to mean heat. The same call the floor's tiles already make — see `ThermalZone` and the
 ## Data Center palette in `tools/generate_art.py`.

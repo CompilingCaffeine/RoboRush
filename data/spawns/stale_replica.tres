@@ -5,6 +5,8 @@
 
 [resource]
 script = ExtResource("1_spawn")
-weight = 0.9
+; The other half of `load_balancer.tres`'s note, and the same correction. It was the *rarest* entry
+; on the roster at 0.9 — below the Help Desk's filler — and missing from a quarter of floors.
+weight = 1.7
 min_difficulty = 2
 scene = ExtResource("2_scene")

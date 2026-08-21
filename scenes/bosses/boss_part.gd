@@ -11,6 +11,24 @@ extends CharacterBody2D
 ##
 ## The alternative was teaching projectiles about bosses, which would put a boss-specific
 ## branch in the one file that has never had one.
+##
+## ## It also hurts to touch
+##
+## Every ordinary enemy that has a body the player can walk into charges them for walking into it
+## (`Enemy._step_contact_damage`), and until recently the bosses were the one exception: three
+## fights in which standing inside the thing you are shooting was free. That is the wrong lesson
+## in the room where positioning matters most, and it is worst in the fight built entirely out of
+## where you are standing — Cascade Failure's nodes could be ridden around the ring, which put the
+## player on the one patch of floor the boss was about to vent and charged them nothing for it.
+##
+## So a part is a hazard as well as a receiver, and it lives here rather than in each of the three
+## controllers for the reason the receiver does: a body that hurts to touch hurts on all of it,
+## whichever boss it belongs to. The numbers are per scene, because a 28-pixel king and a 16-pixel
+## rack unit are not the same thing to stand next to.
+##
+## The Scrap King's charge keeps its own separate hit — see `MergeConflict._step_charge`. It is a
+## different event with its own knockback, and the player's own damage window means the two can
+## never both land.
 
 ## Emitted for every hit this part takes. The controller decides what it costs.
 signal took_damage(info: DamageInfo)
@@ -19,19 +37,83 @@ signal took_damage(info: DamageInfo)
 ## reaches zero and never emits `died`.
 const RECEIVER_POOL := 100000.0
 
+## The player's collision radius, from player.tscn. Duplicated for the reason `CompileLane`,
+## `ThermalZone` and `CascadeFailure` all duplicate it: a body has to be able to ask who it is
+## touching without depending on how the player scene is assembled.
+const PLAYER_RADIUS := 5.0
+
+@export_group("Contact")
+
+## What touching this body costs. Zero switches contact damage off entirely, which is what a part
+## that is meant to be walked through would set.
+@export var contact_damage: float = 1.0
+
+## How close the player's centre must come, before their own radius is added. Set per scene to the
+## part's own collision radius, so what hurts is what the player can see they are standing in.
+@export var contact_radius: float = 14.0
+
+## Seconds before this body may charge the player again. Longer than the player's own damage window
+## (`PlayerConfig.damage_invulnerability`), so a robot that has been shoved out of a boss and comes
+## straight back gets a fresh moment inside it rather than being billed the instant their immunity
+## lapses.
+@export var contact_interval: float = 1.0
+
+## Impulse a contact hit shoves the player with. Larger than an ordinary enemy's, because the point
+## of it is to put the player back outside the body rather than to punish them twice for the same
+## mistake.
+@export var contact_knockback: float = 190.0
+
 @onready var _health: HealthComponent = %Health
 @onready var _sprite: Sprite2D = %Sprite
 @onready var _hurt_flash: HurtFlash = %HurtFlash
 @onready var _status: StatusEffectController = StatusEffectController.find_on(self)
 
+var _contact_cooldown := 0.0
+
 
 func _ready() -> void:
 	add_to_group(Teams.GROUP_ENEMY)
 	collision_layer = Teams.body_layer(Teams.Id.ENEMY)
-	collision_mask = Teams.LAYER_WORLD
+	collision_mask = Teams.body_mask()
 	_health.configure(RECEIVER_POOL, 0.0)
 	_health.damaged.connect(_on_damaged)
 	HostileRegistry.register(self, Teams.Id.ENEMY, _health)
+
+
+## Physics-timed, like every other thing in the game that decides real damage.
+func _physics_process(delta: float) -> void:
+	_step_contact_damage(delta)
+
+
+## Charges the player for standing inside this body.
+##
+## Resolved by distance rather than by an extra Area2D, the way `Enemy._step_contact_damage` is and
+## for its reason: both bodies are circles and the radii are known.
+##
+## Silent while inert, which is the one state a part can be in where it is not there at all — The
+## Scrap King's feigned death hides the body and takes it off the collision layer, and a boss that
+## is invisible and unshootable must not still be charging the player for walking through the space
+## it used to occupy.
+func _step_contact_damage(delta: float) -> void:
+	_contact_cooldown = maxf(_contact_cooldown - delta, 0.0)
+	if contact_damage <= 0.0 or _contact_cooldown > 0.0 or not visible:
+		return
+
+	var player := get_tree().get_first_node_in_group(Teams.GROUP_PLAYER) as Node2D
+	if player == null:
+		return
+	var offset := player.global_position - global_position
+	if offset.length() > contact_radius + PLAYER_RADIUS:
+		return
+
+	var health := HealthComponent.find_on(player)
+	if health == null:
+		return
+	var direction := offset.normalized() if not offset.is_zero_approx() else Vector2.RIGHT
+	if health.apply_damage(
+		DamageInfo.new(contact_damage, self, direction, contact_knockback)
+	):
+		_contact_cooldown = contact_interval
 
 
 func set_tint(tint: Color) -> void:

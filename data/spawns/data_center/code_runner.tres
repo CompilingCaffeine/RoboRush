@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="EnemySpawn" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/enemy_spawn.gd" id="1_spawn"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/code_runner.tscn" id="2_scene"]
+
+[resource]
+script = ExtResource("1_spawn")
+scene = ExtResource("2_scene")
+; See `ticket_bot.tres` beside this one for why the floor keeps its own copy. Barely moved from the
+; shared 1.4: a moving target is what makes standing still tempting, which is the habit this floor
+; charges for, so the Code Runner is already doing the floor's work.
+weight = 1.1
+min_difficulty = 1

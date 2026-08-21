@@ -41,6 +41,7 @@ const DOOR_WIDTH := DOOR_TILES * TILE_SIZE
 const ENTRY_INSET := 20
 
 const WALL_BLOCK := preload("res://scenes/rooms/wall_block.tscn")
+const CABLE_DUCT := preload("res://scenes/rooms/cable_duct.tscn")
 
 @onready var _floor: Sprite2D = %Floor
 @onready var _walls: Node2D = %Walls
@@ -73,6 +74,7 @@ func build(room_plan: RoomPlan, room_theme: FloorTheme = null) -> void:
 	_floor.region_rect = Rect2(Vector2.ZERO, Vector2(INTERIOR_SIZE))
 	_build_wall_ring(plan.get_door_directions())
 	_build_obstacles()
+	_build_ducts()
 	_build_thermal_zones()
 	_build_bounds()
 
@@ -295,6 +297,25 @@ func _build_obstacles() -> void:
 		block.texture = _wall_texture()
 		block.position = Vector2(tile_rect.position * TILE_SIZE)
 		_obstacles.add_child(block)
+
+
+## Lays out this template's cable ducts, if it has any. See `CableDuct` for what they do.
+##
+## Into the same `Obstacles` container as the wall blocks, and that is deliberate: everything under
+## it is solid level geometry the room owns and frees, and `tests/test_floor.gd` already walks that
+## container to check the theme reached the geometry. A separate node would be a second place to
+## remember. What tells a duct from a wall is its collision layer, which is the only place the
+## difference is real.
+func _build_ducts() -> void:
+	if plan.template == null:
+		return
+	for tile_rect: Rect2i in plan.template.ducts:
+		var duct: CableDuct = CABLE_DUCT.instantiate()
+		duct.size = tile_rect.size * TILE_SIZE
+		# No `texture` assignment, unlike a wall block. See `CableDuct` for why a duct is never
+		# handed the floor's wall sheet.
+		duct.position = Vector2(tile_rect.position * TILE_SIZE)
+		_obstacles.add_child(duct)
 
 
 ## Lays out this template's throughput zones, if it has any. See `ThermalZone` for what they do and

@@ -1,0 +1,45 @@
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="1_template"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/firewall_node.tscn" id="2_firewall"]
+
+[resource]
+script = ExtResource("1_template")
+id = &"data_hot_containment"
+type = 1
+obstacles = Array[Rect2i]([Rect2i(4, 4, 18, 1), Rect2i(4, 7, 18, 1)])
+; The aisle point comes first so it can be the forced one. Everything after it is a corner, drawn
+; from the roster as normal.
+enemy_spawns = Array[Vector2i]([Vector2i(13, 5), Vector2i(1, 2), Vector2i(24, 2), Vector2i(1, 9), Vector2i(24, 9)])
+; Hot aisle containment, which is the real thing this floor is named after: two rack rows sealing a
+; narrow lane, and every watt the room produces coming out of it.
+;
+; The lane is two tiles of hot floor and the only thing standing in it is a Firewall Node, whose
+; beams sweep the length of it. The rows are solid, so there is no shooting the node through them —
+; the room has exactly one answer and it is a good one: stand at a mouth of the aisle, where the
+; floor is cold, and fight down it. A player who works that out is a player who has understood both
+; halves of this floor at once, and a player who charges in meets a beam in a corridor they cannot
+; strafe.
+;
+; The forced enemy is the room. A weighted roll here would put a Stale Replica in a two-tile lane
+; on some seeds — an enemy whose whole answer is "outrun it forwards", in the one place on the floor
+; with nowhere forward to go — and the room would be a different, worse room on those seeds without
+; anything in the data admitting it.
+forced_enemies = Array[PackedScene]([ExtResource("2_firewall")])
+; One duct in each outer band, on opposite sides. The bands are the cold route around the aisle, and
+; without these they are a straight run: the ducts put a detour in each of them, so going round is a
+; decision with a length rather than the obvious free answer. Kept clear of the top and bottom
+; doorways, so neither can strand a chassis in the band it walked into.
+ducts = Array[Rect2i]([Rect2i(4, 1, 7, 1), Rect2i(15, 10, 7, 1)])
+; Two zones with one cold tile between them, rather than one unbroken lane, and the gap is where the
+; Firewall Node stands. Partly because `tests/test_thermal.gd` forbids authoring an enemy onto hot
+; ground and is right to — a zone charges for a habit the *player* chooses, and a room that starts a
+; fight with the target already standing in one is a room arguing about who the rule is for. Mostly
+; because it is the better picture: the equipment sits on the one plate that is not venting, and the
+; floor either side of it is.
+thermal_zones = Array[Rect2i]([Rect2i(4, 5, 9, 2), Rect2i(14, 5, 8, 2)])
+reward_spawn = Vector2i(13, 2)
+difficulty = 2
+floor_tags = Array[StringName]([&"data_center"])
+min_floor = 3
+max_floor = 3

@@ -56,11 +56,20 @@ var _still_seconds := 0.0
 ## True until the first shot after entering a room, which is what Cache Warmer multiplies.
 var _room_opening_shot := true
 
+## Seconds of immunity the robot deliberately does not flash for. See `_on_room_entered`.
+##
+## Presentation state, and the only piece of it this file keeps — `PlayerVisuals` is handed a
+## boolean rather than being told about doorways, because a doorway is not something the robot's
+## sprite has any business knowing. The alternative, teaching `HealthComponent` which of its
+## windows are worth showing, would put the word "flash" in the one component that runs on every
+## enemy in the game.
+var _quiet_invulnerability_left := 0.0
+
 
 func _ready() -> void:
 	assert(config != null, "Player.config is unset: assign a PlayerConfig resource.")
 	collision_layer = Teams.body_layer(Teams.Id.PLAYER)
-	collision_mask = Teams.LAYER_WORLD
+	collision_mask = Teams.body_mask()
 
 	_input.setup(config)
 	_motion.setup(config)
@@ -132,7 +141,8 @@ func _physics_process(delta: float) -> void:
 		_input.consume_interact_request()
 		use_nearest_interactable()
 
-	_visuals.update_visuals(_input.aim_direction, _is_invulnerable(), delta)
+	_quiet_invulnerability_left = maxf(_quiet_invulnerability_left - delta, 0.0)
+	_visuals.update_visuals(_input.aim_direction, should_flash(), delta)
 
 
 ## Pins the camera to exactly one room's view rectangle.
@@ -245,6 +255,12 @@ func _absorb_with_shield(_info: DamageInfo) -> bool:
 func _on_room_entered(_type: int, _room_id: int) -> void:
 	_shields_left = _items.get_shield_charges_per_room()
 	_room_opening_shot = true
+	# Asked before the grant, not after, and that ordering is the whole of the exception: a player
+	# who walks through a door still flashing from a hit taken on the other side of it keeps that
+	# flash, because the window they are watching is one they have to play around. Only a doorway
+	# window that is the robot's *only* immunity goes quiet. See `should_flash`.
+	if not _is_invulnerable():
+		_quiet_invulnerability_left = config.room_entry_grace
 	_health.grant_invulnerability(config.room_entry_grace)
 
 
@@ -384,6 +400,22 @@ func use_nearest_interactable() -> bool:
 ## agree.
 func _is_invulnerable() -> bool:
 	return _health.is_invulnerable()
+
+
+## Whether the invulnerability the robot currently has is worth showing.
+##
+## Not every immune moment is. A flash is a warning with a deadline — *this is about to run out* —
+## and it earns its place after a hit, when the player has to decide what to do with the window
+## they were given. The window a doorway grants is not that: the player did nothing to earn it,
+## there is nothing to spend it on, and it arrives on entering every room in the game. Twelve
+## cycles a second for six tenths of a second, forty rooms a run, is a strobe attached to walking.
+##
+## So the window is kept and the flash is dropped, which is the split the two things actually want.
+##
+## Public for the reason `opening_shot_damage_scale` is: the rule can then be read — and checked —
+## without driving a frame of input and looking at a sprite to find out what it decided.
+func should_flash() -> bool:
+	return _is_invulnerable() and _quiet_invulnerability_left <= 0.0
 
 
 ## Dash follows the held movement direction so it never fights the player's intent;
