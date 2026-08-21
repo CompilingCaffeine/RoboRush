@@ -607,6 +607,14 @@ func _sweep_population(config: FloorConfig) -> Dictionary:
 ## *single* connected region — not "the doors connect to each other", which a sealed pocket in a
 ## corner would also satisfy, and which is exactly where the loot spawner would eventually drop a
 ## repair cell nobody can reach.
+##
+## **Cloud Operations widened what "connected" means, and this walk had to widen with it.** A
+## `MigrationLink` joins two patches of floor that are not adjacent, so a room split by ducts and
+## reachable only across a pad is correct content rather than a stranding — and the flood fill would
+## have called it a sealed pocket. Pads are edges here, not tiles. What that costs is nothing: the
+## claim being asserted is still "the player can reach every tile of this room", which is the claim
+## that matters. What it stops requiring is that they can *walk* there, which was only ever a proxy
+## for it, and which this floor's whole mechanic exists to break.
 func _test_no_template_can_strand_a_chassis() -> void:
 	var campaign := load(CAMPAIGN_PATH) as RunDefinition
 	if not require(campaign, "the campaign loads"):
@@ -633,6 +641,15 @@ func _test_no_template_can_strand_a_chassis() -> void:
 	check(checked > 0, "there were templates to walk (%d)" % checked)
 
 
+## Every tile a rect covers, in tile coordinates.
+func _tiles_of(rect: Rect2i) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for y: int in rect.size.y:
+		for x: int in rect.size.x:
+			out.append(rect.position + Vector2i(x, y))
+	return out
+
+
 func _check_template_is_one_room(template: RoomTemplate) -> void:
 	var tiles := Room.INTERIOR_TILES
 	var solid: Dictionary[Vector2i, bool] = {}
@@ -641,6 +658,19 @@ func _check_template_is_one_room(template: RoomTemplate) -> void:
 			for y: int in rect.size.y:
 				for x: int in rect.size.x:
 					solid[rect.position + Vector2i(x, y)] = true
+
+	# Where a pad tile leads. Built both ways round, because a link has no direction and the walk
+	# may arrive at either end first. See the note above about pads being edges rather than tiles.
+	var jumps: Dictionary[Vector2i, Array] = {}
+	for link: MigrationLink in template.pad_links:
+		if link == null or not link.is_valid():
+			continue
+		var a_tiles := _tiles_of(link.a)
+		var b_tiles := _tiles_of(link.b)
+		for tile: Vector2i in a_tiles:
+			jumps[tile] = b_tiles
+		for tile: Vector2i in b_tiles:
+			jumps[tile] = a_tiles
 
 	var free: Array[Vector2i] = []
 	for y: int in tiles.y:
@@ -662,6 +692,15 @@ func _check_template_is_one_room(template: RoomTemplate) -> void:
 				continue
 			reached[next] = true
 			pending.append(next)
+		# And across a link, if this tile is a pad. A pad in a wall leads nowhere the walk can use,
+		# which is why `tests/test_migration.gd` asserts separately that no pad tile is solid — that
+		# failure has to be its own message rather than arriving here as an unreachable region.
+		if jumps.has(tile):
+			for landing: Vector2i in jumps[tile]:
+				if solid.has(landing) or reached.has(landing):
+					continue
+				reached[landing] = true
+				pending.append(landing)
 
 	check(
 		reached.size() == free.size(),
@@ -866,7 +905,19 @@ func _test_a_run_never_fights_the_same_boss_twice() -> void:
 	var repeats := 0
 	var runs := 0
 
-	for seed_value: int in [1, 7, 12, 20, 33, 41, 58, 64, 77, 91]:
+	# Eight seeds per boss in the pool, rather than the ten fixed seeds this used to walk.
+	#
+	# The expectation below was already derived from the pool size so that it moved with the
+	# content; the *sample* was not, and a fourth boss is what showed the difference. Ten uniform
+	# draws over four outcomes miss one about a fifth of the time, so the check began failing on a
+	# perfectly correct draw. Deriving both ends means a fifth boss cannot quietly under-sample
+	# either: at eight seeds each, missing one is around a thousand-to-one and the seeds are fixed,
+	# so it is not a question of luck on any particular run.
+	var seeds: Array[int] = []
+	for step: int in _config.boss_pool.size() * 8:
+		seeds.append(1 + step * 7)
+
+	for seed_value: int in seeds:
 		var arena := Node2D.new()
 		add_child(arena)
 		var floor_node: FloorController = FLOOR_SCENE.instantiate()

@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="EnemySpawn" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/enemy_spawn.gd" id="1_spawn"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/firewall_node.tscn" id="2_scene"]
+
+[resource]
+script = ExtResource("1_spawn")
+scene = ExtResource("2_scene")
+; The region guard. It does not move, which on a floor of separated regions turns it from a hazard into
+; a *place* — a piece of ground that has to be got past rather than something that comes to the player.
+; `cloud_control_plane` forces one into its middle region for that reason.
+weight = 1.2
+min_difficulty = 2

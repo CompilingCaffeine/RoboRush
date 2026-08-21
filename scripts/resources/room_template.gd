@@ -75,6 +75,25 @@ enum Type {
 ## cheaper to have from the first floor that needed it than to retrofit later.
 @export var thermal_zones: Array[Rect2i] = []
 
+## Migration pads, in pairs. Cloud Operations' signature mechanic: step onto either end of a link
+## and the robot is standing on the other. See `MigrationPad`.
+##
+## `Array[MigrationLink]` rather than a flat `Array[Rect2i]` matched two at a time, which is the
+## shape `forced_enemies` uses and the wrong shape here — see `MigrationLink` for why a pad with no
+## partner is a failure worth making unauthorable rather than checking for.
+##
+## Declared per template, like `ducts` and `thermal_zones` and for the same reason: it keeps the
+## mechanic out of the generator and out of every floor that does not want it. A Cloud Operations
+## template carries its own links; a Data Center template leaves this empty and gets none; and no
+## code anywhere asks what floor number it is on.
+##
+## **A room with links is a room whose walkable floor need not be one connected piece.** That is the
+## one existing rule this field changes, and it changes it on purpose: a room split by ducts and
+## joined only by pads is the whole point of the mechanic. `tests/test_floor.gd` treats a link as an
+## edge in its connectivity walk, so "the player can reach every tile" stays asserted while "the
+## player can *walk* to every tile" stops being required.
+@export var pad_links: Array[MigrationLink] = []
+
 ## Where a room-clear reward or treasure appears, in tile coordinates.
 @export var reward_spawn := Vector2i(13, 6)
 

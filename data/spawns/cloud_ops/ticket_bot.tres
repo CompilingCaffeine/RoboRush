@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="EnemySpawn" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/enemy_spawn.gd" id="1_spawn"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/ticket_bot.tscn" id="2_scene"]
+
+[resource]
+script = ExtResource("1_spawn")
+scene = ExtResource("2_scene")
+; The mild opener, at the same weight the Data Center gave it and for the same reason: this floor's
+; own number, so nothing here can reweight it on floors 1 to 3. Kept because a roster needs something
+; gentle for a difficulty-one room to draw, and `cloud_intake_hall` forces one of its three points.
+weight = 0.7
+min_difficulty = 1

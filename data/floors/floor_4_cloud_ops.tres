@@ -1,0 +1,96 @@
+[gd_resource type="Resource" script_class="FloorConfig" load_steps=25 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/floor_config.gd" id="1_floor"]
+[ext_resource type="Resource" path="res://data/rooms/cloud_ingress.tres" id="2_start"]
+[ext_resource type="Resource" path="res://data/rooms/cloud_intake_hall.tres" id="3_intake"]
+[ext_resource type="Resource" path="res://data/rooms/cloud_split_aisle.tres" id="4_split"]
+[ext_resource type="Resource" path="res://data/rooms/cloud_region_pair.tres" id="5_pair"]
+[ext_resource type="Resource" path="res://data/rooms/cloud_blast_radius.tres" id="6_blast"]
+[ext_resource type="Resource" path="res://data/rooms/cloud_failover_row.tres" id="7_row"]
+[ext_resource type="Resource" path="res://data/rooms/cloud_cold_row.tres" id="8_cold"]
+[ext_resource type="Resource" path="res://data/rooms/cloud_control_plane.tres" id="9_plane"]
+[ext_resource type="Resource" path="res://data/rooms/cloud_snapshot_vault.tres" id="10_treasure"]
+[ext_resource type="Resource" path="res://data/rooms/shop_bay.tres" id="11_shop"]
+[ext_resource type="Resource" path="res://data/rooms/cloud_control_tower.tres" id="12_boss_room"]
+[ext_resource type="Resource" path="res://data/settings/shop_config.tres" id="13_shop_cfg"]
+[ext_resource type="Resource" path="res://data/spawns/cloud_ops/ticket_bot.tres" id="14_ticket_bot"]
+[ext_resource type="Resource" path="res://data/spawns/cloud_ops/code_runner.tres" id="15_code_runner"]
+[ext_resource type="Resource" path="res://data/spawns/cloud_ops/pop_up_drone.tres" id="16_drone"]
+[ext_resource type="Resource" path="res://data/spawns/cloud_ops/firewall_node.tres" id="17_firewall"]
+[ext_resource type="Resource" path="res://data/spawns/cloud_ops/memory_leech.tres" id="18_leech"]
+[ext_resource type="Resource" path="res://data/spawns/cloud_ops/null_pointer.tres" id="19_null"]
+[ext_resource type="Resource" path="res://data/floors/cloud_ops_theme.tres" id="40_theme"]
+[ext_resource type="Resource" path="res://data/pools/run_item_pool.tres" id="91_pool"]
+[ext_resource type="Resource" path="res://data/bosses/orchestrator_encounter.tres" id="92_orchestrator"]
+[ext_resource type="Resource" path="res://data/bosses/cascade_failure_encounter.tres" id="93_cascade"]
+[ext_resource type="Resource" path="res://data/bosses/runtime_error_encounter.tres" id="94_error"]
+[ext_resource type="Resource" path="res://data/bosses/scrap_king_encounter.tres" id="95_king"]
+
+[resource]
+script = ExtResource("1_floor")
+id = &"cloud_ops"
+display_name = "Cloud Operations"
+floor_number = 4
+theme = ExtResource("40_theme")
+floor_tags = Array[StringName]([&"cloud_ops"])
+room_count = 10
+start_templates = Array[RoomTemplate]([ExtResource("2_start")])
+; Seven combat templates, matching the Data Center's count after its own correction rather than the
+; four it shipped with. The reason is recorded there at length and is worth not relearning: with four
+; templates the teaching room was 2.4 of the six combat rooms a run saw, and the floor put 17 enemies
+; on the ground against the 22 of both floors before it.
+;
+; The ladder is 1 / 2 / 2 / 3 / 3 / 3 / 4, and the difficulty numbers are load-bearing.
+; `_capped_by_distance` scales a combat room's allowance by its distance from the start over the
+; furthest *combat* room, so a 4 is reachable only at the very end of the floor — about a quarter of
+; runs. That is deliberate rarity now and was silently zero before Floor 3's generator fix, which is
+; the only reason `cloud_control_plane` is authorable at all.
+combat_templates = Array[RoomTemplate]([ExtResource("3_intake"), ExtResource("4_split"), ExtResource("5_pair"), ExtResource("6_blast"), ExtResource("7_row"), ExtResource("8_cold"), ExtResource("9_plane")])
+treasure_templates = Array[RoomTemplate]([ExtResource("10_treasure")])
+shop_templates = Array[RoomTemplate]([ExtResource("11_shop")])
+boss_templates = Array[RoomTemplate]([ExtResource("12_boss_room")])
+; Six entries, all of them this floor's own `EnemySpawn` resources under `data/spawns/cloud_ops/`.
+; None of the six is exclusive to this floor, which makes the private copies the whole point rather
+; than a formality: a shared spawn resource is one weight that has to be right on every floor listing
+; it, and the Data Center's measurement is what that costs when it is not.
+;
+; Chosen on one question — does this enemy make *where the player is* matter. Pop Up Drone is the
+; floor's own threat and the roster's argument: it teleports, so it is the only thing in the game that
+; can cross a cable duct and follow somebody out of a fight they left. The Data Center excluded it for
+; exactly that property; here that is the qualification. Firewall Node holds a region. Null Pointer
+; acts somewhere other than where it stands. Code Runner is the moving target that makes closing
+; distance worth a pad. Memory Leech, held to difficulty three, is the longest telegraph in the game
+; answered by the fastest movement in it. Ticket Bot is the mild thing a difficulty-one room needs.
+;
+; Deliberately absent: Load Balancer and Stale Replica, which are the Data Center's and listed by no
+; other floor — the two enemies that floor exists to introduce should not become anybody else's
+; furniture. Deadlock and Recursion are both about timing rather than position, and a floor teaching
+; a positional idea should not spend its rooms asking a different question.
+enemy_spawns = Array[EnemySpawn]([ExtResource("14_ticket_bot"), ExtResource("15_code_runner"), ExtResource("16_drone"), ExtResource("17_firewall"), ExtResource("18_leech"), ExtResource("19_null")])
+clear_scrap_range = Vector2i(1, 3)
+enemy_scrap_range = Vector2i(0, 2)
+item_pool = ExtResource("91_pool")
+item_clear_indices = Array[int]([2, 5])
+shop = ExtResource("13_shop_cfg")
+treasure_grants_item = true
+; All four bosses, which is what a pool is for and what the Data Center's note said a fourth floor
+; would cost: a fourth boss, not a re-plumbing of the first three. `CampaignValidator` needs four
+; distinct bosses across four floors — it checks every subset, so any dealing has to work — and this
+; is the floor that supplies the fourth.
+;
+; The Orchestrator is listed first here and last on the three floors before it, but it is on all four
+; — a run can meet it on the Help Desk. That matters for a reason the Data Center wrote down: with it
+; confined to this floor, `CampaignValidator`'s four-distinct-bosses rule would have exactly one legal
+; dealing, so the Orchestrator would guard floor 4 every run and the campaign's last fight would never
+; change. That is the cost the Data Center paid for locking Cascade Failure to itself, and paying it
+; again one floor later would be choosing not to have read it.
+;
+; It survives being met early for the same reason Cascade Failure does. Everything it does is a lit
+; rectangle that ramps for 1.9 seconds before anything happens, which is a telegraph read on its own
+; terms at any depth, and its plates are its own — it does not require the arena to have pads in it,
+; so it works in a Help Desk room that has never heard of one. What the floor teaches first is the
+; verb, not the fight.
+;
+; And there is no `if floor_number == 4` anywhere in any of it, which is the property this floor exists
+; to prove: a fourth floor is four resources and a boss, not a branch.
+boss_pool = Array[BossEncounter]([ExtResource("92_orchestrator"), ExtResource("93_cascade"), ExtResource("94_error"), ExtResource("95_king")])

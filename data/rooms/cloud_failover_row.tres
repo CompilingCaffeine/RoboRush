@@ -1,0 +1,45 @@
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="1_template"]
+[ext_resource type="Script" path="res://scripts/resources/migration_link.gd" id="90_link"]
+
+[sub_resource type="Resource" id="Resource_link_0"]
+script = ExtResource("90_link")
+a = Rect2i(5, 1, 2, 2)
+b = Rect2i(5, 5, 2, 2)
+
+[sub_resource type="Resource" id="Resource_link_1"]
+script = ExtResource("90_link")
+a = Rect2i(12, 1, 2, 2)
+b = Rect2i(12, 9, 2, 2)
+
+[sub_resource type="Resource" id="Resource_link_2"]
+script = ExtResource("90_link")
+a = Rect2i(19, 5, 2, 2)
+b = Rect2i(19, 9, 2, 2)
+
+[resource]
+script = ExtResource("1_template")
+id = &"cloud_failover_row"
+type = 1
+; Three bands of floor separated by two long ducts, and three links stitching them
+; together at different points. The first room on the floor where the pads are a
+; *network* rather than a door.
+;
+; Unlike `cloud_split_aisle` the bands are genuinely walkable between — the ducts stop
+; short of both side walls, so the columns at either end are open. That is the point:
+; here a pad is a shortcut rather than the only route, and taking the long way round is a
+; real option that costs time instead of being impossible. A floor whose every pad is
+; mandatory has taught the player that pads are doors.
+obstacles = Array[Rect2i]([])
+enemy_spawns = Array[Vector2i]([Vector2i(8, 1), Vector2i(16, 1), Vector2i(8, 10), Vector2i(13, 5)])
+ducts = Array[Rect2i]([Rect2i(3, 3, 20, 1), Rect2i(3, 8, 20, 1)])
+; One link per pair of adjacent bands and one that skips the middle entirely. Three
+; distinct pip counts in one room, which is the most this floor asks anybody to keep
+; straight.
+pad_links = Array[MigrationLink]([SubResource("Resource_link_0"), SubResource("Resource_link_1"), SubResource("Resource_link_2")])
+reward_spawn = Vector2i(24, 6)
+difficulty = 3
+floor_tags = Array[StringName]([&"cloud_ops"])
+min_floor = 4
+max_floor = 4

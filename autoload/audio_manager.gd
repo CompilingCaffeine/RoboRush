@@ -29,6 +29,7 @@ const LIBRARY := {
 	&"enemy_death": "res://audio/sfx/enemy_death.wav",
 	&"player_hurt": "res://audio/sfx/player_hurt.wav",
 	&"dash": "res://audio/sfx/dash.wav",
+	&"migrate": "res://audio/sfx/migrate.wav",
 	&"room_clear": "res://audio/sfx/room_clear.wav",
 	&"low_integrity": "res://audio/sfx/low_integrity.wav",
 	&"pickup": "res://audio/sfx/pickup.wav",
@@ -64,6 +65,8 @@ const MUSIC_LIBRARY := {
 	&"dev_boss": "res://audio/music/dev_boss.wav",
 	&"data_explore": "res://audio/music/data_explore.wav",
 	&"data_boss": "res://audio/music/data_boss.wav",
+	&"cloud_explore": "res://audio/music/cloud_explore.wav",
+	&"cloud_boss": "res://audio/music/cloud_boss.wav",
 }
 
 ## Seconds to crossfade between tracks. Long enough not to read as a cut, short enough that

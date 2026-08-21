@@ -24,6 +24,7 @@
 [ext_resource type="Resource" path="res://data/bosses/cascade_failure_encounter.tres" id="92_cascade"]
 [ext_resource type="Resource" path="res://data/bosses/scrap_king_encounter.tres" id="93_king"]
 [ext_resource type="Resource" path="res://data/bosses/runtime_error_encounter.tres" id="94_error"]
+[ext_resource type="Resource" path="res://data/bosses/orchestrator_encounter.tres" id="95_orchestrator"]
 
 [resource]
 script = ExtResource("1_floor")
@@ -96,4 +97,4 @@ treasure_grants_item = true
 ; `CampaignValidator`'s boss supply stops being exactly tight — three bosses, three floors, any
 ; dealing works — which is the point of a pool. A fourth floor is now a fourth boss, not a
 ; re-plumbing of the first three.
-boss_pool = Array[BossEncounter]([ExtResource("92_cascade"), ExtResource("93_king"), ExtResource("94_error")])
+boss_pool = Array[BossEncounter]([ExtResource("92_cascade"), ExtResource("93_king"), ExtResource("94_error"), ExtResource("95_orchestrator")])

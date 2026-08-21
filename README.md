@@ -4,26 +4,32 @@ A 2D top-down roguelite shooter built to [`robo_rush_build_spec.md`](robo_rush_b
 You play an obsolete maintenance robot scavenging hardware and software upgrades
 inside a corrupted software megacorporation.
 
-**Current state: Milestone 6 — Polish.** A complete run exists, and the game now
-introduces itself. It opens on a title screen, tells a first-time player the one thing
-they cannot work out by pressing keys, and remembers their settings and their records
-between sessions. A ten-room floor is generated procedurally with a start, six combat
-rooms, a treasure vault, a shop, and a boss arena. You fight through it against four
-enemy types, spend scrap on items you cannot all afford, and finish against the Merge
-Conflict — a boss that splits into two incompatible versions of itself and heals one when
-you damage the other, until you stop shooting it and go break the terminals keeping them
-in sync. Beating it offers a choice of three rare items, and the run ends on a statistics
-screen that marks anything you have never done better.
+**Current state: four floors of a planned six.** A complete run exists and the game
+introduces itself: it opens on a title screen, tells a first-time player the one thing they
+cannot work out by pressing keys, and remembers their settings and their records between
+sessions. Each floor generates ten rooms procedurally — a start, six combat rooms, a
+treasure vault, a shop, and a boss arena — and each teaches one idea before combining it
+with the ones before.
+
+The Help Desk is the fundamentals. Development adds compile lanes, a stripe of floor that
+announces itself and then goes off. The Data Center adds throughput zones that charge for
+standing still and cable ducts that stop a chassis and not a shot. Cloud Operations adds
+migration pads: two patches of floor that are the same place, and the first thing in the
+game that moves the player. Any floor can draw any of the four bosses, so the last fight of
+a run is not the same fight twice.
 
 Items compose: a run that finds Ricochet Driver and Fork Bomb fires shots that bounce
 off a wall and then split, with no code anywhere aware those two items can be held at
-once.
+once. Stacked multipliers bend rather than compound, so the worst legal build does about
+9.4 times the damage the enemies are written for instead of 52.
 
 Engine: **Godot 4.7.1**, GDScript, GL Compatibility renderer.
 
-**It still has not been played by a person.** That is the one thing every milestone since
-the third has ended by admitting, and it is still true. See
-[Known limitations](#known-limitations).
+**It has now been played, once, and not far enough.** A beta pass produced the findings in
+[What playing it answered](#what-playing-it-answered) — one mild sentence about the Data
+Center that turned out to be three bugs — which is the strongest argument in this document
+for playing it again. Nobody has played Cloud Operations at all, or timed a run end to end
+at four floors. See [Known limitations](#known-limitations).
 
 ---
 
@@ -580,6 +586,8 @@ scripts/combat/shot_counter.gd          + A shot tally several weapons can share
 scripts/combat/targeting.gd               The hostile bodies near a point
 scripts/combat/explosion.gd               One blast, damage only
 scripts/combat/chain_lightning.gd         Damage that hops between enemies
+scripts/combat/compile_lane.gd             Development: a stripe of floor that announces itself
+scripts/combat/thermal_zone.gd             The Data Center: ground that charges for standing still
 
 scripts/components/player_input.gd        Named actions -> movement, fire, dash, interact
 scripts/components/motion_controller.gd   Acceleration/deceleration
@@ -620,7 +628,11 @@ scenes/enemies/memory_leech.tscn / .gd   + Commits to a charge it will not steer
 scenes/enemies/firewall_node.tscn / .gd  + Stationary; sweeps rotating beams
 scenes/bosses/merge_conflict.tscn / .gd  + The Scrap King and its three phases
 scenes/bosses/boss_part.tscn / .gd       + A shootable body that forwards its hits
-scenes/bosses/boss_terminal.tscn / .gd   + A synchronization terminal
+scenes/bosses/boss_terminal.tscn / .gd     A synchronization terminal
+scenes/bosses/runtime_error.tscn / .gd     Development's boss
+scenes/bosses/cascade_failure.tscn / .gd   The Data Center's boss
+scenes/bosses/orchestrator.tscn / .gd   + Cloud Operations' boss; migrates, cannot be shot dead
+scenes/bosses/orchestrator_core.tscn    + Its one body
 scenes/shop/shop_room.tscn / .gd         + A shop's stock, rerolls, and exclusive choices
 scenes/shop/shop_stand.tscn / .gd        + One thing for sale
 scenes/projectiles/projectile.tscn / .gd   Fully config-driven projectile
@@ -628,6 +640,10 @@ scenes/effects/*.tscn                      Impact, death, explosion, chain zap, 
 scenes/rooms/wall_block.tscn / .gd         Resizable solid wall
 scenes/rooms/room.tscn / .gd               A room built from a template
 scenes/rooms/door.tscn / .gd               Shared door between two rooms
+scenes/rooms/cable_duct.tscn / .gd         Stops a chassis, passes a shot
+scenes/rooms/migration_pad.gd           + Cloud Operations: one end of a link, and the only
+                                            thing in the game that moves the player. No scene —
+                                            it draws itself, like a thermal zone
 scenes/floors/floor.tscn / .gd             Instantiates the layout, runs the room loop
 scenes/pickups/pickup.tscn / .gd           One scene, behaviour from PickupConfig
 scenes/ui/combat_hud.tscn / .gd            Integrity, dash, weapon, scrap, items, boss bar
@@ -644,8 +660,12 @@ shaders/damage_vignette.gdshader        + A red frame when the player is hit
 data/player, data/projectiles, data/weapons    Player, shot, and weapon tuning
 data/enemies/*.tres                        Four enemies, each its own config type
 data/spawns/*.tres                       + The floor's weighted enemy roster
-data/bosses/merge_conflict.tres          + The boss's phases and attacks
-data/rooms/*.tres                          Eight templates (start, combat, treasure, shop, boss)
+data/bosses/*.tres                         Four bosses: tuning, and the four things the HUD says
+scripts/resources/migration_link.gd     + A pair of pads, so half a link is unauthorable
+data/rooms/*.tres                          Thirty-two templates across four floors
+data/runs/main_campaign.tres               Which floors a run is made of, in order
+data/floors/floor_*.tres                   One per floor: rooms, roster, economy, boss pool
+data/spawns/<floor>/*.tres                 A floor's own weights for an enemy it shares
 data/floors/floor_1_help_desk.tres         Floor 1: parts, rosters, rewards, item pool
 data/runs/main_campaign.tres             + The run's floor order, by stable id and path
 data/items/*.tres                          54 items: 48 one-time, 6 stackable chips
@@ -660,26 +680,36 @@ tests/test_case.gd                         Suite base class
 tests/test_player_movement.gd              32 movement and dash checks
 tests/test_combat.gd                       126 data, component, and integration checks
 tests/test_player_input.gd                 38 arrow-key shooting checks
-tests/test_campaign.gd                  + 62 campaign, lookup, seed, and injected-fault checks
-tests/test_determinism.gd               + 127 seed-derivation, stream, manifest, and record checks
-tests/test_economy.gd                   + 36 reward, boss-choice, stacking, and 10k-run checks
-tests/test_post_boss.gd                 + 25 checks that a dead boss's hazards still resolve
-tests/test_floor.gd                        161 generation, invariant, template, and floor-advance checks
-tests/test_items.gd                        174 item, stack, inventory, and synergy checks
-tests/test_enemies.gd                      84 checks that each enemy poses its problem
+tests/test_campaign.gd                     74 campaign, lookup, seed, and injected-fault checks
+tests/test_determinism.gd                  155 seed-derivation, stream, manifest, and record checks
+tests/test_economy.gd                      57 reward, boss-choice, stacking, and 10k-run checks
+tests/test_post_boss.gd                    36 checks that a dead boss's hazards still resolve
+tests/test_floor.gd                        688 generation, invariant, template, and floor-advance
+                                            checks, including the flood fill that walks every
+                                            template in the campaign
+tests/test_items.gd                        548 item, stack, inventory, and synergy checks
+tests/test_enemies.gd                      200 checks that each enemy poses its problem
 tests/test_run.gd                          64 statistics, state, and summary checks
-tests/test_shop.gd                         47 price, purchase, and refusal checks
-tests/test_boss.gd                         85 phase, terminal, and defeat checks
-tests/test_save.gd                      + 72 settings, save format, and record checks
-tests/test_checkpoint.gd                + 129 boundary-checkpoint, resume, refusal, and
+tests/test_shop.gd                         75 price, purchase, and refusal checks
+tests/test_boss.gd                         104 phase, terminal, and defeat checks
+tests/test_runtime_error.gd                97 checks on Development's boss
+tests/test_cascade_failure.gd              101 checks on the Data Center's boss
+tests/test_thermal.gd                      183 checks on what may and may not heat a zone
+tests/test_migration.gd                 + 179 checks on what a pad moves, and what rearms it
+tests/test_orchestrator.gd              + 64 checks on Cloud Operations' boss, most of them
+                                            asserting what the fight refuses to do
+tests/test_save.gd                         83 settings, save format, and record checks
+tests/test_checkpoint.gd                   198 boundary-checkpoint, resume, refusal, and
                                             file-recovery checks
-tests/test_soak.gd                      + 100 complete six-floor campaigns, checked for
+tests/test_gate.gd                         72 checks of the six-floor plan's per-floor gate,
+                                            counted off the campaign rather than hard-coded
+tests/test_soak.gd                         100 complete six-floor campaigns, checked for
                                             anything left behind
-tests/greybox_campaign.gd               + A campaign of any length, for suites needing more
+tests/greybox_campaign.gd                  A campaign of any length, for suites needing more
                                             floors than the game has
-tests/test_audio.gd                     + 55 library, loop, and crossfade checks
-tests/test_gamepad.gd                   + 67 checks driven by a synthesized controller
-tests/test_balance.gd                   + 63 checks on what the tuning numbers mean
+tests/test_audio.gd                        110 library, loop, crossfade, and watchdog checks
+tests/test_gamepad.gd                      96 checks driven by a synthesized controller
+tests/test_balance.gd                      165 checks on what the tuning numbers mean
 
 tools/release.sh                        + Builds every target from a tag, hashed and
                                             manifested
@@ -689,8 +719,8 @@ tools/ci/lib.sh                         + What "pinned" means, shared by both bu
 tools/engine.lock                       + The pinned engine, template and SDK hashes
 tools/generate_input_map.gd                Regenerates project.godot's [input]
 tools/generate_art.py                      Regenerates every sprite and tile sheet
-tools/generate_audio.py                    Synthesizes all 19 sound effects
-tools/generate_music.py                 + A small tracker; the three music loops
+tools/generate_audio.py                    Synthesizes all 20 sound effects
+tools/generate_music.py                    A small tracker; the nine music loops
 tools/generate_ui_font.py               + The UI's bitmap font and its BMFont page
 ```
 
@@ -1144,25 +1174,24 @@ resulting frames, and by nothing else. The suite was green for all of them.
    it can get. The environment, the boss, and the upgrade attachments were the three things
    worth the effort this milestone; the enemy and player silhouettes are milestone 5's and
    hold up.
-5. **The music is seven short loops** — between 10.9 and 20.0 seconds each. A boss fight
-   outlasts its track several times over. The tracker can express more than this; nobody has
-   written longer. Each floor added an explore/boss *pair*, which is a third theme rather than a
-   third length: the shortest track in the game is the newest one.
+5. **The music is nine short loops** — between 10.9 and 22.9 seconds each. A boss fight still
+   outlasts its track several times over. Cloud Operations is where this stopped getting worse:
+   its two run 48 beats against the 32 of every track before them, which makes them the longest
+   in the game by eight seconds, and the only cost was writing more bars. The other seven are
+   still the length they were.
 6. **Only three items visibly change the robot.** Spec section 20 asks for sprite changes
    from major items and an eleven-pixel robot has room for about that many before it stops
    being a robot. The other nine still get only a tinted cannon.
-7. **Three floors of a planned six.** Help Desk, Development, and the Data Center exist and
-   chain; Cloud Operations, Executive Systems, and Core Intelligence do not. Every seam this
-   entry used to name is gone — the floor order is a `RunDefinition` list in
-   `data/runs/main_campaign.tres`, victory is "the last entry in that list" decided in one
-   place, and each floor carries its own theme, roster, and pair of tracks. The campaign
-   declares `target_floor_count = 6` against three authored floors with
+7. **Four floors of a planned six.** Help Desk, Development, the Data Center and Cloud
+   Operations exist and chain; Executive Systems and Core Intelligence do not. The campaign
+   declares `target_floor_count = 6` against four authored floors with
    `require_complete = false`, so it plays and reports what is missing rather than refusing to
-   start; flipping that flag is the last step of the campaign, not a thing to do early. What
-   is *not* proven is the pipeline claim: a floor's rooms, roster, and economy are data, but
-   each of the three so far also brought new code for its own mechanic, and no floor has yet
-   been added without any. That is exactly what [Floor 4's gate](SIX_FLOOR_SCALING_GAMEPLAN.md)
-   is written to test.
+   start; flipping that flag is the last step of the campaign, not a thing to do early.
+   [Floor 4's gate](#floor-4-cloud-operations--built) has been met, with the narrower claim
+   written out there: no gameplay path anywhere branches on floor number, and a floor is data —
+   but a new *mechanic* is still four files, so "a floor is only a new `.tres`" is true only of
+   floors that reuse an idea. Neither of the two remaining floors is required to introduce one,
+   and Core Intelligence is specified not to.
 8. **Five of spec section 23's twelve game states exist** — main menu, run, paused, game
    over, victory. Settings and the shop are deliberately *not* states: one is a panel over
    whichever screen opened it, the other is a room the player walks into.
@@ -1223,7 +1252,7 @@ victory.
 This work begins after the playtest gate below. The Help Desk still has to prove that its
 movement, economy, and boss are enjoyable before a second floor compounds them.
 
-### The floor's job
+### Development's job
 
 The Help Desk teaches the player to react to four readable movement problems. Development
 asks them to **predict**. Its shared visual language is the **compile lane**: a row or column
@@ -1240,7 +1269,7 @@ The presentation should read as an unfinished development lab rather than anothe
 cyan and violet machinery, amber warnings, red execution errors, broken IDE windows, temporary
 build scaffolds, and a distinct exploration and boss loop. Rooms stay the existing 26-by-12
 tile single-screen arenas. **Built** — see
-[The floor's own look and sound](#the-floors-own-look-and-sound), including the one place this
+[Development's look and sound](#developments-look-and-sound), including the one place this
 brief and the floor's warning language turned out to contradict each other.
 
 ### Encounter curve
@@ -1540,7 +1569,7 @@ having never seen them before. The honest options if that reads badly are to tea
 earlier, to tune the two pools closer together, or to weight the draw rather than leave it even.
 `tests/test_balance.gd` records the reasoning beside the assertion.
 
-### The floor's own look and sound
+### Development's look and sound
 
 A floor's presentation is a [`FloorTheme`](scripts/resources/floor_theme.gd) — two tile sheets
 and two music ids — hung off `FloorConfig`. Split out rather than added as four more fields for
@@ -1631,7 +1660,7 @@ reason.
    environment art, and music. **Done.** The Code Runner, the Compiler, compile lanes, and the
    finished boss, plus three more enemies (Null Pointer, Deadlock, Recursion), nine items
    rather than six, the status system those items were the reason for, and Development's own
-   tile sheets and soundtrack — see [The floor's own look and sound](#the-floors-own-look-and-sound).
+   tile sheets and soundtrack — see [Development's look and sound](#developments-look-and-sound).
 6. Play full two-floor runs with keyboard and controller, tune against the carried Help Desk
    build rather than a fresh debug character, then verify the exported builds.
 
@@ -1664,7 +1693,7 @@ Development proves that the run can grow without weakening the room combat alrea
 The third floor is in the campaign. `main_campaign.tres` lists Help Desk, Development and
 [Data Center](data/floors/floor_3_data_center.tres), and a run now plays all three.
 
-### The floor's job
+### The Data Center's job
 
 [`SIX_FLOOR_SCALING_GAMEPLAN.md`](SIX_FLOOR_SCALING_GAMEPLAN.md) calls this the
 "architecture-proving vertical slice", and the emphasis is on *proving* rather than on the floor.
@@ -1744,7 +1773,7 @@ the other, and the wall's own two say the arena is wired up rather than the quer
 everything. A second check flood-fills every template in the campaign, because a duct is the one
 piece of geometry that can seal a robot into a room while looking like open floor.
 
-### Seven combat rooms
+### The Data Center's seven combat rooms
 
 The floor shipped with four, and [what playing it answered](#floor-3-was-the-emptiest-floor-in-the-game)
 has the measurements that said that was too few. The three new ones are all built on ducts:
@@ -1947,6 +1976,248 @@ before it carry.
 - Is a boss with no projectiles in it tense or slack?
 - Is 144 the right pool? It is 36 seconds of *perfect* starting-weapon fire, which nobody will have,
   against Runtime Error's 110 and The Scrap King's 60.
+
+---
+
+## Floor 4: Cloud Operations — **built**
+
+A hyperscale hall: sealed concrete, painted aisle markings, and rows of blades that go on past the
+edge of the room. Ten rooms, seven combat templates, a curated six-enemy roster, and a boss that
+cannot be killed by being shot at.
+
+### Cloud Operations' job
+
+The gameplan calls this floor the **content-pipeline proof**, and its gate is not about content at
+all:
+
+> No `if floor_number == 4` gameplay path is required.
+
+Floors 2 and 3 each proved a floor could be *authored*. This is the first that tests whether one can
+be authored without reaching into the engine — which is the claim the remaining two floors are
+budgeted against, and the claim the README had been making since `FloorConfig` existed without ever
+having been made to hold.
+
+It holds, and the honest version of that is narrower than the slogan. **A floor is data. A new
+mechanic is not.** Adding migration pads took four files — the mechanic, a field on `RoomTemplate`, a
+`_build_pads` in `Room`, and a resource — and then every one of the ten rooms, the roster, the theme,
+the boss's eligibility, and the campaign entry was a `.tres`. What is *not* in any of it is a branch
+on which floor is being played. The generator, the room, the enemies, and all four bosses read
+nothing about floor number; a Data Center template leaves `pad_links` empty and gets no pads, and a
+Help Desk arena that has never heard of one can still host this floor's boss.
+
+That is the property, and it was cheaper to have from the first floor that needed it than to
+retrofit. `RoomTemplate.thermal_zones` said so a floor early:
+
+> That is the property Floor 4 of the plan exists to prove, and it was cheaper to have from the
+> first floor that needed it than to retrofit later.
+
+### The signature mechanic: migration pads
+
+Two patches of floor that are the same place. Step onto either end of a link and the robot is
+standing on the other.
+
+Every floor before this answers *where are you standing* by changing what the ground costs — a
+`CompileLane` denies a stripe of it, a `ThermalZone` charges for holding still on it, a `CableDuct`
+decides which way round it you may go. All three are things done **to** the floor. A pad changes what
+the floor is *connected to*, which is the one thing a room could not previously say — and the player
+says it, by choosing to step on one. It is the first thing in the game that moves the player.
+
+**It charges nothing.** The lesson `ThermalZone` records at length is that a mechanic taxing the
+player's damage output drowns a weak build and is invisible to a strong one. A pad is not a hazard,
+never damages anybody, and no item interacts with it. What it costs is a decision about position,
+which is the one currency every build has exactly as much of as every other.
+
+**The destination is never a surprise**, and not because of anything the code does: every room in
+this game is one screen with no scrolling, so both ends of a link are in view at the moment the
+player decides. Pairs are told apart by **counting pips** — one bar pairs with one bar — which is
+shape rather than hue, the lesson the thermal zones' louvre bars record after two floors shipped
+hazards that both resolved to red.
+
+**Bouncing is prevented by a rule, not a timer.** A pad the player *arrived* on does not fire until
+they leave it. That is a fact about where the robot is rather than about how long ago something
+happened, so there is no cooldown constant anywhere — and any constant would have been wrong for
+somebody's frame rate.
+
+#### What it changed underneath
+
+One thing, and it is the interesting one. Floor 3 added a flood fill asserting that a template's
+walkable floor is a single connected region, because a duct is invisible to everything except a
+chassis and a sealed pocket reads as open floor both on screen and in the data. **A room split by
+ducts and joined only by pads fails that check** — and that room is the entire point of the
+mechanic.
+
+So pads are now **edges** in that walk rather than tiles. What the suite asserts is still "the player
+can reach every tile of this room", which is the claim that matters; what it has stopped requiring is
+that they can *walk* there, which was only ever a proxy for it. `cloud_split_aisle` is two regions
+and always will be.
+
+`cloud_blast_radius` is the room that makes the change visible. It is a sealed vault in the middle of
+the floor with the payout inside it and a pad as the only key — which is, tile for tile, the shape of
+a bug this project shipped: `dev_server_ring`'s `reward_spawn` sat inside four walls, so on every
+seed that room paid out, the item dropped where nobody could reach it. The layout is legal now for
+exactly one reason, and the flood fill is what can tell the difference.
+
+### Cloud Operations' seven combat rooms
+
+The ladder is 1 / 2 / 2 / 3 / 3 / 3 / 4, and the numbers are load-bearing rather than descriptive —
+`_capped_by_distance` scales a combat room's allowance by its distance from the start over the
+furthest *combat* room, so a 4 is reachable only at the very end of the floor.
+
+| room | difficulty | what it asks |
+|---|---|---|
+| `cloud_intake_hall` | 1 | the mechanic under mild pressure; one link, open floor, cover |
+| `cloud_split_aisle` | 2 | a duct wall top to bottom — shots cross, bodies do not, and the pad is the only way over |
+| `cloud_region_pair` | 2 | two crossed links, so a pad becomes a *question* about which |
+| `cloud_blast_radius` | 3 | a sealed vault with the reward in it and a pad as the key |
+| `cloud_failover_row` | 3 | three links across two long ducts: pads as a network, with walking still possible |
+| `cloud_cold_row` | 3 | an S of ducts that is tedious on foot, and one link that skips all of it |
+| `cloud_control_plane` | 4 | three regions, two links, no walking between any of them |
+
+`cloud_failover_row` and `cloud_cold_row` are deliberately *not* pad-mandatory. A floor whose every
+pad is the only route has taught the player that pads are doors; these two are where the mechanic has
+to earn being used, because going round is possible and slow.
+
+The start room is where the lesson actually lands. `cloud_ingress` is one link, no enemies, no
+hazard, and no door shut behind the player — the only place in the game where a new mechanic is
+taught with nothing else happening. Every floor before this taught its idea in a combat room and
+hoped the player had attention spare. Floor 3's measurement is the argument against doing that again:
+its teaching room was 2.4 of the six combat rooms a run saw, which is a tutorial that will not stop
+repeating itself. There is exactly one start room per floor and it cannot be skipped, so a lesson
+placed there is delivered once and always.
+
+### A roster measured before anybody played it
+
+Six entries, all of them this floor's own `EnemySpawn` resources under `data/spawns/cloud_ops/`. None
+of the six is exclusive to this floor, which makes the private copies the point rather than a
+formality — a shared spawn resource is one weight that has to be right on every floor listing it, and
+the Data Center measured what that costs when it is not.
+
+The roster's argument is **Pop Up Drone**. It teleports to a room's edge, and has since the first
+floor, which makes it the only enemy in the game that can cross a cable duct — the only thing that
+can follow the player out of a fight they left. The Data Center excluded it on the grounds that
+nothing a player learns about holding ground applies to it; here that is the qualification rather
+than the objection. A mobility floor whose enemies are all stationary is a floor where the mechanic
+is a convenience. What it still cannot do is get into a sealed interior: it picks points on the
+room's inset perimeter, so `cloud_blast_radius`'s vault stays sealed and a pad is still the only way
+in.
+
+Deliberately absent: Load Balancer and Stale Replica, which are the Data Center's and listed by no
+other floor — the two enemies that floor exists to introduce should not become anybody else's
+furniture. Deadlock and Recursion are both about timing rather than position.
+
+**The floor was measured across four hundred generated floors before it was called finished**, which
+is the one piece of process Floor 3 bought and the reason this table exists at all. Two of the three
+columns below are corrections the measurement forced.
+
+| | authored | after measuring | floors 1-3 |
+|---|---|---|---|
+| enemies per floor | 25.2 | 23.8 | 22.2 / 22.2 / 22.9 |
+| Null Pointer | absent from 24.2% of floors | 3.0% | — |
+| Memory Leech | absent from 16.8% | 3.8% | — |
+| Code Runner | 6.34 a floor | 4.32 | — |
+| `cloud_control_plane` | 0.28 rooms per floor | 0.28 | `data_grid_floor` 0.29 |
+
+The two absences were the Data Center's exact fault, reproduced: both entries were authored at
+`min_difficulty` 3, and only about 2.4 of a floor's six combat rooms reach difficulty three, so a
+third-tier entry competes for a slice of the floor rather than for the floor. Twenty-four per cent is
+worse than the 22% that Floor 3's Load Balancer was corrected for. Nobody would have reported it —
+that is the whole reason the measurement runs.
+
+The enemy count is the other one. Authored, this floor was 13% fuller than the fullest floor before
+it, which is an escalation nobody designed; two rooms lost a spawn point each. It is still a step up,
+and that is deliberate for the last floor of the campaign, but it is now a step rather than a jump.
+
+### Floor boss: Orchestrator
+
+Named for the thing that decides where a workload runs. **It cannot be killed by being shot.**
+
+The live instance absorbs a pool of damage and then *fails over*: it names one of three plates, lights
+it, counts down for 1.9 seconds, and moves there with its pool refilled. Left alone that loop runs
+forever, and no amount of damage per second shortens it by a second. What damage buys is not progress
+but **events** — it is how the player forces a failover to happen.
+
+The turn is positional. **Stand on the plate it is migrating to and the failover is denied**: the load
+has nowhere to go, the boss loses a generation, and it is stunned and open. Three denials and it is
+done. So the fight is a race with a starting gun the player fires themselves — shoot to force the
+announcement, read which plate, get there first. The boss performs the floor's own verb.
+
+Why score it that way at all: the worst legal build does about 9.4 times the damage per second the
+enemies are written for, and every boss before this one is, in the end, a health bar. A build near
+that ceiling deletes them, which is a fine reward for a good run and a poor final exam. Denials make
+this the one boss whose length is set by the player's reading rather than by their inventory — and
+they do it **without** a damage cap or an immunity phase, neither of which reads as anything but the
+game refusing to let you win. A strong build is still strongly rewarded: it fills the pool faster, so
+it gets more failovers, so it gets more chances to deny one. It is given more of the fight. What it
+cannot do is skip the reading.
+
+`tests/test_orchestrator.gd` is unusual among the boss suites in that most of it asserts things the
+fight *refuses* to do — six checks exist so that turning the pool into a health bar fails loudly. It
+would make the boss easier, would read as a simplification in a diff, and would delete the entire
+fight.
+
+It is **not called Failover**, and that is not a stylistic choice: the game already ships an item
+with that id (a death save). Two things sharing one would collide in a run's records and put the same
+word in the HUD for a boss banner and a pickup banner, which is the specific confusion
+`BossEncounter` was created to stop.
+
+#### Any floor, any boss — again
+
+All four floors now list all four bosses, and the Orchestrator had to be added to the three before
+this one rather than kept to its own. The reason is arithmetic that the Data Center already wrote
+down: `CampaignValidator` requires a distinct boss per floor and checks every subset, so with the
+Orchestrator confined to floor 4 there would be exactly **one** legal dealing — it would guard floor
+4 every run and the campaign's last fight would never change. That is precisely the cost the Data
+Center paid for locking Cascade Failure to itself, and paying it again one floor later would be
+choosing not to have read it.
+
+It survives being met early for the same reason Cascade Failure does. Everything it does is a lit
+rectangle ramping for 1.9 seconds before anything happens, which is a telegraph read on its own terms
+at any depth, and its plates are its own — the fight needs no pads in the arena, so it works in a
+Help Desk room that has never heard of one. What this floor teaches first is the verb, not the fight.
+
+`RunDefinition.content_version` goes to 3 with all of it. A run is four floors instead of three, so
+victory has moved and a seed no longer reproduces the same run.
+
+### Cloud Operations' look and sound
+
+Deliberately the lightest and warmest environment in the game, which is a contrast decision rather
+than a taste one: the Data Center is near-black cold steel and this floor follows it, so a second
+dark blue hall would read as the same place with different furniture. Walls are stripes where the
+Data Center's are a grid, because the two have to read apart in peripheral vision and stripe-versus-grid
+does that at any size.
+
+**Nothing in the palette is green.** A pad draws itself spring green because it is the one piece of
+floor in the game that is purely an offer rather than a threat, and a floor carrying green as
+decoration would spend the only colour the player has to find. Exactly the call the Data Center makes
+about teal and violet, and Development about amber.
+
+Two tracks, and they are the first in the game written from an idea rather than a mood. The floor's
+mechanic is that a place can also be a different place, so `cloud_explore`'s melody is a call and an
+answer: a three-note figure low, then the *same figure* an octave up, then a tail belonging to
+neither. Nothing is transposed for colour — it is the identical shape in a different register, which
+is what a migration is. Round the loop it stops being obvious which of the two was the original.
+`cloud_boss` is the same two registers with the answer arriving *first* and the low line catching up
+half a beat late, which is the fight: the boss commits to being somewhere else and the player is
+trying to get there before it does.
+
+Both run 48 beats against the 32 every track before them, which comes out at 22.9 and 17.1 seconds —
+the two longest loops in the game. Short music has been a known limitation since milestone 6 and the
+only cost of fixing it is writing more bars, so this floor wrote more bars. Seven tracks became nine.
+
+### What playing Cloud Operations will have to answer
+
+- **Is 1.9 seconds the right telegraph?** It is the player's entire budget for crossing a 416-pixel
+  arena to deny a failover. Too short and the fight is unwinnable without the arena's corner pads;
+  too long and the denial is free. This is the number to move first.
+- **Does a boss that cannot be damaged to death read as a puzzle or as a cheat?** The reasoning above
+  is sound and the reasoning is not the experience.
+- **Do the pips actually pair?** Counting bars is the colourblind-safe answer and it is also more work
+  than reading a colour. `cloud_failover_row` asks a player to keep three pairs straight at once.
+- **Is a room the fight cannot follow you out of a relief or an exploit?** `cloud_split_aisle` lets the
+  player shoot two enemies that can never reach them. That is either the best thing on the floor or a
+  turret position.
+- **Is 23.8 enemies the right step up** from three floors of 22, given enemy health also grows across
+  a run?
 
 ---
 
@@ -2238,19 +2509,27 @@ had never once appeared in a room written for it and the hardest room on every f
 unreachable. None of the three was visible in the code, in a test, or on screen. Measuring
 after a report is what caught them; nothing was going to generate the report but playing.
 
-The open questions now are a three-floor run's, not a one-floor run's:
+The open questions now are a four-floor run's, and the newest floor has the sharpest of them
+listed under [what playing Cloud Operations will have to answer](#what-playing-cloud-operations-will-have-to-answer). The
+rest, oldest first:
 
 - **Did the Data Center fixes land where they matter?** The distribution moved a long way —
-  22.8 enemies a floor from 16.9, Load Balancer from absent-on-22%-of-floors to absent on
+  22.9 enemies a floor from 16.9, Load Balancer from absent-on-22%-of-floors to absent on
   none — but the report was that the floor felt *thin*, and a better histogram is not the same
   as a floor that plays fuller.
 - **Do the thermal zones and the cable ducts read?** Both are new, and the zones have
   effectively never been played, since until now they were being built in the wrong rooms.
-- **Is three floors the right length?** Nothing has timed a full run end to end.
-- **Does the economy still hold over three shops?** `tests/test_balance.gd` still reasons about
+- **Is four floors the right length?** Nothing has timed a full run end to end, and the run is
+  now a third longer than the last thing anybody played.
+- **Does the economy still hold over four shops?** `tests/test_balance.gd` still reasons about
   scrap against `COMBAT_ROOMS_ON_FLOOR_1` — one floor, one shop. A rare costs 32 and a run now
-  passes three shelves; whether that is tension or an obvious surplus is unmeasured either way.
-- **Is 6 integrity right when the run is three times longer?**
+  passes four shelves; whether that is tension or an obvious surplus is unmeasured either way.
+  This is the piece of the suite most clearly left behind by the content.
+- **Is 6 integrity right when the run is four times longer?**
+- **Is the Orchestrator fair on floor 1?** Every floor can now draw every boss, so a first-room
+  player can meet a fight whose answer is positional and whose mechanic they have not been
+  taught. The reasoning says the telegraph carries it. Cascade Failure's inclusion rests on the
+  same argument and has not been played either.
 - Does the CRT filter look like an arcade cabinet or like a dirty screen?
 
 Then move the numbers in `data/`, which is one `.tres` edit each and the whole payoff for
@@ -2267,12 +2546,14 @@ After that, in rough order of value:
 2. **Run the Windows and Linux builds on their target environments.** Web CI now exports,
    serves, and boots the browser build on every push, which is the execution test the other
    three still lack; the macOS app runs here, and Windows and Linux have never been started.
-3. **Build [Floor 4, Cloud Operations](SIX_FLOOR_SCALING_GAMEPLAN.md).** Its gate is the
-   interesting one and it is deliberately not about content: *no `if floor_number == 4`
-   gameplay path is required*. Floors 2 and 3 each proved a floor could be authored; Floor 4 is
-   the first that tests whether one can be authored without new code, which is the claim the
-   remaining three floors are budgeted against.
-4. **Longer music.** The tracker takes patterns; the tracks are short because writing more
-   bars is the only cost. Seven tracks now, none over twenty seconds.
+3. **Build [Floor 5, Executive Systems](SIX_FLOOR_SCALING_GAMEPLAN.md).** The plan makes it the
+   endurance floor rather than another foundational subsystem: mature builds, compounding items,
+   dense compositions, UI capacity at 480x270, and a full five-floor soak against the frame-time
+   budgets. It is the first floor whose gate is about the *run* rather than about the floor, and
+   with Cloud Operations' pipeline proof behind it, the plan expects it to need no new mechanic
+   at all — which is the claim [limitation 7](#known-limitations) says is still only half tested.
+4. **Longer music, for the other seven tracks.** Cloud Operations' two run 48 beats and come out
+   near twenty-three and seventeen seconds; the seven before them are 10.9 to 20.0 and a boss
+   fight still laps its track. The method is proven and the only cost is bars.
 5. **Elite modifiers** (spec section 15), which the spec says to add once the base enemies
    feel good — a judgement that needs playing first.

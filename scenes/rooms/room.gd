@@ -46,6 +46,7 @@ const CABLE_DUCT := preload("res://scenes/rooms/cable_duct.tscn")
 @onready var _floor: Sprite2D = %Floor
 @onready var _walls: Node2D = %Walls
 @onready var _thermals: Node2D = %Thermals
+@onready var _pads: Node2D = %Pads
 @onready var _obstacles: Node2D = %Obstacles
 @onready var _enemies: Node2D = %Enemies
 @onready var _bounds: Area2D = %Bounds
@@ -76,6 +77,7 @@ func build(room_plan: RoomPlan, room_theme: FloorTheme = null) -> void:
 	_build_obstacles()
 	_build_ducts()
 	_build_thermal_zones()
+	_build_pads()
 	_build_bounds()
 
 	_bounds.body_entered.connect(_on_body_entered)
@@ -125,6 +127,9 @@ func set_active(active: bool) -> void:
 	# in would heat nothing, hurt nobody, and still cost a physics step and a group lookup per
 	# frame — and on the frame it filled, it would announce a vent into an empty room.
 	_thermals.process_mode = mode
+	# And the pads, for the same reason: each one asks the tree for the player every physics frame,
+	# which is work worth nothing at all in a room the player is demonstrably not in.
+	_pads.process_mode = mode
 
 
 func get_room_combat() -> RoomCombat:
@@ -337,6 +342,37 @@ func _build_thermal_zones() -> void:
 		return
 	for tile_rect: Rect2i in plan.template.thermal_zones:
 		ThermalZone.spawn(_thermals, get_tile_block_rect(tile_rect.position, tile_rect.size))
+
+
+## Lays out this template's migration pads, if it has any. See `MigrationPad` for what they do and
+## `RoomTemplate.pad_links` for why they are declared on the template rather than the floor.
+##
+## Both ends are spawned and then joined, rather than each pad resolving its own partner. A pad that
+## looked its partner up would need something to look it up *in* — an index, a name, a second pass —
+## and every one of those is a way for a link to be half built. Spawning a pair together means the
+## only code that can make a pad is code that makes two and joins them.
+##
+## Under their own `Pads` node, and stopped with the enemies by `set_active` for the reason the
+## thermal zones are: a pad asks the scene tree for the player every physics frame, and ten rooms of
+## pads asking that in rooms nobody is standing in is the same wasted work ten rooms of AI would be.
+##
+## Placed through `get_tile_block_rect`, which clamps a block into the interior — so a template
+## whose pad runs off the edge of the room gets a pad at the edge rather than one half outside it,
+## and never an arrival point in a wall.
+func _build_pads() -> void:
+	if plan.template == null:
+		return
+	for index: int in plan.template.pad_links.size():
+		var link: MigrationLink = plan.template.pad_links[index]
+		if link == null or not link.is_valid():
+			continue
+		var first := MigrationPad.spawn(
+			_pads, get_tile_block_rect(link.a.position, link.a.size), index
+		)
+		var second := MigrationPad.spawn(
+			_pads, get_tile_block_rect(link.b.position, link.b.size), index
+		)
+		MigrationPad.link(first, second)
 
 
 ## The entry trigger is inset from the interior so it fires only once the player is clearly

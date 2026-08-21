@@ -1,22 +1,29 @@
 extends TestCase
-## The Floor 3 gate, from the six-floor plan, as a suite.
+## The floor gate, from the six-floor plan, as a suite.
 ##
 ## `SIX_FLOOR_SCALING_GAMEPLAN.md` gives each floor a list of conditions that have to hold before
-## the next one is worth starting. Floor 3's are not about the Data Center — they are about the
-## *architecture* it is the first real test of, which is why the plan calls that floor the
+## the next one is worth starting. Floor 3's were not about the Data Center — they were about the
+## *architecture* it was the first real test of, which is why the plan calls that floor the
 ## "architecture-proving vertical slice". Two floors can produce one transition, and one transition
 ## cannot show a trend. Three can.
 ##
+## **Nothing here is written for a particular floor count any more.** It was, and Cloud Operations is
+## what changed it: every loop below ran twice, because three floors have two boundaries, and adding
+## a fourth floor made a passing suite quietly stop covering the last transition in the game. The
+## counts now come off the campaign, so the floor after this one is covered by this file on the day it
+## is listed rather than on the day somebody remembers to widen a loop.
+##
 ## The five criteria, and where each is answered:
 ##
-## 1. Floors 1 -> 2 -> 3 complete with no stale object from either prior floor.
-## 2. All three floors pass at least 120 generation seeds.
-## 3. Both transitions preserve every declared run-wide field and reset every declared floor-local
+## 1. Every floor completes with no stale object from any prior floor.
+## 2. Every floor passes at least 120 generation seeds.
+## 3. Every transition preserves each declared run-wide field and resets each declared floor-local
 ##    field.
 ## 4. Death, abandon, restart, reward claim, and checkpoint restore each file the run at most once.
 ## 5. Post-boss committed hazards retain their intended behaviour.
 ##
 ## All five are checked here, against the **shipped campaign** rather than against a greybox one.
+##
 ## That is the difference between this suite and the parts of `tests/test_floor.gd` it overlaps
 ## with. Those checks use a synthetic six-floor campaign precisely so they can produce five
 ## boundaries before five floors exist; this one is the same questions asked of the content the
@@ -46,6 +53,15 @@ const ARENA := Rect2(Vector2.ZERO, Vector2(416.0, 192.0))
 ## so the seeds exercised are not 120 neighbours that hash to nearly the same layout.
 const SEED_STRIDE := 37
 
+## How many floors the campaign is expected to have authored.
+##
+## Stated here rather than read off the campaign, which is the one place in this file that deliberately
+## does *not* derive its count. Everything else does, so that a new floor is covered automatically —
+## but something has to notice that the number changed at all, or a floor deleted by accident would
+## make every loop below shorter and every check in them still pass. This is the tripwire; the loops
+## are the coverage.
+const FLOORS_AUTHORED := 4
+
 var _campaign: RunDefinition
 
 
@@ -54,12 +70,12 @@ func run() -> void:
 	if not require(_campaign, "the shipped campaign loads"):
 		return
 
-	_test_the_campaign_is_three_playable_floors()
+	_test_the_campaign_is_every_authored_floor()
 	_test_every_field_of_the_run_is_classified()
 	_test_every_floor_generates_across_seeds()
 
-	await _test_one_two_three_leaves_nothing_behind()
-	await _test_both_transitions_carry_the_run_and_replace_the_floor()
+	await _test_the_whole_chain_leaves_nothing_behind()
+	await _test_every_transition_carries_the_run_and_replaces_the_floor()
 	await _test_each_ending_files_the_run_at_most_once()
 	await _test_the_data_centers_boss_leaves_its_committed_heat()
 
@@ -67,11 +83,14 @@ func run() -> void:
 # --- The content ---------------------------------------------------------------
 
 
-## Before anything is generated or driven: the campaign really is three distinct, valid floors, and
-## the validator agrees. Every check below builds on this, and a failure here would otherwise
-## present as five unrelated ones.
-func _test_the_campaign_is_three_playable_floors() -> void:
-	check(_campaign.size() == 3, "the campaign is three floors long (%d)" % _campaign.size())
+## Before anything is generated or driven: the campaign really is `FLOORS_AUTHORED` distinct, valid
+## floors, and the validator agrees. Every check below builds on this, and a failure here would
+## otherwise present as five unrelated ones.
+func _test_the_campaign_is_every_authored_floor() -> void:
+	check(
+		_campaign.size() == FLOORS_AUTHORED,
+		"the campaign is %d floors long (%d)" % [FLOORS_AUTHORED, _campaign.size()],
+	)
 
 	var report := CampaignValidator.validate(_campaign)
 	check(report.is_valid(), "and passes validation:\n%s" % report.describe())
@@ -185,7 +204,7 @@ func _test_every_floor_generates_across_seeds() -> void:
 ## here — `tests/test_floor.gd` runs five against a greybox campaign precisely because a trend needs
 ## more boundaries than this game has floors. What this adds is that the objects being counted are
 ## the real ones: the Help Desk's rooms, Development's, and the Data Center's.
-func _test_one_two_three_leaves_nothing_behind() -> void:
+func _test_the_whole_chain_leaves_nothing_behind() -> void:
 	var arena := Node2D.new()
 	add_child(arena)
 	var floor_node := await _open_the_campaign(arena, 8675309)
@@ -194,7 +213,7 @@ func _test_one_two_three_leaves_nothing_behind() -> void:
 		await advance_physics(2)
 		return
 
-	for boundary: int in 2:
+	for boundary: int in _campaign.size() - 1:
 		await _descend(floor_node)
 		var number := boundary + 2
 		check(
@@ -223,11 +242,13 @@ func _test_one_two_three_leaves_nothing_behind() -> void:
 
 	check(
 		floor_node.get_session().pending_count() == 0,
-		"nothing is left queued after both boundaries",
+		"nothing is left queued after every boundary",
 	)
+	var last := _campaign.floor_id_at(_campaign.size() - 1)
 	check(
-		floor_node.config.id == &"data_center",
-		"and the run has arrived on the Data Center ('%s')" % floor_node.config.id,
+		floor_node.config.id == last,
+		"and the run has arrived on the campaign's last floor, '%s' ('%s')"
+			% [last, floor_node.config.id],
 	)
 
 	arena.queue_free()
@@ -241,7 +262,7 @@ func _test_one_two_three_leaves_nothing_behind() -> void:
 ## must be the new floor's, and are checked against what the campaign says they should be rather
 ## than merely against "something changed" — a boundary that reset the floor seed to zero would
 ## satisfy the weaker version.
-func _test_both_transitions_carry_the_run_and_replace_the_floor() -> void:
+func _test_every_transition_carries_the_run_and_replaces_the_floor() -> void:
 	var arena := Node2D.new()
 	add_child(arena)
 	var floor_node := await _open_the_campaign(arena, 271828)
@@ -257,7 +278,7 @@ func _test_both_transitions_carry_the_run_and_replace_the_floor() -> void:
 	RunManager.spend_death_save(6.0, 1.0)
 	RunManager.offered_item_ids.append(&"__gate_probe")
 
-	for boundary: int in 2:
+	for boundary: int in _campaign.size() - 1:
 		var before := _snapshot(RunManager.RUN_WIDE_FIELDS)
 		var ledgers_before := _snapshot(RunManager.RUN_LEDGER_FIELDS)
 		var stats_before := RunManager.stats

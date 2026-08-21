@@ -1,0 +1,38 @@
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="1_template"]
+[ext_resource type="Script" path="res://scripts/resources/migration_link.gd" id="90_link"]
+
+[sub_resource type="Resource" id="Resource_link_0"]
+script = ExtResource("90_link")
+a = Rect2i(2, 1, 2, 2)
+b = Rect2i(22, 9, 2, 2)
+
+[sub_resource type="Resource" id="Resource_link_1"]
+script = ExtResource("90_link")
+a = Rect2i(2, 9, 2, 2)
+b = Rect2i(22, 1, 2, 2)
+
+[resource]
+script = ExtResource("1_template")
+id = &"cloud_region_pair"
+type = 1
+; Two links instead of one, crossed, so all four corners of the room are one step from
+; their opposite. The first room where a pad is a question — there are two of them under
+; the player's feet and they go to different places.
+;
+; This is where the pips earn their keep. Both links are drawn in the same green because
+; they are the same kind of thing, and they are told apart by counting bars: one bar
+; pairs with one bar. A player who has not noticed that has a fifty-fifty chance of
+; arriving in the wrong corner, and will notice shortly.
+; Two blocks that make the middle of the room a corridor. Without them the diagonal links
+; are a shortcut across ground that was already quick to cross; with them, going round is
+; long enough that the pads are the sensible route and the corridor is a fight.
+obstacles = Array[Rect2i]([Rect2i(6, 4, 3, 4), Rect2i(17, 4, 3, 4)])
+enemy_spawns = Array[Vector2i]([Vector2i(13, 2), Vector2i(13, 9), Vector2i(10, 5), Vector2i(15, 6)])
+pad_links = Array[MigrationLink]([SubResource("Resource_link_0"), SubResource("Resource_link_1")])
+reward_spawn = Vector2i(13, 5)
+difficulty = 2
+floor_tags = Array[StringName]([&"cloud_ops"])
+min_floor = 4
+max_floor = 4

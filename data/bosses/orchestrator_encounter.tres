@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="BossEncounter" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/boss_encounter.gd" id="1_encounter"]
+[ext_resource type="PackedScene" path="res://scenes/bosses/orchestrator.tscn" id="2_scene"]
+
+[resource]
+script = ExtResource("1_encounter")
+id = &"orchestrator"
+scene = ExtResource("2_scene")
+display_name = "ORCHESTRATOR"
+defeat_banner = "NOWHERE LEFT TO PUT IT"
+; All three announced, unlike Cascade Failure, and for the opposite reason. That fight's middle phase
+; changes only *how much* — a number the player can already see on the bodies — so a banner would be
+; the game narrating something visible. Here every phase change is a denial, which is the one event
+; in the fight the player has to work for and the only thing that is progress. A denial that went
+; unremarked would be the game staying quiet about the only thing it is asking for.
+phase_banners = Array[String](["", "ONE INSTANCE DOWN  //  IT IS LEARNING THE ROOM", "LAST INSTANCE  //  NOWHERE TO FAIL OVER TO"])

@@ -1,0 +1,38 @@
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="1_template"]
+[ext_resource type="Script" path="res://scripts/resources/migration_link.gd" id="90_link"]
+
+[sub_resource type="Resource" id="Resource_link_0"]
+script = ExtResource("90_link")
+a = Rect2i(9, 5, 2, 2)
+b = Rect2i(16, 5, 2, 2)
+
+[resource]
+script = ExtResource("1_template")
+id = &"cloud_split_aisle"
+type = 1
+; The floor's thesis in one room: a wall of cable duct from top to bottom, and the only
+; way across it is a pad.
+;
+; The duct is the half that makes it work. Shots cross it and bodies do not, so the
+; player standing on the left can fight everything on the right and cannot be reached
+; by any of it — and neither can they reach the two enemies that will still be alive
+; when the near side is clear. The room is two fights in the same room, and the pad is
+; the decision about when to stop having the first one.
+;
+; This is also the room that made the connectivity walk in tests/test_floor.gd treat a
+; link as an edge. Its walkable floor is two regions and always will be; asserting that
+; a room is one *walkable* piece would have made the floor's whole idea unauthorable.
+obstacles = Array[Rect2i]([])
+enemy_spawns = Array[Vector2i]([Vector2i(5, 2), Vector2i(5, 9), Vector2i(20, 2), Vector2i(20, 9)])
+; Two tiles wide and the full height of the interior. It cuts through the top and bottom
+; doorways at x12 and x13 and leaves x11 and x14, which is a doorway pinched rather than
+; sealed — the same call `data_hot_aisle` makes, and the suite checks the difference.
+ducts = Array[Rect2i]([Rect2i(12, 0, 2, 12)])
+pad_links = Array[MigrationLink]([SubResource("Resource_link_0")])
+reward_spawn = Vector2i(20, 5)
+difficulty = 2
+floor_tags = Array[StringName]([&"cloud_ops"])
+min_floor = 4
+max_floor = 4

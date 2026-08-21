@@ -1,0 +1,34 @@
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="1_template"]
+[ext_resource type="Script" path="res://scripts/resources/migration_link.gd" id="90_link"]
+
+[sub_resource type="Resource" id="Resource_link_0"]
+script = ExtResource("90_link")
+a = Rect2i(20, 1, 2, 2)
+b = Rect2i(20, 10, 2, 2)
+
+[resource]
+script = ExtResource("1_template")
+id = &"cloud_cold_row"
+type = 1
+; Three offset ducts making an S, so walking from the top of the room to the bottom means
+; crossing it four times. One link, at the far right, that does the whole journey in a
+; step.
+;
+; The room is a comparison. Everything in it is reachable on foot and the route is
+; tedious, which is exactly the condition under which a pad stops being a curiosity and
+; becomes the obvious thing to do. Rooms that make the pad mandatory teach that it is a
+; door; this one teaches what it is *for*.
+obstacles = Array[Rect2i]([])
+enemy_spawns = Array[Vector2i]([Vector2i(12, 1), Vector2i(6, 3), Vector2i(12, 6), Vector2i(6, 10)])
+; Offset rather than stacked, so the gaps at the ends of each duct do not line up and the
+; route has to zigzag. Each duct stops short of one side wall, which is what keeps the room
+; walkable at all.
+ducts = Array[Rect2i]([Rect2i(4, 2, 14, 1), Rect2i(8, 5, 14, 1), Rect2i(4, 8, 14, 1)])
+pad_links = Array[MigrationLink]([SubResource("Resource_link_0")])
+reward_spawn = Vector2i(24, 6)
+difficulty = 3
+floor_tags = Array[StringName]([&"cloud_ops"])
+min_floor = 4
+max_floor = 4
