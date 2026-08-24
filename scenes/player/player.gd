@@ -132,7 +132,7 @@ func _physics_process(delta: float) -> void:
 		_input.consume_interact_request()
 		use_nearest_interactable()
 
-	_visuals.update_visuals(_input.aim_direction, _is_invulnerable(), delta)
+	_visuals.update_visuals(_input.aim_direction, _is_visibly_invulnerable(), delta)
 
 
 ## Pins the camera to exactly one room's view rectangle.
@@ -242,10 +242,14 @@ func _absorb_with_shield(_info: DamageInfo) -> bool:
 ## The grace window is granted rather than set, so it can only ever lengthen an immunity the player
 ## already had — walking through a door immediately after being hit must not cut the hit's own
 ## window short. See `PlayerConfig.room_entry_grace` for the length and the reason for it.
+##
+## Granted *quietly*, which is the other half of the same complaint: the flash means "you were hit",
+## and a robot that flashes on every doorway is telling the player they took a shot they did not
+## take. The mercy is meant to be invisible — a hit that never happens has nothing to report.
 func _on_room_entered(_type: int, _room_id: int) -> void:
 	_shields_left = _items.get_shield_charges_per_room()
 	_room_opening_shot = true
-	_health.grant_invulnerability(config.room_entry_grace)
+	_health.grant_quiet_invulnerability(config.room_entry_grace)
 
 
 ## Mutex Lock and Adrenal Loop: fire rate that depends on what the robot is *doing* rather than on
@@ -377,13 +381,16 @@ func use_nearest_interactable() -> bool:
 	return best != null and best.call(&"interact", self)
 
 
-## Either source of immunity flashes the robot, so the player never has to work out
-## which kind of invulnerability they currently have. Reads the health component alone,
-## because the dash is registered with it — the flash is now driven by the exact predicate
-## that decides whether a hit lands, rather than by a second expression that happened to
-## agree.
-func _is_invulnerable() -> bool:
-	return _health.is_invulnerable()
+## Immunity the player earned flashes the robot, so they never have to work out which kind of
+## invulnerability they currently have: a hit's own window and a dash both answer something the
+## player just did. The room-entry grace does not, and is granted quietly for that reason — see
+## `_on_room_entered`.
+##
+## Reads the health component alone, because the dash is registered with it — the flash is driven
+## by the same object that decides whether a hit lands, rather than by a second expression that
+## happened to agree.
+func _is_visibly_invulnerable() -> bool:
+	return _health.is_visibly_invulnerable()
 
 
 ## Dash follows the held movement direction so it never fights the player's intent;

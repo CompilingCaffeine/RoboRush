@@ -59,6 +59,18 @@ var damage_absorber := Callable()
 var _damage_scale_sources: Array[Callable] = []
 
 var _invulnerable_left := 0.0
+
+## The same immunity, kept apart because it must not be *shown*. The flash is the game's word for
+## "you were hit" — it is what the player sees at the one moment they lose a point — so a window
+## opened by something the player did not do must not speak it. Room entry is the only such window:
+## it is a mercy the player never asked for, and testers reading their own robot flashing on the
+## doorway reported a hit they had not taken.
+##
+## A second timer rather than a flag, because the two overlap and the longer one has to win on its
+## own terms: walking through a door mid-hit must not turn the hit's own flash quiet, and a hit
+## landing is impossible while either runs.
+var _quiet_invulnerable_left := 0.0
+
 var _is_dead := false
 
 ## Immunity granted by something other than this component. The dash owns its own window,
@@ -80,6 +92,7 @@ func _physics_process(delta: float) -> void:
 ## Separate from _physics_process so the timing can be driven directly from a test.
 func step(delta: float) -> void:
 	_invulnerable_left = maxf(_invulnerable_left - delta, 0.0)
+	_quiet_invulnerable_left = maxf(_quiet_invulnerable_left - delta, 0.0)
 
 
 ## Applies new limits and refills. Used by the player, whose maximum comes from
@@ -95,6 +108,7 @@ func configure(new_max_health: float, new_invulnerability: float) -> void:
 	invulnerability_seconds = new_invulnerability
 	current = new_max_health
 	_invulnerable_left = 0.0
+	_quiet_invulnerable_left = 0.0
 	_is_dead = false
 
 
@@ -160,6 +174,12 @@ func grant_invulnerability(seconds: float) -> void:
 	_invulnerable_left = maxf(_invulnerable_left, seconds)
 
 
+## The same grant, without the flash. See `_quiet_invulnerable_left` for why room entry is the one
+## window that takes this door: the immunity is identical, only the telling of it is not.
+func grant_quiet_invulnerability(seconds: float) -> void:
+	_quiet_invulnerable_left = maxf(_quiet_invulnerable_left, seconds)
+
+
 ## Puts integrity back where a saved run left it. Not `heal`, and deliberately not built out of
 ## it: healing is an event the game reacts to — a repair sound, a flash, a statistic — and a
 ## resumed run did not repair anything, it merely continued.
@@ -210,6 +230,22 @@ func get_damage_scale() -> float:
 
 
 func is_invulnerable() -> bool:
+	if _invulnerable_left > 0.0 or _quiet_invulnerable_left > 0.0:
+		return true
+	for source: Callable in _immunity_sources:
+		if source.is_valid() and source.call():
+			return true
+	return false
+
+
+## Whether the immunity currently running is one the owner should show. Everything except a quiet
+## grant: a hit's own window and a dash both answer a thing the player just did, and the flash is
+## how they are told it worked.
+##
+## Deliberately a second question rather than a parameter on the first, so the damage path cannot
+## accidentally ask the presentation question — the two disagreeing is exactly the bug that made
+## `_immunity_sources` a list of callables instead of a copied timer.
+func is_visibly_invulnerable() -> bool:
 	if _invulnerable_left > 0.0:
 		return true
 	for source: Callable in _immunity_sources:
