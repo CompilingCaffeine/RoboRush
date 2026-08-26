@@ -5,6 +5,11 @@
 
 [resource]
 script = ExtResource("1_spawn")
-weight = 1.0
+; Weighted for the floor it belongs to, and it belongs to exactly one — nothing else lists this.
+; It was 1.0 against a roster totalling 7.3, which put it in about one room in seven and left it out
+; of a floor entirely on 22% of seeds: a signature enemy the player could finish the level without
+; meeting. At 1.8 against 7.6 it is the most common thing on the floor, which is what a floor's own
+; enemy should be.
+weight = 1.8
 min_difficulty = 2
 scene = ExtResource("2_scene")

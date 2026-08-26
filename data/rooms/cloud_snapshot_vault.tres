@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="1_template"]
+[ext_resource type="Script" path="res://scripts/resources/migration_link.gd" id="90_link"]
+
+[sub_resource type="Resource" id="Resource_link_0"]
+script = ExtResource("90_link")
+a = Rect2i(3, 5, 2, 2)
+b = Rect2i(13, 5, 2, 2)
+
+[resource]
+script = ExtResource("1_template")
+id = &"cloud_snapshot_vault"
+type = 3
+; A snapshot held in another region: the treasure sits inside a sealed box and the only
+; way in is a pad.
+;
+; The same shape as `cloud_blast_radius` with the fight taken out, which is the right way
+; round for a treasure room — it is the one room on the floor where the player is not
+; being shot at, so it is the one place a locked box is a moment of recognition rather
+; than an obstacle.
+obstacles = Array[Rect2i]([Rect2i(11, 3, 5, 1), Rect2i(11, 8, 5, 1), Rect2i(11, 4, 1, 4), Rect2i(15, 4, 1, 4)])
+enemy_spawns = Array[Vector2i]([])
+pad_links = Array[MigrationLink]([SubResource("Resource_link_0")])
+reward_spawn = Vector2i(12, 4)
+difficulty = 0
+floor_tags = Array[StringName]([&"cloud_ops"])
+min_floor = 4
+max_floor = 4

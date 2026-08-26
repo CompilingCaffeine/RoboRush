@@ -54,6 +54,17 @@ enum Type {
 ## as unpredictable as before.
 @export var forced_enemies: Array[PackedScene] = []
 
+## Cable ducts, in tile coordinates. Solid to anything that walks and transparent to anything that
+## is fired — see `CableDuct`.
+##
+## A second list rather than a flag on `obstacles`, because the two are read for different reasons
+## and one of them is a safety check. `tests/test_floor.gd` asks whether a template's walkable
+## floor is still one connected piece, and the answer has to count both; it also asks whether an
+## obstacle straddles a doorway, and a duct across a doorway is a different question — it seals a
+## chassis in without sealing the room's line of fire, which is the worse of the two failures and
+## the easier one to author by accident.
+@export var ducts: Array[Rect2i] = []
+
 ## Throughput zones, in tile coordinates: patches of floor that heat up under sustained
 ## stationary fire and vent. Floor 3's signature mechanic — see `ThermalZone`.
 ##
@@ -63,6 +74,25 @@ enum Type {
 ## floor number it is on. That is the property Floor 4 of the plan exists to prove, and it was
 ## cheaper to have from the first floor that needed it than to retrofit later.
 @export var thermal_zones: Array[Rect2i] = []
+
+## Migration pads, in pairs. Cloud Operations' signature mechanic: step onto either end of a link
+## and the robot is standing on the other. See `MigrationPad`.
+##
+## `Array[MigrationLink]` rather than a flat `Array[Rect2i]` matched two at a time, which is the
+## shape `forced_enemies` uses and the wrong shape here — see `MigrationLink` for why a pad with no
+## partner is a failure worth making unauthorable rather than checking for.
+##
+## Declared per template, like `ducts` and `thermal_zones` and for the same reason: it keeps the
+## mechanic out of the generator and out of every floor that does not want it. A Cloud Operations
+## template carries its own links; a Data Center template leaves this empty and gets none; and no
+## code anywhere asks what floor number it is on.
+##
+## **A room with links is a room whose walkable floor need not be one connected piece.** That is the
+## one existing rule this field changes, and it changes it on purpose: a room split by ducts and
+## joined only by pads is the whole point of the mechanic. `tests/test_floor.gd` treats a link as an
+## edge in its connectivity walk, so "the player can reach every tile" stays asserted while "the
+## player can *walk* to every tile" stops being required.
+@export var pad_links: Array[MigrationLink] = []
 
 ## Where a room-clear reward or treasure appears, in tile coordinates.
 @export var reward_spawn := Vector2i(13, 6)

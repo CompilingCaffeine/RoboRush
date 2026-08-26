@@ -19,6 +19,7 @@
 [ext_resource type="Resource" path="res://data/bosses/scrap_king_encounter.tres" id="92_king"]
 [ext_resource type="Resource" path="res://data/bosses/runtime_error_encounter.tres" id="93_error"]
 [ext_resource type="Resource" path="res://data/bosses/cascade_failure_encounter.tres" id="94_cascade"]
+[ext_resource type="Resource" path="res://data/bosses/orchestrator_encounter.tres" id="95_orchestrator"]
 
 [resource]
 script = ExtResource("1_floor")
@@ -45,4 +46,4 @@ treasure_grants_item = true
 ; ground, which is a thing a player can read the first time they see it, and the alternative was a
 ; campaign whose last fight never changed. This arena has no zones of its own, so the boss's vents
 ; are the only heated ground in the room — the cleanest possible first reading of the ramp.
-boss_pool = Array[BossEncounter]([ExtResource("92_king"), ExtResource("93_error"), ExtResource("94_cascade")])
+boss_pool = Array[BossEncounter]([ExtResource("92_king"), ExtResource("93_error"), ExtResource("94_cascade"), ExtResource("95_orchestrator")])

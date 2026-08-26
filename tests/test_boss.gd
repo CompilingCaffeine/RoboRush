@@ -28,6 +28,17 @@ const PLAYER_SCENE := preload("res://scenes/player/player.tscn")
 const ARENA := Rect2(Vector2.ZERO, Vector2(416.0, 192.0))
 const RIVET_PATH := "res://data/projectiles/rivet.tres"
 
+## Every shootable body in the game's three boss fights, by the name the player would call it.
+##
+## All three are `boss_part.gd` with their own texture and hitbox, so the contact rule below is one
+## rule — and this is where it is checked for all three, in the suite that already exists about boss
+## bodies rather than in three suites that are each about one fight.
+const PART_SCENES := {
+	"The Scrap King": "res://scenes/bosses/boss_part.tscn",
+	"Runtime Error": "res://scenes/bosses/runtime_error_part.tscn",
+	"Cascade Failure": "res://scenes/bosses/cascade_node.tscn",
+}
+
 ## What the feigned death is shortened to for the tests. The shipped two seconds are tuned for a
 ## player's patience and the music fade, and every phase end here would wait them out in real time —
 ## which is a suite that takes half a minute longer to make exactly the same assertions. The shipped
@@ -62,6 +73,7 @@ func run() -> void:
 	await _test_no_single_hit_skips_a_phase()
 	await _test_the_boss_fights_inside_its_arena()
 	await _test_real_projectiles_drive_the_whole_fight()
+	await _test_every_bosss_body_hurts_to_touch()
 
 
 func _test_config_matches_the_spec() -> void:
@@ -516,6 +528,78 @@ func _find_terminal() -> BossTerminal:
 		if terminal != null and is_instance_valid(terminal):
 			return terminal
 	return null
+
+
+## Standing inside a boss costs a point, in all three fights.
+##
+## It did not, for a long time, and the omission was invisible because nothing else in the game
+## works that way: every enemy with a body the player can walk into charges them for walking into
+## it. Three fights in which the safest place on the floor was *inside the thing you are shooting*
+## is a lesson the rest of the game spends thirty rooms un-teaching, and it was worst in Cascade
+## Failure, where a node could be ridden around the ring — which parks the robot on exactly the
+## ground that node is about to vent, for free.
+##
+## Checked against the part scenes rather than through a fight, because the rule is a property of a
+## boss's body and not of any one boss's phases. Driven with the robot's own damage window switched
+## off, so what spaces the hits is the part's `contact_interval` and nothing else — a body that
+## billed the player every frame would otherwise be hidden by the robot's immunity and read as
+## working.
+func _test_every_bosss_body_hurts_to_touch() -> void:
+	for label: String in PART_SCENES:
+		var scene := load(PART_SCENES[label]) as PackedScene
+		if not require(scene, "%s's body scene loads" % label):
+			continue
+
+		var arena := Node2D.new()
+		add_child(arena)
+		var player: Player = PLAYER_SCENE.instantiate()
+		player.position = ARENA.get_center()
+		arena.add_child(player)
+		# No window of the robot's own: this is measuring the part's cooldown, not the player's.
+		player.get_health_component().configure(50.0, 0.0)
+
+		var part: BossPart = scene.instantiate()
+		arena.add_child(part)
+		part.global_position = ARENA.get_center()
+		await advance_physics(2)
+
+		var health := player.get_health_component()
+		var full := health.max_health
+		check(part.contact_damage > 0.0, "%s's body deals contact damage" % label)
+		check_near(health.current, full - part.contact_damage, "and standing in it costs a point")
+
+		# Half the cooldown. A body that billed per frame would have emptied the pool by now.
+		await advance_physics(int(part.contact_interval * 30.0))
+		check_near(
+			health.current,
+			full - part.contact_damage,
+			"%s's body charges on a cooldown rather than every frame" % label,
+		)
+
+		# Out of reach. The margin is generous on purpose: what is being checked is that the range
+		# has an edge at all, not where exactly it is.
+		player.global_position = ARENA.get_center() + Vector2(part.contact_radius + 40.0, 0.0)
+		await advance_physics(int(part.contact_interval * 120.0))
+		check_near(
+			health.current,
+			full - part.contact_damage,
+			"%s's body cannot reach a robot standing off it" % label,
+		)
+
+		# And a body that is not there charges nothing. The Scrap King spends four seconds a fight
+		# invisible and unshootable between phases, and a boss the player cannot see must not be
+		# billing them for walking through the space it used to occupy.
+		part.set_inert(true)
+		player.global_position = ARENA.get_center()
+		await advance_physics(int(part.contact_interval * 120.0))
+		check_near(
+			health.current,
+			full - part.contact_damage,
+			"%s's body is harmless while it is playing dead" % label,
+		)
+
+		arena.queue_free()
+		await advance_physics(2)
 
 
 # --- Fixtures -----------------------------------------------------------------

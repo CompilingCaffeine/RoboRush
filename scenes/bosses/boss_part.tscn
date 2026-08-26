@@ -16,6 +16,11 @@ collision_layer = 4
 collision_mask = 1
 motion_mode = 1
 script = ExtResource("1_part")
+; Matched to the collision circle above, so the ring that hurts to stand in is the ring the
+; player can see they are standing in. The Scrap King is the largest body in the game and the
+; slowest to reposition, so walking into it is a mistake with time to make — a full point.
+contact_damage = 1.0
+contact_radius = 14.0
 
 [node name="Shape" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_part")

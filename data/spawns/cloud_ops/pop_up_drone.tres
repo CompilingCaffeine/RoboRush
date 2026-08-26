@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="EnemySpawn" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/enemy_spawn.gd" id="1_spawn"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/pop_up_drone.tscn" id="2_scene"]
+
+[resource]
+script = ExtResource("1_spawn")
+scene = ExtResource("2_scene")
+; **The floor's own threat, and the roster's whole argument.** It teleports to a room's edge, which is
+; the player's trick answered with the player's trick — and it is the only enemy in the game that can
+; cross a cable duct, so it is the only one that can follow somebody out of a fight they left.
+;
+; The Data Center excluded it on the grounds that nothing a player learns about holding ground applies
+; to it, which was right for a floor about holding ground. Here that is the qualification rather than
+; the objection. Weighted highest of the six because a mobility floor whose enemies are all stationary
+; is a floor where the mechanic is a convenience.
+weight = 1.6
+min_difficulty = 2

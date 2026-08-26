@@ -1,0 +1,41 @@
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="1_template"]
+[ext_resource type="Script" path="res://scripts/resources/migration_link.gd" id="90_link"]
+
+[sub_resource type="Resource" id="Resource_link_0"]
+script = ExtResource("90_link")
+a = Rect2i(2, 5, 2, 2)
+b = Rect2i(12, 5, 2, 2)
+
+[resource]
+script = ExtResource("1_template")
+id = &"cloud_blast_radius"
+type = 1
+; A sealed vault in the middle of the room with the payout inside it, and a pad as the
+; only key.
+;
+; Worth saying plainly what this is: Floor 3 shipped a room — `dev_server_ring` — whose
+; reward_spawn sat inside four walls forming a closed rectangle, so on every seed that
+; room paid out, the item dropped where nobody could reach it. It went unnoticed for two
+; floors because a walled courtyard is not *blocked* ground, it is unreachable ground,
+; and nothing in the game could tell the difference. This room is that exact shape, on
+; purpose, made legal by the one thing that changes it: there is a pad inside.
+;
+; It only reads as a room rather than as a bug because the flood fill now proves the
+; difference. That check would have failed on this layout a week ago and passes on it
+; now, for the right reason.
+; Four walls around x11..15, y4..7. Solid blocks rather than ducts, deliberately: a duct
+; would let the player shoot the vault guard from outside and the room would be over
+; without anybody going in.
+obstacles = Array[Rect2i]([Rect2i(10, 3, 7, 1), Rect2i(10, 8, 7, 1), Rect2i(10, 4, 1, 4), Rect2i(16, 4, 1, 4)])
+; The last point is inside the vault. Enemies do not migrate, so whatever spawns there
+; cannot come out and cannot be shot through the walls — the room does not clear until the
+; player goes in after it, which is the only way this room ends.
+enemy_spawns = Array[Vector2i]([Vector2i(5, 2), Vector2i(5, 9), Vector2i(20, 2), Vector2i(20, 9), Vector2i(14, 4)])
+pad_links = Array[MigrationLink]([SubResource("Resource_link_0")])
+reward_spawn = Vector2i(14, 6)
+difficulty = 3
+floor_tags = Array[StringName]([&"cloud_ops"])
+min_floor = 4
+max_floor = 4

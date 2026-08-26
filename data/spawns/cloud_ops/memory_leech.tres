@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="EnemySpawn" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/enemy_spawn.gd" id="1_spawn"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/memory_leech.tscn" id="2_scene"]
+
+[resource]
+script = ExtResource("1_spawn")
+scene = ExtResource("2_scene")
+; Its windup is the longest telegraph any enemy has, and a pad is the fastest answer in the game to a
+; committed charge: the pairing is the floor teaching that a migration is a defensive option and not
+; only a route.
+;
+; Difficulty two rather than the three it was authored at, which is a correction made by measuring
+; before anybody played it. At three it was absent from 16.8% of generated floors — only about 2.4 of
+; a floor's six combat rooms reach difficulty three, so a third-tier entry is competing for a slice
+; of the floor rather than for the floor. That is precisely the Data Center's fault repeated: the two
+; enemies that floor was built to introduce were missing from a fifth of its floors and nobody could
+; have reported it.
+weight = 1.1
+min_difficulty = 2

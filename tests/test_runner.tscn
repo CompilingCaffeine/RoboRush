@@ -24,6 +24,8 @@
 [ext_resource type="Script" path="res://tests/test_checkpoint.gd" id="23_checkpoint"]
 [ext_resource type="Script" path="res://tests/test_soak.gd" id="24_soak"]
 [ext_resource type="Script" path="res://tests/test_thermal.gd" id="25_thermal"]
+[ext_resource type="Script" path="res://tests/test_migration.gd" id="26_migration"]
+[ext_resource type="Script" path="res://tests/test_orchestrator.gd" id="27_orchestrator"]
 [ext_resource type="Script" path="res://tests/test_audio.gd" id="12_audio"]
 [ext_resource type="Script" path="res://tests/test_gamepad.gd" id="13_gamepad"]
 [ext_resource type="Script" path="res://tests/test_balance.gd" id="14_balance"]
@@ -105,6 +107,12 @@ script = ExtResource("14_balance")
 
 [node name="Thermal" type="Node" parent="."]
 script = ExtResource("25_thermal")
+
+[node name="Migration" type="Node" parent="."]
+script = ExtResource("26_migration")
+
+[node name="Orchestrator" type="Node" parent="."]
+script = ExtResource("27_orchestrator")
 
 [node name="Gate" type="Node" parent="."]
 script = ExtResource("27_gate")

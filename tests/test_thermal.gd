@@ -174,6 +174,21 @@ func _test_a_zone_cools_when_left_alone() -> void:
 
 ## The data path: a template declares zones in tile coordinates and the room builds them, with no
 ## floor number anywhere in it.
+##
+## **The room is built somewhere other than the origin, and that is the entire point of this check.**
+## It used to build at cell zero, and at cell zero this test could not fail: `ThermalZone.spawn`
+## assigned `global_position` to a node that had not been parented yet — which is only ever its
+## *local* position — so every zone was placed at its room's offset twice over, and twice zero is
+## zero. Every arena in this suite sat at the origin, so nothing anywhere caught it.
+##
+## What it cost is the whole of the Data Center. A room at cell (2, 1) sits at (896, 224), and its
+## floor patches were being built at (1808, 464) — most of a screen away, inside whichever room
+## happened to be standing there. The zones were still drawn, so the floor looked like it had them;
+## the rooms authored to teach the mechanic did not have them. Floor 3's signature idea had never
+## once appeared in the rooms written for it.
+##
+## So the cell below is not incidental and must not be tidied back to zero. A placement test run at
+## the origin is a placement test that cannot fail.
 func _test_a_template_builds_its_zones_inside_the_room() -> void:
 	var template := RoomTemplate.new()
 	template.id = &"__test_thermal"
@@ -182,9 +197,13 @@ func _test_a_template_builds_its_zones_inside_the_room() -> void:
 	# a bad zone should draw a zone at the edge rather than half outside the room.
 	template.thermal_zones = [Rect2i(4, 3, 6, 4), Rect2i(24, 10, 8, 6)]
 
+	var plan := RoomPlan.new(0, Vector2i(2, 1), RoomTemplate.Type.COMBAT)
 	var room: Room = ROOM_SCENE.instantiate()
 	add_child(room)
-	room.build(RoomPlan.new(0, Vector2i.ZERO, RoomTemplate.Type.COMBAT))
+	# Where the floor would put a room in that cell. `FloorController` positions rooms on the grid
+	# before it builds them, and building at the origin is what hid the bug above.
+	room.global_position = Vector2(plan.cell * Room.OUTER_SIZE)
+	room.build(plan)
 	room.plan.template = template
 	# Rebuilt now that the plan has a template, which is the order the floor uses in reverse; the
 	# zones are what this is checking, and they are built from the template.
@@ -253,6 +272,9 @@ func _test_the_data_center_templates_are_authored_sanely() -> void:
 		["data_hot_aisle", RoomTemplate.Type.COMBAT, true],
 		["data_chiller_bank", RoomTemplate.Type.COMBAT, true],
 		["data_grid_floor", RoomTemplate.Type.COMBAT, true],
+		["data_busway", RoomTemplate.Type.COMBAT, true],
+		["data_hot_containment", RoomTemplate.Type.COMBAT, true],
+		["data_tape_library", RoomTemplate.Type.COMBAT, true],
 		["data_cache_vault", RoomTemplate.Type.TREASURE, true],
 		["data_core_arena", RoomTemplate.Type.BOSS, true],
 	]

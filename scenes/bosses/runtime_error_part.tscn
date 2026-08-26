@@ -26,6 +26,11 @@ collision_layer = 4
 collision_mask = 1
 motion_mode = 1
 script = ExtResource("1_part")
+; Matched to the collision circle above. Half the radius of The Scrap King's means the player has
+; to be nearly on top of it, which is right for the fight that asks them to read the floor: the
+; body is the one thing in the arena that is never telegraphed, so it is also the smallest.
+contact_damage = 1.0
+contact_radius = 7.0
 
 [node name="Shape" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_runtime_error")

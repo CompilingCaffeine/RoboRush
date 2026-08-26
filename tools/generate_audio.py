@@ -129,6 +129,34 @@ def make_dash(noise: random.Random) -> list[float]:
     return render(0.12, voice)
 
 
+def make_migrate(noise: random.Random) -> list[float]:
+    """Two-part blink: a short downward pluck, a gap, then the same pluck an octave up.
+
+    Deliberately not a whoosh. `make_dash` is the whoosh, and a dash and a migration are
+    different claims about the same robot — one is travel through the room and the other is
+    the room deciding the robot was somewhere else all along. A sound that swept would say
+    the first. Two discrete plucks either side of silence say the second: departure, nothing,
+    arrival. The silence is most of the sound and is doing the work.
+    """
+    phase = [0.0]
+    gap = 0.035
+
+    def voice(t: float, progress: float) -> float:
+        # Which half of the sound we are in. The middle is genuinely silent rather than
+        # quiet — a fade across the gap would join the two plucks into one event.
+        if 0.05 <= t < 0.05 + gap:
+            return 0.0
+        arriving = t >= 0.05 + gap
+        base = 880.0 if arriving else 440.0
+        phase[0] += base / SAMPLE_RATE
+        # Each half runs its own envelope, so the second pluck attacks rather than swelling
+        # out of the first one's tail.
+        local = (t - (0.05 + gap)) / 0.06 if arriving else t / 0.05
+        return square(phase[0], 0.35) * decay(min(local, 1.0), 6.0)
+
+    return render(0.05 + gap + 0.06, voice)
+
+
 def make_room_clear(noise: random.Random) -> list[float]:
     """Rising major arpeggio: the only unambiguously good news in the game."""
     steps = [523.0, 659.0, 784.0, 1047.0]
@@ -360,6 +388,10 @@ SOUNDS = {
     "audio/sfx/enemy_death.wav": (make_enemy_death, 0.30),
     "audio/sfx/player_hurt.wav": (make_player_hurt, 0.35),
     "audio/sfx/dash.wav": (make_dash, 0.18),
+    # Quieter than the dash it sits beside. A migration happens once per crossing and a dash
+    # happens constantly, but the pad is a mechanic the player will use all floor and a sound
+    # at dash volume every time would wear out long before the floor did.
+    "audio/sfx/migrate.wav": (make_migrate, 0.15),
     "audio/sfx/room_clear.wav": (make_room_clear, 0.24),
     "audio/sfx/low_integrity.wav": (make_low_integrity, 0.22),
     "audio/sfx/pickup.wav": (make_pickup, 0.20),

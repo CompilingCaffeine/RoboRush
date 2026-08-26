@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="EnemySpawn" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/enemy_spawn.gd" id="1_spawn"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/null_pointer.tscn" id="2_scene"]
+
+[resource]
+script = ExtResource("1_spawn")
+scene = ExtResource("2_scene")
+; Everything it does happens somewhere other than where it is, which is this floor's subject stated by
+; an enemy rather than by the ground. It never touches the player, so a region it is standing in is
+; dangerous to be near and safe to be beside — a distinction the pads make it possible to act on.
+;
+; Difficulty two and a slightly heavier weight, both for the reason recorded on `memory_leech.tres`:
+; at difficulty three it was absent from 24.2% of four hundred generated floors, which is worse than
+; the Data Center's own worst case before that floor was corrected.
+weight = 1.2
+min_difficulty = 2

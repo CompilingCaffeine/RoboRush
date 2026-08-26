@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="OrchestratorConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/orchestrator_config.gd" id="1_boss"]
+[ext_resource type="Resource" path="res://data/projectiles/boss_green.tres" id="2_shot"]
+
+[resource]
+script = ExtResource("1_boss")
+id = &"orchestrator"
+display_name = "Orchestrator"
+plate_count = 3
+plate_radius = 0.72
+plate_size = 32.0
+; Damage buys events, not progress. See `Orchestrator` for why the fight is scored in denials — the
+; number below only decides how often the player gets a chance, which is the one thing a strong build
+; is allowed to buy more of.
+pool_per_generation = 34.0
+generations = 3
+; The player's whole budget for crossing a 416-pixel arena to deny a failover. Tuned generous on
+; purpose and flagged for the first playtest: too short and the fight is unwinnable without the
+; arena's corner pads, too long and the denial is free. This is the number to move first.
+telegraph_seconds = 1.9
+denial_stun_seconds = 1.6
+volley_interval = 1.5
+telegraph_volley_interval = 0.7
+spread_count = 3
+spread_degrees = 34.0

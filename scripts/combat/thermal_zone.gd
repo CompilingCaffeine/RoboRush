@@ -6,8 +6,8 @@ extends Node2D
 ## camping**. A zone gains heat while the player stands inside it firing, loses heat the moment
 ## they move or stop, and when it fills it vents — a flash and one point of integrity to whoever
 ## is still standing there. Nothing about it is random and nothing about it is hidden: the zone is
-## drawn on the floor, its heat is its colour, and the vent is telegraphed by the colour having
-## been climbing for two and a half seconds.
+## drawn on the floor as a grille of louvre bars, its heat is their colour, and the vent is
+## telegraphed by that colour having been climbing for two and a half seconds.
 ##
 ## **Why load and not time.** The obvious version of this mechanic charges a zone for being stood
 ## in, or for shots fired in it. Both are worse, and for the same reason: they tax the build. Heat
@@ -40,11 +40,13 @@ extends Node2D
 ##
 ## What does not differ between them is the only thing the player reads. The colour means how close
 ## this ground is to venting, in a room's zone and in a boss's alike. Nine rooms of the Data Center
-## teach that ramp with the player as its cause; the boss keeps the sentence and changes the subject.
+## teach that ramp with the player as its cause; the boss keeps the sentence and changes the
+## subject. A boss's vents are deliberately given no look of their own for that reason — see
+## `COOL_COLOR` for what the look is, and which floor above it is being told apart from.
 
 ## Seconds of stationary firing inside a zone before it vents.
 ##
-## Long enough that the colour climbing through amber is a warning a player can act on, short
+## Long enough that the colour climbing off teal is a warning a player can act on, short
 ## enough that standing still is never the right answer. Two and a half seconds is about four
 ## shots of the starting weapon: the first is free, the last is a choice.
 const SECONDS_TO_VENT := 2.5
@@ -74,14 +76,43 @@ const PLAYER_RADIUS := 5.0
 
 ## Cold, loaded, and venting. The zone is drawn as a lerp between the first two by heat, so the
 ## player reads a number they are never shown.
+##
+## **The hot end is violet rather than red, and that is a deliberate separation from the floor
+## above.** Development's hazard language is `CompileLane`'s amber-then-red, and it is a good
+## language: the Compiler enemy teaches it and Runtime Error's whole fight is written in it. The
+## trouble was that this floor's ramp also ended in red, so two floors' worth of unrelated hazards
+## resolved to the same colour a beat before they bit — and the second of them was the one the
+## player met at speed. A ramp is only worth reading if it is the only thing that looks like it.
+##
+## Violet also happens to be what the fiction wanted. Amber-to-red is fire, and nothing here is on
+## fire; a rack that has run out of thermal headroom arcs. Teal through indigo to a hard magenta is
+## a machine going somewhere it was not built to go, and it reads against the Data Center's cold
+## steel in a way another warm colour on a cold floor never quite did.
 const COOL_COLOR := Color(0.24, 0.62, 0.68)
-const HOT_COLOR := Color(0.95, 0.36, 0.30)
-const VENT_COLOR := Color(1.0, 0.93, 0.82)
+const HOT_COLOR := Color(0.80, 0.24, 0.98)
+const VENT_COLOR := Color(0.97, 0.90, 1.0)
 
 ## Alpha at zero heat and at full heat. The zone is always visible — a hazard that appears only
 ## once it is dangerous is a trap, and this floor is not built out of traps.
 const COLD_ALPHA := 0.16
 const HOT_ALPHA := 0.5
+
+## Pixels between the louvre bars the zone is drawn as, and how thick each one is.
+##
+## The second half of the separation from `CompileLane`, and the half that survives a colourblind
+## player and a badly calibrated screen. A lane is a flat filled rectangle; this is a grille — thin
+## bars over a dim wash, which is what the face of a rack unit actually looks like and is nothing a
+## lane has ever looked like. Two hazards that mean different things now differ in shape as well as
+## in hue, so neither reading has to carry the distinction on its own.
+##
+## Four pixels at a 480x270 render is a bar and a gap the player can resolve, and every zone is a
+## whole number of 16-pixel tiles, so the pattern never ends on a half bar.
+const LOUVRE_SPACING := 4.0
+const LOUVRE_THICKNESS := 1.0
+
+## What the wash behind the louvres keeps of the zone's alpha. The bars carry the reading; the wash
+## is only there so the extent of the zone stays obvious on the ground between them.
+const WASH_ALPHA_SCALE := 0.45
 
 var _size := Vector2.ZERO
 
@@ -108,11 +139,28 @@ var _since_shot := FIRING_MEMORY
 
 ## Spawns a zone covering `rect` as a child of `parent`. A room builds its own from its template;
 ## nothing else should need this, but it takes a plain `Rect2` so a test can place one anywhere.
+##
+## **`add_child` first, then the position**, and the ordering is the whole of a bug that shipped with
+## this floor. `global_position` on a node with no parent is only its local position — there is no
+## parent transform to measure against — so assigning it before parenting silently wrote a *global*
+## rect into a *local* slot. `Room._build_thermal_zones` passes global coordinates from
+## `get_tile_block_rect`, and the room's zones hang off a node inside the room, so every zone landed
+## at the room's own position twice over: a room at (896, 224) put its floor patches at (1808, 464),
+## most of a screen away, in whatever room happened to be sitting there.
+##
+## It was invisible from both directions, which is why it lasted. Every arena in the suite builds its
+## room at the origin, where adding zero twice is still zero and the zones land exactly right. And in
+## a real run the misplaced patches were still *drawn* — just in the wrong rooms — so the floor
+## looked like it had zones in it. What it did not have was zones in the rooms authored to teach
+## them, which is the whole of what the Data Center is for. `tests/test_thermal.gd` now builds a room
+## somewhere other than the origin, which is the only version of that check worth having.
+##
+## The same lesson `MergeConflict._spawn_part` and `CascadeFailure.begin` both paid for already.
 static func spawn(parent: Node, rect: Rect2) -> ThermalZone:
 	var zone := ThermalZone.new()
-	zone.global_position = rect.position
 	zone._size = rect.size
 	parent.add_child(zone)
+	zone.global_position = rect.position
 	return zone
 
 
@@ -136,10 +184,12 @@ static func spawn_vent(spawner: Node, rect: Rect2, seconds: float) -> ThermalZon
 		container = tree.current_scene
 
 	var zone := ThermalZone.new()
-	zone.global_position = rect.position
 	zone._size = rect.size
 	zone._drive_seconds = maxf(seconds, 0.001)
 	container.add_child(zone)
+	# After `add_child`, for the reason `spawn` above gives at length. This path happened to be
+	# correct while the container sat at the origin, which is not the same as being right.
+	zone.global_position = rect.position
 	return zone
 
 
@@ -265,6 +315,8 @@ func _find_player() -> Player:
 	return get_tree().get_first_node_in_group(Teams.GROUP_PLAYER) as Player
 
 
+## A grille rather than a filled rectangle. See `LOUVRE_SPACING` for why the shape carries as much
+## of the reading as the colour does.
 func _draw() -> void:
 	var rect := Rect2(Vector2.ZERO, _size)
 	if _vent_flash_left > 0.0:
@@ -272,7 +324,16 @@ func _draw() -> void:
 		return
 
 	var tint := COOL_COLOR.lerp(HOT_COLOR, _heat)
-	draw_rect(rect, Color(tint.r, tint.g, tint.b, lerpf(COLD_ALPHA, HOT_ALPHA, _heat)))
+	var alpha := lerpf(COLD_ALPHA, HOT_ALPHA, _heat)
+	draw_rect(rect, Color(tint.r, tint.g, tint.b, alpha * WASH_ALPHA_SCALE))
+
+	# The bars, brightening with the heat. Started half a spacing in, so the pattern sits inside the
+	# zone rather than flush against its top edge where it would read as a second border.
+	var bar := Color(tint.r, tint.g, tint.b, minf(alpha + 0.32, 1.0))
+	var y := LOUVRE_SPACING * 0.5
+	while y + LOUVRE_THICKNESS <= _size.y:
+		draw_rect(Rect2(Vector2(0.0, y), Vector2(_size.x, LOUVRE_THICKNESS)), bar)
+		y += LOUVRE_SPACING
 
 	# An edge, so the zone's boundary is exactly readable. A hazard whose extent is a soft gradient
 	# is a hazard the player has to learn by being hurt by it.

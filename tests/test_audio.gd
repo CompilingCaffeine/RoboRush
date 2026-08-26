@@ -28,6 +28,9 @@ func run() -> void:
 	await _test_stopping_music_fades_it_out()
 	await _test_stop_all_leaves_nothing_playing()
 	_test_the_mixer_drain_ends_on_the_mixer()
+	_test_a_healthy_output_never_trips_the_watchdog()
+	_test_a_stalled_output_is_noticed_and_reopened()
+	await _test_the_watchdog_runs_when_nothing_is_fading()
 	await _test_the_director_plays_the_floors_own_tracks()
 
 	_teardown()
@@ -326,3 +329,108 @@ func _test_the_mixer_drain_ends_on_the_mixer() -> void:
 			AudioManager.MIXER_DRAIN_MIXES, AudioManager.MIXER_DRAIN_TIMEOUT_MS, elapsed,
 		],
 	)
+
+
+# --- The output watchdog -------------------------------------------------------
+#
+# From a bug report with no reproduction: on Windows, mid-run, the music and every sound effect
+# stopped at the same moment, with nothing in the console and no pattern to what preceded it.
+# Everything in this file above this line was already passing at the time and still is, which is
+# most of what makes the driver the remaining suspect — the crossfade, the loop, the pool and the
+# bus layout were all measured and cleared.
+#
+# The watchdog is therefore a mitigation for an unconfirmed cause, and these checks are written to
+# hold the two things that actually have to be true of one: it must not fire on a working game, and
+# it must fire on a dead output. The first is the important one. A watchdog that cries wolf is worse
+# than no watchdog, because the first thing anybody does with one is turn it off.
+
+
+## The whole session, at every mix period this project has ever run on. Nothing here may trip.
+func _test_a_healthy_output_never_trips_the_watchdog() -> void:
+	var before := AudioManager._output_recoveries
+
+	# CoreAudio's ~3 ms, the Dummy driver's ~93 ms, and a deliberately awful 300 ms — six times the
+	# worst real period measured and still a third of the threshold.
+	for period: float in [0.003, 0.011, 0.037, 0.093, 0.3]:
+		AudioManager._output_stalled_for = 0.0
+		for _frame: int in 600:
+			# The value the AudioServer would report: it climbs inside a mix period and resets, which
+			# is the shape that must never be read as a stall however long the period is.
+			AudioManager._step_output_watchdog(1.0 / 60.0, randf() * period)
+
+	check(
+		AudioManager._output_recoveries == before,
+		"ten seconds at each of five mix periods trips nothing (%d attempts)"
+			% [AudioManager._output_recoveries - before],
+	)
+
+
+## And the case it exists for. Driven by handing it the reading rather than by breaking a real
+## driver, because there is no way to break a real driver from inside the game — which is also why
+## the check has to be written this way round rather than not written.
+func _test_a_stalled_output_is_noticed_and_reopened() -> void:
+	AudioManager._output_stalled_for = 0.0
+	AudioManager._output_recovery_cooldown = 0.0
+	var before := AudioManager._output_recoveries
+
+	# Half a second of frames with the mixer already a second behind. Past the threshold on the
+	# reading, short of it on the duration — a single bad sample must not be enough.
+	for _frame: int in 30:
+		AudioManager._step_output_watchdog(1.0 / 60.0, 1.5)
+	check(
+		AudioManager._output_recoveries == before,
+		"half a second of missing mixer is not yet a failure",
+	)
+
+	# The rest of the second.
+	for _frame: int in 40:
+		AudioManager._step_output_watchdog(1.0 / 60.0, 1.5)
+	check(
+		AudioManager._output_recoveries == before + 1,
+		"a full second of it is, and the output is re-opened once (%d)"
+			% [AudioManager._output_recoveries - before],
+	)
+
+	# And exactly once. A driver that has gone will keep reading stalled for as long as the game
+	# runs, and a warning per frame would bury the one line that matters in thousands of copies.
+	for _frame: int in 120:
+		AudioManager._step_output_watchdog(1.0 / 60.0, 1.5)
+	check(
+		AudioManager._output_recoveries == before + 1,
+		"and not again inside the cooldown (%d)" % [AudioManager._output_recoveries - before],
+	)
+
+	check(
+		"recovered" in AudioManager.describe_state(),
+		"the overlay says it happened: '%s'" % AudioManager.describe_state(),
+	)
+
+	AudioManager._output_recovery_cooldown = 0.0
+	AudioManager._output_stalled_for = 0.0
+
+
+## The ordering bug this was one line away from shipping with. `_process` used to return early
+## whenever no crossfade was running, which is almost every frame of a session — a watchdog added
+## after that return would have been a watchdog that only ran during the 1.2 seconds after a track
+## change, and the reported failure had no pattern at all.
+func _test_the_watchdog_runs_when_nothing_is_fading() -> void:
+	AudioManager.stop_music()
+	await advance_physics(int(AudioManager.MUSIC_FADE_SECONDS * 60.0) + 10)
+	check(AudioManager._fade >= 1.0, "no crossfade is running (fade %.2f)" % AudioManager._fade)
+
+	AudioManager._output_stalled_for = 0.0
+	# The cooldown is the probe, because it is the one piece of watchdog state that moves on *every*
+	# frame regardless of what the mixer is doing. If `_process` returns before reaching the
+	# watchdog, this number does not change — which is exactly the bug being guarded against, and it
+	# is measurable without needing a stalled driver to measure it with.
+	AudioManager._output_recovery_cooldown = 1.0
+	# Through `_process` rather than through the step function, so the early-out is what is measured.
+	AudioManager._process(0.25)
+
+	check(
+		is_equal_approx(AudioManager._output_recovery_cooldown, 0.75),
+		"a frame with no crossfade in flight still reaches the watchdog (cooldown %.2f, expected 0.75)"
+			% AudioManager._output_recovery_cooldown,
+	)
+	AudioManager._output_recovery_cooldown = 0.0
+	AudioManager._output_stalled_for = 0.0

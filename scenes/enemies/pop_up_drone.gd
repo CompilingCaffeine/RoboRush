@@ -137,7 +137,7 @@ func _random_edge_point(room: Room) -> Vector2:
 func _is_blocked(point: Vector2) -> bool:
 	var query := PhysicsPointQueryParameters2D.new()
 	query.position = point
-	query.collision_mask = Teams.LAYER_WORLD
+	query.collision_mask = Teams.body_mask()
 	query.collide_with_areas = false
 	return not get_world_2d().direct_space_state.intersect_point(query, 1).is_empty()
 

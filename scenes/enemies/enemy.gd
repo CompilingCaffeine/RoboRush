@@ -49,7 +49,7 @@ var _resting_tint := Color.WHITE
 func _ready() -> void:
 	assert(config != null, "%s.config is unset: assign an EnemyConfig resource." % name)
 	collision_layer = Teams.body_layer(Teams.Id.ENEMY)
-	collision_mask = Teams.LAYER_WORLD
+	collision_mask = Teams.body_mask()
 	_resting_tint = _sprite.modulate
 
 	_health.configure(scaled_max_health(config.max_health), 0.0)

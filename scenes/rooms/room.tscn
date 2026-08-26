@@ -22,6 +22,9 @@ unique_name_in_owner = true
 [node name="Thermals" type="Node2D" parent="."]
 unique_name_in_owner = true
 
+[node name="Pads" type="Node2D" parent="."]
+unique_name_in_owner = true
+
 [node name="Obstacles" type="Node2D" parent="."]
 unique_name_in_owner = true
 

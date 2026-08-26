@@ -1,0 +1,41 @@
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="1_template"]
+[ext_resource type="Script" path="res://scripts/resources/migration_link.gd" id="90_link"]
+
+[sub_resource type="Resource" id="Resource_link_0"]
+script = ExtResource("90_link")
+a = Rect2i(2, 1, 2, 2)
+b = Rect2i(22, 9, 2, 2)
+
+[sub_resource type="Resource" id="Resource_link_1"]
+script = ExtResource("90_link")
+a = Rect2i(2, 9, 2, 2)
+b = Rect2i(22, 1, 2, 2)
+
+[resource]
+script = ExtResource("1_template")
+id = &"cloud_control_tower"
+type = 6
+; The arena keeps the floor's rule and drops its furniture — the same call
+; `data_core_arena` makes, and for the same reason: a boss needs open ground, and a floor's
+; last room should still be recognisably that floor.
+;
+; Two crossed links, one in each pair of opposite corners, and no obstacles at all. Every
+; boss in the pool gets something out of them. Against The Scrap King the terminals stand
+; in corners the player can now reach in one step instead of crossing the arena under fire.
+; Runtime Error's compile lanes sweep whole rows, and a pad is the one thing in the game
+; that can take a robot out of a row it is already standing in. Cascade Failure's vents are
+; ground denial, and a pad is ground.
+;
+; That is the property this arena is really for: whichever of the four bosses the run draws,
+; the floor's mechanic is in the room with them, and none of them needed a line of code to
+; know about it.
+obstacles = Array[Rect2i]([])
+enemy_spawns = Array[Vector2i]([])
+pad_links = Array[MigrationLink]([SubResource("Resource_link_0"), SubResource("Resource_link_1")])
+reward_spawn = Vector2i(13, 9)
+difficulty = 4
+floor_tags = Array[StringName]([&"cloud_ops"])
+min_floor = 4
+max_floor = 4

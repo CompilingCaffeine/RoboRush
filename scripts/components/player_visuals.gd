@@ -86,11 +86,16 @@ func _ready() -> void:
 
 
 ## Call once per frame with the player's current presentation-relevant state.
-func update_visuals(aim_direction: Vector2, is_invulnerable: bool, delta: float) -> void:
+##
+## `flash` is whether the robot should *show* immunity rather than whether it has any: the
+## window a doorway grants is deliberately silent, and `Player.should_flash` is where that is
+## decided. This file is handed the answer because a sprite has no business knowing what a
+## doorway is.
+func update_visuals(aim_direction: Vector2, flash: bool, delta: float) -> void:
 	if _is_dead:
 		return
 	_update_aim(aim_direction)
-	_update_flash(is_invulnerable, delta)
+	_update_flash(flash, delta)
 	_update_muzzle_flash(delta)
 	_body.scale = _body.scale.move_toward(Vector2.ONE, SQUASH_RECOVERY * delta)
 	if _fan.visible:
@@ -197,8 +202,8 @@ func _update_aim(aim_direction: Vector2) -> void:
 	_cannon.flip_v = aim_direction.x < 0.0
 
 
-func _update_flash(is_invulnerable: bool, delta: float) -> void:
-	if not is_invulnerable:
+func _update_flash(flash: bool, delta: float) -> void:
+	if not flash:
 		_flash_time = 0.0
 		_body.modulate = Color.WHITE
 		return

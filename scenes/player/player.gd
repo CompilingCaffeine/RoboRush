@@ -56,11 +56,10 @@ var _still_seconds := 0.0
 ## True until the first shot after entering a room, which is what Cache Warmer multiplies.
 var _room_opening_shot := true
 
-
 func _ready() -> void:
 	assert(config != null, "Player.config is unset: assign a PlayerConfig resource.")
 	collision_layer = Teams.body_layer(Teams.Id.PLAYER)
-	collision_mask = Teams.LAYER_WORLD
+	collision_mask = Teams.body_mask()
 
 	_input.setup(config)
 	_motion.setup(config)
@@ -132,7 +131,7 @@ func _physics_process(delta: float) -> void:
 		_input.consume_interact_request()
 		use_nearest_interactable()
 
-	_visuals.update_visuals(_input.aim_direction, _is_visibly_invulnerable(), delta)
+	_visuals.update_visuals(_input.aim_direction, should_flash(), delta)
 
 
 ## Pins the camera to exactly one room's view rectangle.
@@ -381,15 +380,23 @@ func use_nearest_interactable() -> bool:
 	return best != null and best.call(&"interact", self)
 
 
-## Immunity the player earned flashes the robot, so they never have to work out which kind of
-## invulnerability they currently have: a hit's own window and a dash both answer something the
-## player just did. The room-entry grace does not, and is granted quietly for that reason — see
-## `_on_room_entered`.
+## Whether the invulnerability the robot currently has is worth showing.
 ##
-## Reads the health component alone, because the dash is registered with it — the flash is driven
-## by the same object that decides whether a hit lands, rather than by a second expression that
-## happened to agree.
-func _is_visibly_invulnerable() -> bool:
+## Not every immune moment is. A flash is a warning with a deadline — *this is about to run out* —
+## and it earns its place after a hit, when the player has to decide what to do with the window
+## they were given. The window a doorway grants is not that: the player did nothing to earn it,
+## there is nothing to spend it on, and it arrives on entering every room in the game. Twelve
+## cycles a second for six tenths of a second, forty rooms a run, is a strobe attached to walking.
+##
+## So the window is kept and the flash is dropped, which is the split the two things actually want.
+## `HealthComponent` owns that split, because it owns the timers: a doorway grant goes in quietly
+## and everything else — a hit's own window, a dash — still speaks. Asking it here rather than
+## keeping a second timer beside it means the flash is driven by the same object that decides
+## whether a hit lands, rather than by a parallel expression that happened to agree.
+##
+## Public for the reason `opening_shot_damage_scale` is: the rule can then be read — and checked —
+## without driving a frame of input and looking at a sprite to find out what it decided.
+func should_flash() -> bool:
 	return _health.is_visibly_invulnerable()
 
 

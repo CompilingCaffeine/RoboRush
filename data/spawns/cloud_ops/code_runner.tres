@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="EnemySpawn" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/enemy_spawn.gd" id="1_spawn"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/code_runner.tscn" id="2_scene"]
+
+[resource]
+script = ExtResource("1_spawn")
+scene = ExtResource("2_scene")
+; The other thing a difficulty-one room may draw, and the reason the teaching room is not simply
+; three Ticket Bots. A moving target is also the right first lesson for this floor — a pad closes
+; distance in one step, and the enemy worth closing distance on is the one that will not hold still.
+;
+; Trimmed from 1.3 after measuring: eligible from difficulty one, it drew in every room on the floor
+; and came to 6.34 a floor, more than any other entry and a quarter of everything the player met.
+weight = 1.0
+min_difficulty = 1

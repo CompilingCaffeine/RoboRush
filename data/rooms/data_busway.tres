@@ -1,0 +1,36 @@
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="1_template"]
+
+[resource]
+script = ExtResource("1_template")
+id = &"data_busway"
+type = 1
+obstacles = Array[Rect2i]([Rect2i(9, 4, 2, 2), Rect2i(16, 7, 2, 2)])
+enemy_spawns = Array[Vector2i]([Vector2i(3, 1), Vector2i(22, 1), Vector2i(3, 10), Vector2i(22, 10)])
+; The floor's first room where the *route* is longer than the sightline, and the first built out of
+; cable ducts rather than walls (see `CableDuct`). Two busways run almost the whole width of the
+; room, staggered, so crossing from the top of the room to the bottom means going round the end of
+; one and then round the other end of the other — while every enemy in the room has been able to
+; shoot at you the entire time, because a duct stops a chassis and not a bullet.
+;
+; That is the whole idea, and it is one a wall cannot express. A room full of walls is a room where
+; cover and pathing are the same object: going the long way round also means being safe on the way.
+; Here they come apart, and the question stops being "where is cover" and becomes "where am I going
+; to be when I get there" — which is this floor's question, asked by the architecture instead of by
+; a hazard for once.
+;
+; The zones sit on the two turns rather than in the open, so the ground the route forces the player
+; onto is the ground that charges for stopping on it. Running the turn is free; stopping in it to
+; return fire is not.
+;
+; The two blocks are the only real cover in the room, and they are deliberately small and off the
+; route. They exist so the middle band is somewhere a player can *choose* to stand and trade, which
+; is the decision the ducts would otherwise take away entirely.
+ducts = Array[Rect2i]([Rect2i(1, 2, 13, 1), Rect2i(12, 9, 13, 1)])
+thermal_zones = Array[Rect2i]([Rect2i(15, 2, 8, 4), Rect2i(3, 6, 8, 4)])
+reward_spawn = Vector2i(13, 6)
+difficulty = 2
+floor_tags = Array[StringName]([&"data_center"])
+min_floor = 3
+max_floor = 3
