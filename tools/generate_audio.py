@@ -199,17 +199,43 @@ def make_pickup(noise: random.Random) -> list[float]:
 
 
 def make_door(noise: random.Random) -> list[float]:
-    """Heavy servo thunk: low square slide plus a mechanical noise transient."""
+    """A bolt driving shut: a rising servo, then a bright metallic latch.
+
+    Rising, and bright where it lands, on purpose. This used to be a falling low square with a
+    noise transient under a single decay — which is `make_player_hurt` described word for word,
+    20ms apart in length and a fifth apart in register. It fires on the frame the doors of an
+    uncleared room lock behind the player, which is the same frame the robot begins its room-entry
+    invulnerability flash, and testers reported the pair as a hit they had taken.
+
+    So the fix is a shape the hurt sound cannot have: the motor holds instead of decaying, the
+    pitch climbs instead of falling, and the loudest moment is a high latch at the end rather than
+    a low thump at the start. Nothing else in the library sits in the player's hurt register now,
+    and neither does this.
+    """
+    # Where the motor stops and the bolt seats. The two halves are cut rather than crossfaded —
+    # a latch is a discontinuity, and smoothing it is what would make it a thump again.
+    latch_at = 0.62
+
     phase = [0.0]
+    latch_phase = [0.0]
     smoothed = [0.0]
 
     def voice(_t: float, progress: float) -> float:
-        phase[0] += sweep(150.0, 62.0, progress) / SAMPLE_RATE
-        smoothed[0] += (noise.uniform(-1.0, 1.0) - smoothed[0]) * 0.2
-        clunk = smoothed[0] * 0.5 * decay(progress, 14.0)
-        return (square(phase[0], 0.5) * 0.8 + clunk) * decay(progress, 3.2)
+        if progress < latch_at:
+            phase[0] += sweep(70.0, 190.0, progress) / SAMPLE_RATE
+            # Held, not decayed. A servo that faded out would be one losing power rather than one
+            # arriving; the short attack only keeps the very first sample from clicking.
+            attack = min(progress / 0.06, 1.0)
+            return square(phase[0], 0.25) * 0.5 * attack
 
-    return render(0.18, voice)
+        latch_progress = (progress - latch_at) / (1.0 - latch_at)
+        latch_phase[0] += 1400.0 / SAMPLE_RATE
+        smoothed[0] += (noise.uniform(-1.0, 1.0) - smoothed[0]) * 0.7
+        ring = square(latch_phase[0], 0.5) * 0.45
+        clack = smoothed[0] * 0.8
+        return (ring + clack) * decay(latch_progress, 9.0)
+
+    return render(0.20, voice)
 
 
 def make_item_pickup(noise: random.Random) -> list[float]:

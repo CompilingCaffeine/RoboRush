@@ -56,16 +56,6 @@ var _still_seconds := 0.0
 ## True until the first shot after entering a room, which is what Cache Warmer multiplies.
 var _room_opening_shot := true
 
-## Seconds of immunity the robot deliberately does not flash for. See `_on_room_entered`.
-##
-## Presentation state, and the only piece of it this file keeps — `PlayerVisuals` is handed a
-## boolean rather than being told about doorways, because a doorway is not something the robot's
-## sprite has any business knowing. The alternative, teaching `HealthComponent` which of its
-## windows are worth showing, would put the word "flash" in the one component that runs on every
-## enemy in the game.
-var _quiet_invulnerability_left := 0.0
-
-
 func _ready() -> void:
 	assert(config != null, "Player.config is unset: assign a PlayerConfig resource.")
 	collision_layer = Teams.body_layer(Teams.Id.PLAYER)
@@ -141,7 +131,6 @@ func _physics_process(delta: float) -> void:
 		_input.consume_interact_request()
 		use_nearest_interactable()
 
-	_quiet_invulnerability_left = maxf(_quiet_invulnerability_left - delta, 0.0)
 	_visuals.update_visuals(_input.aim_direction, should_flash(), delta)
 
 
@@ -252,16 +241,14 @@ func _absorb_with_shield(_info: DamageInfo) -> bool:
 ## The grace window is granted rather than set, so it can only ever lengthen an immunity the player
 ## already had — walking through a door immediately after being hit must not cut the hit's own
 ## window short. See `PlayerConfig.room_entry_grace` for the length and the reason for it.
+##
+## Granted *quietly*, which is the other half of the same complaint: the flash means "you were hit",
+## and a robot that flashes on every doorway is telling the player they took a shot they did not
+## take. The mercy is meant to be invisible — a hit that never happens has nothing to report.
 func _on_room_entered(_type: int, _room_id: int) -> void:
 	_shields_left = _items.get_shield_charges_per_room()
 	_room_opening_shot = true
-	# Asked before the grant, not after, and that ordering is the whole of the exception: a player
-	# who walks through a door still flashing from a hit taken on the other side of it keeps that
-	# flash, because the window they are watching is one they have to play around. Only a doorway
-	# window that is the robot's *only* immunity goes quiet. See `should_flash`.
-	if not _is_invulnerable():
-		_quiet_invulnerability_left = config.room_entry_grace
-	_health.grant_invulnerability(config.room_entry_grace)
+	_health.grant_quiet_invulnerability(config.room_entry_grace)
 
 
 ## Mutex Lock and Adrenal Loop: fire rate that depends on what the robot is *doing* rather than on
@@ -393,15 +380,6 @@ func use_nearest_interactable() -> bool:
 	return best != null and best.call(&"interact", self)
 
 
-## Either source of immunity flashes the robot, so the player never has to work out
-## which kind of invulnerability they currently have. Reads the health component alone,
-## because the dash is registered with it — the flash is now driven by the exact predicate
-## that decides whether a hit lands, rather than by a second expression that happened to
-## agree.
-func _is_invulnerable() -> bool:
-	return _health.is_invulnerable()
-
-
 ## Whether the invulnerability the robot currently has is worth showing.
 ##
 ## Not every immune moment is. A flash is a warning with a deadline — *this is about to run out* —
@@ -411,11 +389,15 @@ func _is_invulnerable() -> bool:
 ## cycles a second for six tenths of a second, forty rooms a run, is a strobe attached to walking.
 ##
 ## So the window is kept and the flash is dropped, which is the split the two things actually want.
+## `HealthComponent` owns that split, because it owns the timers: a doorway grant goes in quietly
+## and everything else — a hit's own window, a dash — still speaks. Asking it here rather than
+## keeping a second timer beside it means the flash is driven by the same object that decides
+## whether a hit lands, rather than by a parallel expression that happened to agree.
 ##
 ## Public for the reason `opening_shot_damage_scale` is: the rule can then be read — and checked —
 ## without driving a frame of input and looking at a sprite to find out what it decided.
 func should_flash() -> bool:
-	return _is_invulnerable() and _quiet_invulnerability_left <= 0.0
+	return _health.is_visibly_invulnerable()
 
 
 ## Dash follows the held movement direction so it never fights the player's intent;

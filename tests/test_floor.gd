@@ -1015,6 +1015,13 @@ func _test_walking_into_a_room_buys_a_moment_of_grace() -> void:
 
 	floor_node._enter_room(destination)
 	check(health.is_invulnerable(), "crossing the threshold makes the robot untouchable")
+	# The other half of the complaint, and the reason the grant is a quiet one: the flash is what
+	# the player sees when they lose a point, so a robot that flashes on every doorway is reporting
+	# a hit that did not happen. Testers read it as exactly that.
+	check(
+		not health.is_visibly_invulnerable(),
+		"and does it without flashing a hit the player never took",
+	)
 
 	var landed := health.apply_damage(DamageInfo.new(1.0))
 	check(not landed, "and a shot waiting on the doorway takes nothing")
@@ -1030,6 +1037,10 @@ func _test_walking_into_a_room_buys_a_moment_of_grace() -> void:
 		health.apply_damage(DamageInfo.new(1.0)),
 		"a room the player has had time to read costs what it always did",
 	)
+	# Paired with the check above, because "quiet" must mean the entry grace and not the flash
+	# itself: a hit landing still has to show, or the fix for the false alarm has silenced the
+	# real one.
+	check(health.is_visibly_invulnerable(), "and a hit that does land flashes as it always did")
 
 	arena.queue_free()
 	await advance_physics(1)

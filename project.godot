@@ -15,10 +15,14 @@ run/main_scene="res://scenes/ui/bootstrap.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://art/ui/icon.png"
 
+[audio]
+
+buses/default_bus_layout="res://data/audio/default_bus_layout.tres"
+
 [autoload]
 
 EventBus="*res://autoload/event_bus.gd"
-WavedashSDK="*res://addons/wavedash/WavedashSDK.gd"
+WavedashSDK="*uid://cpea88r4gd2a5"
 CloudSaveCoordinator="*res://autoload/cloud_save_coordinator.gd"
 GameManager="*res://autoload/game_manager.gd"
 RunManager="*res://autoload/run_manager.gd"
@@ -27,10 +31,6 @@ SaveManager="*res://autoload/save_manager.gd"
 SceneRouter="*res://autoload/scene_router.gd"
 ScreenEffects="*res://autoload/screen_effects.gd"
 
-[audio]
-
-buses/default_bus_layout="res://data/audio/default_bus_layout.tres"
-
 [display]
 
 window/size/viewport_width=480
@@ -38,6 +38,10 @@ window/size/viewport_height=270
 window/size/window_width_override=1440
 window/size/window_height_override=810
 window/stretch/mode="viewport"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/wavedash/plugin.cfg")
 
 [gui]
 
@@ -174,10 +178,6 @@ debug_toggle_hud={
 2d_physics/layer_5="enemy_projectile"
 2d_physics/layer_6="pickup"
 2d_physics/layer_7="duct"
-
-[editor_plugins]
-
-enabled=PackedStringArray("res://addons/wavedash/plugin.cfg")
 
 [rendering]
 
