@@ -9,6 +9,12 @@ extends TestCase
 ## easier, would look like a simplification in a diff, and would delete the entire fight. Six of the
 ## checks below exist to fail on it.
 ##
+## The bar is part of that shape rather than decoration on it. It reports generations left and
+## nothing else, so it steps down three times and never goes back up; the pool lives on the body's
+## tint instead. It used to fold the pool in, which drained a third of the bar under fire and put it
+## straight back on an undenied failover — a boss that heals, in the one UI element the player
+## watches, in a fight that cannot be killed by damage at all.
+##
 ## The other half is the telegraph, which is the player's only information and their whole budget.
 ## The target is chosen when the pool empties and must not move afterwards — a boss that re-picked on
 ## resolution would make the run across the arena pointless and would do it invisibly, which is the
@@ -36,6 +42,7 @@ var _arena_node: Node2D
 var _boss: Orchestrator
 var _player: Player
 var _defeated := 0
+var _phases: Array[int] = []
 
 
 func run() -> void:
@@ -52,6 +59,7 @@ func run() -> void:
 	await _test_standing_on_the_target_denies_the_failover()
 	await _test_a_denial_stuns_it()
 	await _test_three_denials_end_the_fight()
+	await _test_every_denial_is_announced()
 	await _test_no_amount_of_damage_alone_can_kill_it()
 	await _test_the_plates_are_inside_the_arena_and_distinct()
 	await _test_it_needs_nothing_from_the_room_it_is_in()
@@ -110,11 +118,22 @@ func _test_the_config_is_coherent() -> void:
 func _test_damage_fills_the_pool_and_does_not_kill() -> void:
 	await _open(Vector2(40.0, 40.0))
 
-	var before := _boss.get_health_ratio()
+	var pool_before := _boss.get_pool_ratio()
+	var bar_before := _boss.get_health_ratio()
 	_hurt(_config.pool_per_generation * 0.5)
 	await advance_physics(1)
 
-	check(_boss.get_health_ratio() < before, "damage moves the bar (%.3f)" % _boss.get_health_ratio())
+	check(
+		_boss.get_pool_ratio() > pool_before,
+		"damage fills the pool (%.3f)" % _boss.get_pool_ratio(),
+	)
+	# And moves nothing else. The bar counts denials; a bar that drained under fire would be back to
+	# promising the player that shooting is the win condition — see `Orchestrator.get_health_ratio`.
+	check(
+		is_equal_approx(_boss.get_health_ratio(), bar_before),
+		"and the bar does not move: it counts denials, not damage (%.3f)"
+			% _boss.get_health_ratio(),
+	)
 	check(
 		_boss.get_generations_left() == _config.generations,
 		"and takes no generation on its own (%d left)" % _boss.get_generations_left(),
@@ -183,12 +202,25 @@ func _test_an_undenied_failover_moves_the_boss_and_resets_the_pool() -> void:
 	await advance_physics(1)
 	var target := _boss.get_target_plate()
 	var generations := _boss.get_generations_left()
+	var bar_before := _boss.get_health_ratio()
 	if not require(target >= 0, "a failover was announced"):
 		await _close()
 		return
 
 	# The player is parked in a corner, deliberately nowhere near any plate.
 	await _resolve_telegraph()
+
+	# The check the fight was reported on. An undenied failover empties the pool the player spent
+	# forcing it, which is the cost of missing — but it must not read as the boss healing, and a bar
+	# that went back up is exactly that reading. It counts denials, and no denial happened here.
+	check(
+		is_equal_approx(_boss.get_health_ratio(), bar_before),
+		"a missed failover does not refill the bar (%.3f)" % _boss.get_health_ratio(),
+	)
+	check(
+		_boss.get_pool_ratio() < 0.001,
+		"though the pool it cost is gone (%.3f)" % _boss.get_pool_ratio(),
+	)
 
 	check(_boss.get_plate() == target, "an undenied failover arrives at its target (%d)" % _boss.get_plate())
 	check(not _boss.is_telegraphing(), "and stops telegraphing")
@@ -252,10 +284,10 @@ func _test_a_denial_stuns_it() -> void:
 		return
 
 	# Damage during the stun must still land — the window is the point of denying one.
-	var before := _boss.get_health_ratio()
+	var before := _boss.get_pool_ratio()
 	_hurt(_config.pool_per_generation * 0.4)
 	await advance_physics(1)
-	check(_boss.get_health_ratio() < before, "and damage during the stun still counts")
+	check(_boss.get_pool_ratio() > before, "and damage during the stun still counts")
 	# ...but it must not announce a new failover while stunned, or the window is not a window.
 	check(not _boss.is_telegraphing(), "and it cannot start a new failover while stunned")
 	await _close()
@@ -285,6 +317,75 @@ func _test_three_denials_end_the_fight() -> void:
 		"%d denials were available and taken (%d)" % [_config.generations, denied],
 	)
 	check(_defeated == 1, "the boss is defeated, exactly once (%d)" % _defeated)
+	await _close()
+
+
+## Every denial reaches the player, on the denial it belongs to.
+##
+## The one event in this fight that is progress is a denial, and the player's only confirmation that
+## they got one is the banner, the shake and the sting the phase change carries. Both consumers index
+## off the *number*: `CombatHUD` shows `phase_banners[phase - 1]` and `FeedbackDirector` gives a
+## phase of 1 nothing, on the shared understanding that phase one is the fight starting.
+##
+## This suite could not see the phase numbering at all before, which is how the boss shipped emitting
+## 0, 1, 2: the first denial announced nothing, the second showed the first's line, and the third
+## line was unreachable. Nothing else in the fight moved, so the only symptom was a boss that took a
+## third of its bar, refilled, and never said why — which is exactly how it was reported.
+func _test_every_denial_is_announced() -> void:
+	var encounter := load(ENCOUNTER_PATH) as BossEncounter
+	if not require(encounter, "the encounter loads"):
+		return
+	check(
+		not encounter.phase_banners[0].is_empty(),
+		"the fight states its rule on the phase it opens on, before it asks for a denial",
+	)
+
+	_phases = []
+	EventBus.boss_phase_changed.connect(_on_phase_changed)
+	await _open(Vector2(40.0, 40.0))
+	check(
+		_phases.size() == 1 and _phases[0] == 1,
+		"the fight opens on phase 1, like every other boss (%s)" % [_phases],
+	)
+
+	# Two denials, which is every phase change there is: the third ends the fight instead.
+	for _attempt: int in 2:
+		_hurt(_config.pool_per_generation)
+		await advance_physics(1)
+		var target := _boss.get_target_plate()
+		if target < 0:
+			continue
+		_stand_on(target)
+		await _resolve_telegraph()
+		await advance_physics(int(_config.denial_stun_seconds * 60.0) + 2)
+
+	EventBus.boss_phase_changed.disconnect(_on_phase_changed)
+	if not require(_phases.size() == 3, "both denials changed phase (%s)" % [_phases]):
+		await _close()
+		return
+	var expected: Array[int] = [1, 2, 3]
+	check(_phases == expected, "and they are numbered 1, 2, 3 (%s)" % [_phases])
+
+	var denials: Array[int] = [1, 2]
+	for index: int in denials:
+		var phase: int = _phases[index]
+		check(
+			phase > 1,
+			"denial %d is not mistaken for the fight starting, so it gets its sting (phase %d)"
+				% [index, phase],
+		)
+		var banner_index := phase - 1
+		var banner := ""
+		if banner_index >= 0 and banner_index < encounter.phase_banners.size():
+			banner = encounter.phase_banners[banner_index]
+		check(
+			not banner.is_empty(),
+			"and the HUD has something to say for it ('%s')" % banner,
+		)
+	check(
+		encounter.phase_banners[1] != encounter.phase_banners[2],
+		"the two denials say different things",
+	)
 	await _close()
 
 
@@ -420,6 +521,10 @@ func _close() -> void:
 
 func _on_defeated(_boss_node: Node) -> void:
 	_defeated += 1
+
+
+func _on_phase_changed(phase: int) -> void:
+	_phases.append(phase)
 
 
 ## Damages the boss the way a projectile does: through its part, which forwards it.

@@ -2160,6 +2160,33 @@ with that id (a death save). Two things sharing one would collide in a run's rec
 word in the HUD for a boss banner and a pickup banner, which is the specific confusion
 `BossEncounter` was created to stop.
 
+**The first denial used to say nothing, which is how the fight read as unkillable.** It shipped with
+`enum Phase { NOMINAL, DEGRADED, LAST_INSTANCE }` — 0, 1, 2 — while `CombatHUD` shows
+`phase_banners[phase - 1]` and `FeedbackDirector` treats `phase > 1` as "not the opening beat". So the
+first denial, the hardest-won event in the game and the only one that is progress, arrived with no
+banner, no shake and no sting; the second showed the first's line; and `LAST INSTANCE` was
+unreachable. A fight scored in denials had nothing to say about a denial, and it played exactly as it
+was reported: a boss that loses a third of its bar, moves, refills, and never explains itself. The
+enum now counts from one like the other three bosses, and `tests/test_orchestrator.gd` pins both the
+numbering and which banner lands on which denial — the suite could not see either before, which is
+why 64 passing checks sat on top of it.
+
+**And the bar stopped refilling.** It reported generations left with the current pool filling the
+segment between them, so damage drained a third of it and an undenied failover — which costs the boss
+nothing — put that third straight back. A bar that refills under fire is the universal sign for a
+heal, so the fight that cannot be killed by damage was spending its most-watched UI element promising
+that damage was the answer and that the boss was undoing it. It now reports denials only: three clean
+steps, never upward. Damage is still visibly doing something — it charges the body toward the next
+failover (`CHARGED_TINT`), which puts the number the player can act on on the thing they are aiming
+at. `get_pool_ratio()` is what the suite asserts on where it used to assert on the bar, and a new
+check pins the reported symptom directly: a missed failover must not move the bar.
+
+Two things went with it. The opening banner slot, left empty by every other boss because a health bar
+needs no words, now carries the rule this fight cannot be played without: **SHOOTING IT ONLY MOVES IT
+// STAND WHERE IT LANDS**. And the destination plate now starts its ramp *above* the brightness of the
+plate the boss is standing on instead of below it — it used to spend the first 0.68 of its 1.9 seconds
+as the dimmer of the two, out of a budget that is entirely spent crossing the room.
+
 #### Any floor, any boss — again
 
 All four floors now list all four bosses, and the Orchestrator had to be added to the three before
