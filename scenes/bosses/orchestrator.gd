@@ -87,7 +87,41 @@ const PLATE_HOT_ALPHA := 0.85
 ## where it is" and "this is where it is going" are never confusable at a glance.
 const PLATE_LIVE_ALPHA := 0.42
 
-enum Phase { NOMINAL, DEGRADED, LAST_INSTANCE }
+## Where the destination plate's ramp starts, and it is above `PLATE_LIVE_ALPHA` on purpose: the
+## plate a failover is heading for has to be the brightest thing on the floor from the frame it is
+## named, not from the frame it happens to overtake the plate the boss is standing on.
+##
+## Ramping from idle put those two the wrong way round for the first third of the telegraph. The
+## crossing point was 0.36 of the way through — 0.68 of the 1.9 seconds gone before the destination
+## was even the brighter of the two — and those 1.9 seconds are the player's entire budget for
+## crossing the arena. It is still a countdown; it now runs between two values that already mean
+## "it is coming here".
+const PLATE_TARGET_MIN_ALPHA := 0.55
+
+## The body's colour, and the colour it reaches with the pool full.
+##
+## The pool is the one number in this fight that damage moves, and the bar stopped reporting it —
+## see `get_health_ratio`. So the body reports it instead, which is the better place for it anyway:
+## it puts "your damage is doing something" on the thing being shot rather than on a strip at the
+## top of the screen, and it is the same charging language `RuntimeError` tints its own body in
+## while a lane winds up. Amber rather than anything green: green on this floor is a pad, an offer,
+## the one colour the player has to find, and the plates below are already spending it.
+const BODY_TINT := Color(1.0, 1.0, 1.0, 1.0)
+const CHARGED_TINT := Color(1.0, 0.68, 0.38, 1.0)
+
+## Numbered from one, like every other boss in this game, because two systems index off the
+## number rather than off the enum: `CombatHUD._on_boss_phase_changed` shows
+## `phase_banners[phase - 1]`, and `FeedbackDirector._on_boss_phase_changed` treats `phase > 1`
+## as "not the opening beat" — the sting, the shake, and the boss music coming back.
+##
+## Left at GDScript's default zero, which is how this shipped, the fight went quiet about the one
+## event it is scored in. The first denial emitted 1, which the HUD read as the *opening* phase and
+## announced nothing for and the director read as the fight starting and gave nothing to; the
+## second denial then showed the first denial's banner; and the last line never appeared at all.
+## `MergeConflict`, `RuntimeError` and `CascadeFailure` all write `= 1` for this reason, and the
+## encounter's own note — that a denial going unremarked would be the game staying quiet about the
+## only thing it asks for — is a description of the bug rather than of the fight.
+enum Phase { NOMINAL = 1, DEGRADED = 2, LAST_INSTANCE = 3 }
 
 @export var config: OrchestratorConfig
 
@@ -137,6 +171,7 @@ func begin(arena: Rect2) -> void:
 	# which would put the body at that offset from this controller instead of in the arena — the
 	# lesson `MergeConflict._spawn_part` paid for and `ThermalZone.spawn` paid for again.
 	_part.global_position = _plates[_plate]
+	_part.set_tint(BODY_TINT)
 	_part.took_damage.connect(_on_part_damaged)
 
 	# A full interval before the first volley, so the opening second of the fight is the boss
@@ -151,6 +186,11 @@ func _physics_process(delta: float) -> void:
 	if _is_dead:
 		return
 	_player = _find_player()
+
+	# Every frame rather than on each hit, for the reason `RuntimeError` also re-tints per frame:
+	# `BossPart.set_tint` declines while the hurt flash is up, so a tint written on the frame damage
+	# landed is precisely the one that gets dropped.
+	_refresh_tint()
 
 	_stun_left = maxf(_stun_left - delta, 0.0)
 	if _stun_left > 0.0:
@@ -176,18 +216,32 @@ func get_generations_left() -> int:
 	return _generations
 
 
-## What the HUD's boss bar shows: generations left, with the current pool filling the segment in
-## between so a player pushing toward the next failover can see it coming.
+## What the HUD's boss bar shows: generations left, and nothing else. Three clean steps, one per
+## denial, and it never goes back up.
 ##
-## Deliberately not "health", because there is none — see the class doc. The bar still has to move
-## under fire or the fight reads as broken, so what it reports is progress toward the next *event*
-## rather than toward death.
+## Deliberately not "health", because there is none — see the class doc. It used to fold the pool
+## into the segment between generations so that the bar moved under fire, on the reasoning that a
+## boss bar that sat still while being shot would read as broken. What it actually produced was the
+## one reading this fight cannot survive: the pool filling drained a third of the bar, and an
+## undenied failover — which costs the boss nothing — put that third straight back. A bar that
+## refills under damage is the universal sign for a heal, so a fight that cannot be killed by damage
+## spent its most-watched UI element telling the player that damage was the thing to try and that
+## the boss was undoing it. It was reported, in exactly those words, as a boss that heals.
+##
+## So the bar now reports the only thing that is progress. Damage is still visibly doing something —
+## it charges the body toward the next failover (`CHARGED_TINT`), which is where a number the player
+## can *act* on belongs, on the thing they are aiming at rather than on a strip they have to look
+## away to read.
 func get_health_ratio() -> float:
 	if config.generations <= 0:
 		return 0.0
-	var pool_ratio := clampf(_pool / maxf(config.pool_per_generation, 0.001), 0.0, 1.0)
-	var whole := float(_generations - 1) + (1.0 - pool_ratio)
-	return clampf(whole / float(config.generations), 0.0, 1.0)
+	return clampf(float(_generations) / float(config.generations), 0.0, 1.0)
+
+
+## How full the pool is, from zero to one. What damage buys, and the only thing it buys: at one the
+## boss commits to a failover. Read by the body's tint, and by the suite in place of the bar.
+func get_pool_ratio() -> float:
+	return clampf(_pool / maxf(config.pool_per_generation, 0.001), 0.0, 1.0)
 
 
 ## Which plate the boss is standing on.
@@ -399,6 +453,12 @@ func _die() -> void:
 	EventBus.boss_defeated.emit(self)
 
 
+## The body carries the pool. Full means the next hit commits it to a failover.
+func _refresh_tint() -> void:
+	if is_instance_valid(_part):
+		_part.set_tint(BODY_TINT.lerp(CHARGED_TINT, get_pool_ratio()))
+
+
 func _announce_health() -> void:
 	EventBus.boss_health_changed.emit(get_health_ratio())
 
@@ -417,14 +477,19 @@ func _draw() -> void:
 		var local := Rect2(rect.position - global_position, rect.size)
 
 		var alpha := PLATE_IDLE_ALPHA
+		# Thicker on the destination, so which plate is being named survives a glance taken while
+		# the player is already running and reading the room rather than the rectangle.
+		var border := 1.0
 		if index == _target:
-			# The countdown. Ramps from idle to hot across the telegraph, so the plate is brightest
-			# on the frame the failover lands — the same direction of travel as a thermal zone
-			# filling, which is the language this floor's player already reads.
+			# The countdown. Ramps to hot across the telegraph, so the plate is brightest on the
+			# frame the failover lands — the same direction of travel as a thermal zone filling,
+			# which is the language this floor's player already reads. It starts above the live
+			# plate rather than at idle; see `PLATE_TARGET_MIN_ALPHA`.
 			var progress := 1.0 - clampf(_telegraph_left / maxf(config.telegraph_seconds, 0.001), 0.0, 1.0)
-			alpha = lerpf(PLATE_IDLE_ALPHA, PLATE_HOT_ALPHA, progress)
+			alpha = lerpf(PLATE_TARGET_MIN_ALPHA, PLATE_HOT_ALPHA, progress)
+			border = 2.0
 		elif index == _plate:
 			alpha = PLATE_LIVE_ALPHA
 
 		draw_rect(local, Color(PLATE_COLOR.r, PLATE_COLOR.g, PLATE_COLOR.b, alpha * 0.5))
-		draw_rect(local, Color(PLATE_COLOR.r, PLATE_COLOR.g, PLATE_COLOR.b, alpha), false, 1.0)
+		draw_rect(local, Color(PLATE_COLOR.r, PLATE_COLOR.g, PLATE_COLOR.b, alpha), false, border)

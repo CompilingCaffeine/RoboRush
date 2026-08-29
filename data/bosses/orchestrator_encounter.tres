@@ -14,4 +14,11 @@ defeat_banner = "NOWHERE LEFT TO PUT IT"
 ; the game narrating something visible. Here every phase change is a denial, which is the one event
 ; in the fight the player has to work for and the only thing that is progress. A denial that went
 ; unremarked would be the game staying quiet about the only thing it is asking for.
-phase_banners = Array[String](["", "ONE INSTANCE DOWN  //  IT IS LEARNING THE ROOM", "LAST INSTANCE  //  NOWHERE TO FAIL OVER TO"])
+;
+; The first slot is the fight *starting* — `CombatHUD` shows `phase_banners[phase - 1]`, and every
+; boss opens on phase one. The other three leave it empty because their opening beat is a health
+; bar, which needs no words. This one is the only fight in the game whose win condition is not the
+; thing the player is holding, and it is the only one that has to say so before it asks: a player
+; who reads the bar drop a third, watches it come back, and concludes the boss heals is a player
+; who was told nothing else and drew the only available conclusion.
+phase_banners = Array[String](["SHOOTING IT ONLY MOVES IT  //  STAND WHERE IT LANDS", "ONE INSTANCE DOWN  //  IT IS LEARNING THE ROOM", "LAST INSTANCE  //  NOWHERE TO FAIL OVER TO"])
