@@ -26,8 +26,8 @@ extends Boss
 ## ## Three places heat comes from
 ##
 ## The rack vents where its bodies are. It also **aims** — a patch centred on wherever the robot is
-## standing, every `aimed_vent_interval` — and it **scatters**, a patch at a random point in the
-## arena every `scatter_vent_interval`.
+## standing, every `aimed_vent_interval` — and it **leads**, a patch centred on where the robot will
+## be in `lead_seconds` if it does not turn, every `lead_vent_interval`.
 ##
 ## The first of those is what makes the fight's own sentence true. "Keep moving" was the floor's
 ## lesson and the boss's stated job, and the boss was not actually asking it: heat only ever landed
@@ -36,10 +36,21 @@ extends Boss
 ## this floor removes things — by painting the ground and counting down, never by landing a hit the
 ## player could not have walked out of.
 ##
-## The second closes the corners. A 416x192 room has ground the ellipse cannot reach, and heat that
-## only ever appears where the boss is or where the player is leaves that ground safe by
-## construction. The scatter is weather: it is aimed at nobody, it is read the same way as
-## everything else, and it means the answer to this fight is a route rather than a spot.
+## The second removes the *other* free answer, which the aimed vent leaves open and which is easier
+## to find. Heat centred on the robot is always behind a robot that is moving, so a player who
+## simply picks a heading and holds it never meets any of it — "keep moving" is satisfied by a
+## straight line, and a straight line takes no reading at all. The lead vent is the front of the
+## pincer. The aimed patch charges for stopping, the lead patch charges for holding a heading, and
+## the only input that answers both is a turn.
+##
+## This is where the fight used to **scatter** instead, a patch at a uniformly random point in the
+## arena, and the argument for it was the corners: a 416x192 room has ground the ellipse cannot
+## reach, and heat that only appears on the ring or under the robot leaves that ground safe by
+## construction. The lead vent inherits that argument and improves on it. A player walking out wide
+## to a cold corner has a heading pointed at that corner, so the patch that leads them is already
+## there when they arrive — the corners close because the player went to them, rather than because
+## a die roll covered enough of the room to eventually include them. Nothing in the fight is now
+## random, which is the property the rest of it already had.
 ##
 ## **Neither of them is divided by load**, and that is deliberate. The whole escalation of this
 ## fight is the rack concentrating what it already had; two sources that quadrupled alongside it
@@ -158,11 +169,12 @@ var _spin := 0.0
 var _breath := START_BREATH_PHASE
 var _packet_cooldown := 0.0
 
-## Seconds until the rack aims at the player again, and until it scatters again. One clock each for
-## the whole rack rather than one per node, because neither is a thing a *node* does — they are the
-## room being run too hot, and they go on at the same rate whether four bodies are doing it or one.
+## Seconds until the rack aims at the player again, and until it leads them again. One clock each
+## for the whole rack rather than one per node, because neither is a thing a *node* does — they are
+## the room being run too hot, and they go on at the same rate whether four bodies are doing it or
+## one.
 var _aimed_left := 0.0
-var _scatter_left := 0.0
+var _lead_left := 0.0
 
 
 func _ready() -> void:
@@ -199,11 +211,15 @@ func begin(arena: Rect2) -> void:
 		# current rather than as four things flashing in unison.
 		_packet_progress[slot] = float(slot) / float(_slot_count())
 
-	# A full interval before the first aimed vent and half of one before the first scatter, so the
+	# A full interval before the first aimed vent and half of one before the first lead vent, so the
 	# opening seconds of the fight are the rack introducing itself. A patch appearing under the
 	# player on the frame they walked in would be the fight's fairest mechanic read as its cheapest.
+	#
+	# Offset from each other rather than started together, so the player meets the two clocks one at
+	# a time and can tell them apart. Two patches arriving on the same frame — one under the robot,
+	# one ahead of it — is the pincer stated before either half of it has been learned.
 	_aimed_left = config.aimed_vent_interval
-	_scatter_left = config.scatter_vent_interval * 0.5
+	_lead_left = config.lead_vent_interval * 0.5
 
 	EventBus.boss_phase_changed.emit(int(_phase))
 	_announce_health()
@@ -456,12 +472,12 @@ func _slot_position(slot: int) -> Vector2:
 # --- Vents --------------------------------------------------------------------
 
 
-## The three sources, in the order the player learns them: the bodies, then themselves, then the
-## room. See the class doc for why only the first is scaled by load.
+## The three sources, in the order the player learns them: the bodies, then where the robot is, then
+## where it is going. See the class doc for why only the first is scaled by load.
 func _step_vents(delta: float) -> void:
 	_step_node_vents(delta)
 	_step_aimed_vent(delta)
-	_step_scatter_vent(delta)
+	_step_lead_vent(delta)
 
 
 func _step_node_vents(delta: float) -> void:
@@ -489,20 +505,38 @@ func _step_aimed_vent(delta: float) -> void:
 		_drop_vent(_player.global_position)
 
 
-## Heat somewhere in the arena, chosen uniformly and aimed at nobody.
+## Heat where the robot is heading, on the same kind of clock that does not care how the fight is
+## going.
 ##
-## Drawn from `_body_bounds` rather than from the whole arena so a scattered patch is a whole patch
-## with room around it, the same inset the nodes themselves keep — `_drop_vent` would clamp one at
-## the wall anyway, and a clamp is how a uniform draw quietly becomes a pile-up along the edges.
-func _step_scatter_vent(delta: float) -> void:
-	_scatter_left -= delta
-	if _scatter_left > 0.0:
+## The lead is taken off the player's own `velocity` rather than off their input, for the reason
+## `ThermalZone` measures stillness the same way: a robot shoved by knockback or carried by a
+## migration pad is going somewhere it did not ask to go, and the rack is reading the room rather
+## than the controller. A robot with no velocity leads nowhere and the patch lands on it, which is
+## the same square the aimed clock would have chosen — see `CascadeFailureConfig.lead_seconds` for
+## why that convergence is the point rather than an edge case.
+##
+## The lead point is *not* clamped here. `_drop_vent` clamps the finished rect into the arena, which
+## is the correct place for it: a robot running at a wall is led into that wall, and the patch that
+## meets them there is a whole patch flush against it rather than half of one outside the room.
+func _step_lead_vent(delta: float) -> void:
+	_lead_left -= delta
+	if _lead_left > 0.0:
 		return
-	_scatter_left = maxf(config.scatter_vent_interval, 0.05)
-	_drop_vent(Vector2(
-		randf_range(_body_bounds.position.x, _body_bounds.end.x),
-		randf_range(_body_bounds.position.y, _body_bounds.end.y),
-	))
+	_lead_left = maxf(config.lead_vent_interval, 0.05)
+	if _player == null:
+		return
+	_drop_vent(_player.global_position + _player_velocity() * config.lead_seconds)
+
+
+## The robot's current velocity, or zero when whatever is standing in for it does not have one.
+##
+## Typed as `Node2D` throughout this file rather than as `Player`, so the boss can be fought by a
+## test double — and a double without a `velocity` must lead to a vent under the target rather than
+## to a crash.
+func _player_velocity() -> Vector2:
+	if _player is CharacterBody2D:
+		return (_player as CharacterBody2D).velocity
+	return Vector2.ZERO
 
 
 ## Puts one zone on the floor under `at`.

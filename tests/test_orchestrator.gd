@@ -1,24 +1,26 @@
 extends TestCase
-## Cloud Operations' boss: what damage does, what it does not do, and the one thing that does.
+## Cloud Operations' boss: when damage counts, what the floor costs, and whether the room it leaves
+## you can still be crossed.
 ##
-## The fight's whole shape is that **damage cannot kill it**. The pool fills, the boss fails over to
-## another plate, the pool resets, and that loop runs forever at any damage per second — the only
-## thing that ends it is the player standing on the plate it is migrating to. That makes this suite
-## unlike the other three boss suites in one way worth stating: most of what follows asserts things
-## the fight refuses to do. A change that turned the pool into a health bar would make the boss
-## easier, would look like a simplification in a diff, and would delete the entire fight. Six of the
-## checks below exist to fail on it.
+## The fight is a four-beat cycle — sealed, telegraph, discharge, open — and this suite is organised
+## around the two claims that make it a fight rather than a wait.
 ##
-## The bar is part of that shape rather than decoration on it. It reports generations left and
-## nothing else, so it steps down three times and never goes back up; the pool lives on the body's
-## tint instead. It used to fold the pool in, which drained a third of the bar under fire and put it
-## straight back on an undenied failover — a boss that heals, in the one UI element the player
-## watches, in a fight that cannot be killed by damage at all.
+## **Damage counts only in the window.** Shots at a sealed boss are discarded outright, not banked,
+## and the bar reports an honest pool that only falls. Those are three separate things a later change
+## could quietly break in three different directions, so they are asserted separately rather than
+## through one "it took damage" check.
 ##
-## The other half is the telegraph, which is the player's only information and their whole budget.
-## The target is chosen when the pool empties and must not move afterwards — a boss that re-picked on
-## resolution would make the run across the arena pointless and would do it invisibly, which is the
-## one failure mode nobody could report.
+## **Every migration is answerable.** The discharge costs a point to anything off a live plate, and
+## the live set shrinks from five plates to three to two as the fight escalates. That makes the
+## geometry load-bearing: if the surviving plates ever cluster on one side of a 416x192 room, a
+## player in the far corner takes a hit they could not have avoided. `_test_every_migration_can_be
+## _answered_from_anywhere` recomputes the worst case over every boss plate and every rotation, from
+## the shipped numbers, and is the check most worth keeping if anyone ever trims this file.
+##
+## This suite replaced one that asserted the opposite fight: six of its checks existed to fail if
+## anybody turned a damage pool into a health bar, because the boss it measured could not be killed
+## by damage at all. That fight is gone — see `Orchestrator` for why, and for the two faults that
+## took it out — so those checks are gone with it rather than being weakened into passing.
 
 const BOSS_SCENE := preload("res://scenes/bosses/orchestrator.tscn")
 const PLAYER_SCENE := preload("res://scenes/player/player.tscn")
@@ -30,11 +32,16 @@ const CAMPAIGN_PATH := "res://data/runs/main_campaign.tres"
 ## The arena every boss in this project is measured in: one room's interior.
 const ARENA := Rect2(Vector2.ZERO, Vector2(416.0, 192.0))
 
-## The telegraph the suite runs at, wound down from the shipped 1.9s so a failover resolves in a
+## The robot's walking speed, from `data/player/player.tres`. Duplicated here because the geometry
+## check below is arithmetic about *this* number against the telegraph, and reading it out of the
+## resource would make a check about the fight's fairness silently follow a change to the player.
+const PLAYER_SPEED := 160.0
+
+## The telegraph the suite runs at, wound down from the shipped 1.9s so a migration resolves in a
 ## handful of frames rather than in two real seconds. Everything timed is derived from this rather
 ## than given its own number, for the reason `test_cascade_failure` winds its vent clocks by one
-## ratio: what the fight's fairness rests on is the *relationships* between these durations, and a
-## suite that shortened one of them alone would be measuring a fight nobody plays.
+## ratio: what the fight rests on is the *relationships* between these durations, and a suite that
+## shortened one of them alone would be measuring a fight nobody plays.
 const TEST_TELEGRAPH := 0.2
 
 var _config: OrchestratorConfig
@@ -52,15 +59,21 @@ func run() -> void:
 
 	_test_the_encounter_is_complete()
 	_test_the_config_is_coherent()
-	await _test_damage_fills_the_pool_and_does_not_kill()
-	await _test_a_full_pool_commits_to_a_named_plate()
+	_test_every_migration_can_be_answered_from_anywhere()
+	await _test_a_sealed_boss_discards_damage()
+	await _test_the_window_after_landing_takes_damage()
+	await _test_the_bar_is_an_honest_pool()
+	await _test_it_announces_a_migration_and_does_not_move_yet()
 	await _test_the_target_does_not_move_once_announced()
-	await _test_an_undenied_failover_moves_the_boss_and_resets_the_pool()
-	await _test_standing_on_the_target_denies_the_failover()
-	await _test_a_denial_stuns_it()
-	await _test_three_denials_end_the_fight()
-	await _test_every_denial_is_announced()
-	await _test_no_amount_of_damage_alone_can_kill_it()
+	await _test_the_target_is_the_live_plate_furthest_from_the_player()
+	await _test_the_live_set_never_holds_the_plate_it_stands_on()
+	await _test_standing_off_every_plate_costs_a_point()
+	await _test_standing_on_any_live_plate_costs_nothing()
+	await _test_denying_a_migration_keeps_it_put_and_opens_it_longer()
+	await _test_a_denial_is_never_also_a_hit()
+	await _test_damage_kills_it()
+	await _test_the_floor_shrinks_as_the_fight_goes()
+	await _test_every_phase_is_announced()
 	await _test_the_plates_are_inside_the_arena_and_distinct()
 	await _test_it_needs_nothing_from_the_room_it_is_in()
 	_test_every_floor_can_draw_it()
@@ -83,337 +96,544 @@ func _test_the_encounter_is_complete() -> void:
 			"and does not collide with the Failover item's id ('%s')" % item.id,
 		)
 	check(
-		encounter.phase_banners.size() == _config.generations,
-		"it announces one banner per generation (%d for %d)"
-			% [encounter.phase_banners.size(), _config.generations],
+		encounter.phase_banners.size() == 3,
+		"it announces one banner per phase (%d for 3)" % encounter.phase_banners.size(),
 	)
 
 
 ## The shipped numbers, on the relationships the fight rests on rather than on their values.
 func _test_the_config_is_coherent() -> void:
-	check(_config.generations >= 2, "there is more than one generation to take (%d)" % _config.generations)
-	check(_config.plate_count >= 3, "and at least three plates (%d)" % _config.plate_count)
+	check(_config.max_health > 0.0, "there is a real pool to empty (%.0f)" % _config.max_health)
 	check(
-		_config.plate_count > 2,
-		"more than two plates, so the destination is something to read rather than the only "
-			+ "other one",
+		_config.phase_two_at > _config.phase_three_at,
+		"the phases are in order (%.2f > %.2f)" % [_config.phase_two_at, _config.phase_three_at],
 	)
-	check(_config.pool_per_generation > 0.0, "the pool is a real amount of damage")
-	check(_config.telegraph_seconds > 0.0, "the telegraph is a real window")
-	# The one inequality in the fight. A telegraph that fired faster than the boss's own volleys
-	# would be a countdown the player could not act inside of.
+	check(_config.plate_count >= 4, "there are enough plates to take some away (%d)" % _config.plate_count)
+	check(
+		_config.live_plates_by_phase.size() == 3,
+		"and a live count for each phase (%d)" % _config.live_plates_by_phase.size(),
+	)
+
+	# The escalation runs one way. A phase that gave ground back would undo the only thing that
+	# changes across this fight.
+	var previous := _config.plate_count
+	for phase: int in _config.live_plates_by_phase.size():
+		var live := _config.live_plates_by_phase[phase]
+		check(
+			live >= 2,
+			"phase %d leaves more than one plate, so shelter is never a single square (%d)"
+				% [phase + 1, live],
+		)
+		check(
+			live < _config.plate_count,
+			"and never every plate — the one it is standing on is never shelter (%d of %d)"
+				% [live, _config.plate_count],
+		)
+		check(live <= previous, "and no phase gives ground back (%d after %d)" % [live, previous])
+		previous = live
+
+	# The denial is worth the run, and that is the entire reward for making it.
+	check(
+		_config.denial_open_seconds > _config.cold_start_seconds,
+		"a denied migration opens it for longer than a completed one (%.2f > %.2f)"
+			% [_config.denial_open_seconds, _config.cold_start_seconds],
+	)
+	# The one inequality the telegraph must keep against the boss's own fire. A countdown shorter
+	# than the volleys under it is a countdown the player cannot act inside of.
 	check(
 		_config.telegraph_seconds > _config.telegraph_volley_interval,
-		"and is longer than the volley interval it fires at (%.2f > %.2f)"
+		"the telegraph is longer than the volley interval it fires at (%.2f > %.2f)"
 			% [_config.telegraph_seconds, _config.telegraph_volley_interval],
 	)
 	check(
 		_config.telegraph_volley_interval < _config.volley_interval,
-		"announcing a failover costs the player more fire, not less (%.2f < %.2f)"
+		"announcing a migration costs the player more fire, not less (%.2f < %.2f)"
 			% [_config.telegraph_volley_interval, _config.volley_interval],
 	)
+	check(_config.off_plate_damage > 0.0, "being off a plate costs something (%.1f)" % _config.off_plate_damage)
+	# Asserted here because the harness below deliberately strips it — see `_open_fight`. Without
+	# this check, a shipped config that lost its projectile would leave every integrity measurement
+	# in this suite passing and the boss firing blanks.
+	check(_config.shot != null, "and the live instance has something to fire")
 
 
-## Damage goes into the pool. Nothing else.
-func _test_damage_fills_the_pool_and_does_not_kill() -> void:
-	await _open(Vector2(40.0, 40.0))
-
-	var pool_before := _boss.get_pool_ratio()
-	var bar_before := _boss.get_health_ratio()
-	_hurt(_config.pool_per_generation * 0.5)
+## **The check this fight cannot ship without.** Every migration has to be answerable from wherever
+## the player is standing when it is announced.
+##
+## The discharge costs a point to anything off a live plate, and the live set shrinks to two plates
+## in the last phase. So the fight's fairness is a geometry claim: the furthest any point in the
+## arena sits from the nearest live plate, over every plate the boss could be on and every rotation
+## of the live set, must be crossable inside the telegraph at the robot's walking speed.
+##
+## Recomputed here from `plate_count`, `plate_radius`, `plate_size` and `live_plates_by_phase` rather
+## than asserted as a remembered number, because the point is to catch the *next* change to any of
+## them. Doubling the plates is what made the shrink possible at all — three plates cannot lose one
+## without the survivors sometimes sitting on the same side of the room — and nothing stops somebody
+## taking them back down.
+##
+## Walking speed only: the dash is deliberately left out of the budget, so the margin this reports is
+## the margin a player who never dashes has.
+func _test_every_migration_can_be_answered_from_anywhere() -> void:
+	var boss: Orchestrator = BOSS_SCENE.instantiate()
+	boss.config = _config
+	add_child(boss)
+	boss.begin(ARENA)
 	await advance_physics(1)
 
+	var plates := boss.get_plate_positions()
+	# Half a plate plus the robot's own radius: the distance a player must close to be *on* it.
+	var reach := _config.plate_size * 0.5 + Orchestrator.PLAYER_RADIUS
+	var budget := _config.telegraph_seconds * PLAYER_SPEED
+
+	for phase: int in _config.live_plates_by_phase.size():
+		var live_count: int = _config.live_plates_by_phase[phase]
+		var worst := 0.0
+		# Every plate the boss could be standing on, against every rotation of the live set. The
+		# fight picks one of these each cycle and the player does not choose which.
+		for standing: int in plates.size():
+			for rotation: int in plates.size() - 1:
+				var live := _live_set(plates.size(), standing, live_count, rotation)
+				check(
+					live.size() == live_count,
+					"phase %d lights %d distinct plates (%s)" % [phase + 1, live_count, live],
+				)
+				worst = maxf(worst, _furthest_from_shelter(plates, live, reach))
+
+		var seconds := worst / PLAYER_SPEED
+		check(
+			worst <= budget,
+			"phase %d: the worst point in the arena is %.0fpx from shelter, %.2fs of a %.2fs "
+				% [phase + 1, worst, seconds, _config.telegraph_seconds]
+				+ "telegraph",
+		)
+		# And with room to spare, because the player is also dodging a volley every 0.7 seconds
+		# while they run. A migration that is answerable only by a player who started moving on the
+		# first frame and took a perfectly straight line is not answerable.
+		check(
+			worst <= budget * 0.85,
+			"phase %d keeps a real margin, not a frame-perfect one (%.0fpx of %.0fpx)"
+				% [phase + 1, worst, budget],
+		)
+
+	boss.queue_free()
+	await advance_physics(2)
+
+
+## Shots at a sealed boss do nothing, and are not saved up to do something later.
+##
+## Banking would be the worse failure of the two and the harder to see: the bar would sit still under
+## fire exactly as it does now, and then move at a moment the player could not connect to anything
+## they did. So the pool is checked after the damage *and* after the window opens.
+func _test_a_sealed_boss_discards_damage() -> void:
+	await _open_fight(Vector2(40.0, 40.0))
+
+	if not require(not _boss.is_open(), "the fight opens with the boss sealed"):
+		await _close()
+		return
+
+	var before := _boss.get_health()
+	_hurt(_config.max_health * 0.5)
+	await advance_physics(1)
 	check(
-		_boss.get_pool_ratio() > pool_before,
-		"damage fills the pool (%.3f)" % _boss.get_pool_ratio(),
+		is_equal_approx(_boss.get_health(), before),
+		"damage to a sealed boss does nothing (%.1f, was %.1f)" % [_boss.get_health(), before],
 	)
-	# And moves nothing else. The bar counts denials; a bar that drained under fire would be back to
-	# promising the player that shooting is the win condition — see `Orchestrator.get_health_ratio`.
+	check(_defeated == 0, "and half a pool of it kills nothing")
+
+	# And it was not banked. Reaching the window must not suddenly apply what was thrown at the
+	# closed body.
+	await _reach_open_window()
 	check(
-		is_equal_approx(_boss.get_health_ratio(), bar_before),
-		"and the bar does not move: it counts denials, not damage (%.3f)"
-			% _boss.get_health_ratio(),
+		is_equal_approx(_boss.get_health(), before),
+		"and it is not banked against the window that follows (%.1f)" % _boss.get_health(),
 	)
-	check(
-		_boss.get_generations_left() == _config.generations,
-		"and takes no generation on its own (%d left)" % _boss.get_generations_left(),
-	)
-	check(not _boss.is_telegraphing(), "and half a pool announces nothing")
-	check(_defeated == 0, "and nothing is dead")
 	await _close()
 
 
-## Filling the pool is what forces the fight forward.
-func _test_a_full_pool_commits_to_a_named_plate() -> void:
-	await _open(Vector2(40.0, 40.0))
+## The window after it lands is the only place damage lands, and it is a real amount of it.
+func _test_the_window_after_landing_takes_damage() -> void:
+	await _open_fight(Vector2(40.0, 40.0))
+	await _reach_open_window()
+
+	if not require(_boss.is_open(), "the boss opens after it lands"):
+		await _close()
+		return
+
+	var before := _boss.get_health()
+	_hurt(_config.max_health * 0.25)
+	await advance_physics(1)
+	check(
+		_boss.get_health() < before,
+		"damage in the window counts (%.1f, was %.1f)" % [_boss.get_health(), before],
+	)
+	check(
+		is_equal_approx(_boss.get_health(), before - _config.max_health * 0.25),
+		"and counts in full, undivided and uncapped (%.1f)" % _boss.get_health(),
+	)
+	await _close()
+
+
+## The bar reports the pool, falls only, and never reports anything else.
+##
+## The fight this replaced spent its most-watched UI element on a number that went back up — it
+## folded a damage pool into a segment between generations, so an undenied failover, which cost the
+## boss nothing, restored a third of the bar. A bar that refills under fire is the universal sign for
+## a heal, and it was reported in exactly those words. There is nothing left to fold in, and this is
+## the check that keeps it that way.
+func _test_the_bar_is_an_honest_pool() -> void:
+	await _open_fight(Vector2(40.0, 40.0))
+
+	check(
+		is_equal_approx(_boss.get_health_ratio(), 1.0),
+		"the bar opens full (%.3f)" % _boss.get_health_ratio(),
+	)
+
+	var highest := _boss.get_health_ratio()
+	var lowest := highest
+	# Three whole cycles, with a quarter-pool of damage taken in each window. Long enough that a bar
+	# reporting anything cyclical — a pool, a timer, a plate count — would visibly rise somewhere.
+	for _cycle: int in 3:
+		await _reach_open_window()
+		_hurt(_config.max_health * 0.2)
+		await advance_physics(1)
+		var ratio := _boss.get_health_ratio()
+		check(ratio <= highest + 0.001, "the bar never rises (%.3f after %.3f)" % [ratio, highest])
+		highest = maxf(highest, ratio)
+		lowest = minf(lowest, ratio)
+		check(
+			is_equal_approx(ratio, _boss.get_health() / _config.max_health),
+			"and reports the pool and nothing else (%.3f)" % ratio,
+		)
+
+	check(lowest < 0.5, "and it moved a long way under fire (%.3f)" % lowest)
+	await _close()
+
+
+## A migration is announced before it happens, and the boss has not moved when it is.
+func _test_it_announces_a_migration_and_does_not_move_yet() -> void:
+	await _open_fight(Vector2(40.0, 40.0))
 
 	var standing := _boss.get_plate()
-	_hurt(_config.pool_per_generation)
-	await advance_physics(1)
+	await _reach_telegraph()
 
-	check(_boss.is_telegraphing(), "a full pool commits to a failover")
+	check(_boss.is_telegraphing(), "the dwell ends in an announced migration")
 	check(
 		_boss.get_target_plate() != standing,
 		"to a plate it is not already on (target %d, standing %d)"
 			% [_boss.get_target_plate(), standing],
 	)
 	check(
-		_boss.get_target_plate() >= 0 and _boss.get_target_plate() < _config.plate_count,
-		"and to a plate that exists (%d)" % _boss.get_target_plate(),
+		_boss.is_plate_live(_boss.get_target_plate()),
+		"and to one that is live (%d in %s)" % [_boss.get_target_plate(), _boss.get_live_plates()],
 	)
-	check(
-		_boss.get_plate() == standing,
-		"and has not moved yet — the telegraph comes first",
-	)
+	check(_boss.get_plate() == standing, "and has not moved yet — the telegraph comes first")
+	check(not _boss.is_open(), "and it is sealed while it announces")
 	await _close()
 
 
-## The target is decided when the pool empties, not when the telegraph ends. This is the check that
-## fails if somebody later re-picks on resolution, which would make the run across the room
-## pointless without changing anything a player could see.
+## The target is decided when the telegraph starts, not when it ends. This is the check that fails if
+## somebody later re-picks on resolution, which would make the run across the room pointless without
+## changing anything a player could see.
 func _test_the_target_does_not_move_once_announced() -> void:
-	await _open(Vector2(40.0, 40.0))
+	await _open_fight(Vector2(40.0, 40.0))
+	await _reach_telegraph()
 
-	_hurt(_config.pool_per_generation)
-	await advance_physics(1)
 	var announced := _boss.get_target_plate()
-	if not require(announced >= 0, "a failover was announced"):
+	if not require(announced >= 0, "a migration was announced"):
 		await _close()
 		return
 
-	# More damage during the telegraph, which is exactly what a player does — they are shooting it
-	# while running.
-	for _step: int in 4:
-		_hurt(_config.pool_per_generation)
+	# The player runs during the telegraph, which is the whole point of it — and running is exactly
+	# what would re-trigger a target chosen by distance if it were being chosen every frame.
+	for step: int in 4:
+		_player.global_position = _boss.get_plate_positions()[step % _boss.get_plate_positions().size()]
 		await advance_physics(1)
+		if not _boss.is_telegraphing():
+			break
 		check(
 			_boss.get_target_plate() == announced,
-			"the target stays %d under further damage (is %d)"
+			"the target stays %d while the player moves (is %d)"
 				% [announced, _boss.get_target_plate()],
 		)
 	await _close()
 
 
-## Nobody there: it arrives, and the damage that forced it is gone.
-func _test_an_undenied_failover_moves_the_boss_and_resets_the_pool() -> void:
-	await _open(Vector2(40.0, 40.0))
+## The destination is the live plate furthest from the player.
+##
+## This is what makes the race real, and it is the fix for how the previous fight died: its target
+## was `(current + 1)` and a denial did not move the boss, so a player standing on the next plate
+## round the ring denied every failover without moving once. Any rule that ignores where the player
+## is can be camped; this one cannot.
+func _test_the_target_is_the_live_plate_furthest_from_the_player() -> void:
+	await _open_fight(Vector2(40.0, 40.0))
 
-	_hurt(_config.pool_per_generation)
-	await advance_physics(1)
+	# Parked on a plate, so "furthest" has an unambiguous answer to check against.
+	var plates := _boss.get_plate_positions()
+	_player.global_position = plates[0]
+	await _reach_telegraph()
+
 	var target := _boss.get_target_plate()
-	var generations := _boss.get_generations_left()
-	var bar_before := _boss.get_health_ratio()
-	if not require(target >= 0, "a failover was announced"):
+	if not require(target >= 0, "a migration was announced"):
 		await _close()
 		return
 
-	# The player is parked in a corner, deliberately nowhere near any plate.
-	await _resolve_telegraph()
-
-	# The check the fight was reported on. An undenied failover empties the pool the player spent
-	# forcing it, which is the cost of missing — but it must not read as the boss healing, and a bar
-	# that went back up is exactly that reading. It counts denials, and no denial happened here.
+	var live := _boss.get_live_plates()
+	var here := _player.global_position
+	var furthest := live[0]
+	for index: int in live:
+		if here.distance_to(plates[index]) > here.distance_to(plates[furthest]):
+			furthest = index
 	check(
-		is_equal_approx(_boss.get_health_ratio(), bar_before),
-		"a missed failover does not refill the bar (%.3f)" % _boss.get_health_ratio(),
+		target == furthest,
+		"it names the live plate furthest from the robot (%d, furthest of %s)" % [target, live],
 	)
-	check(
-		_boss.get_pool_ratio() < 0.001,
-		"though the pool it cost is gone (%.3f)" % _boss.get_pool_ratio(),
-	)
-
-	check(_boss.get_plate() == target, "an undenied failover arrives at its target (%d)" % _boss.get_plate())
-	check(not _boss.is_telegraphing(), "and stops telegraphing")
-	check(
-		_boss.get_generations_left() == generations,
-		"and costs no generation (%d left)" % _boss.get_generations_left(),
-	)
-	check(not _boss.is_stunned(), "and leaves it open to nothing")
-	check(_defeated == 0, "and nothing is dead")
-
-	var body := _boss.get_parts()
-	if not body.is_empty():
-		check(
-			body[0].global_position.distance_to(_boss.get_plate_positions()[target]) < 1.0,
-			"and the body is actually on the plate it moved to",
-		)
+	# And that is not simply the only option it had.
+	check(live.size() >= 2, "with more than one to choose between (%d live)" % live.size())
 	await _close()
 
 
-## The fight. Stand where it is going and the load has nowhere to go.
-func _test_standing_on_the_target_denies_the_failover() -> void:
-	await _open(Vector2(40.0, 40.0))
+## The plate the boss is standing on is never shelter, in any phase.
+##
+## "Every plate but the one it is on" is the rule the fight opens with, and it is what makes the
+## shrink later on legible as a departure from something. It is also what stops the last phase
+## collapsing: with two live plates and the boss's own among them, one of the two shelters would cost
+## a point to stand on (`BossPart` charges for contact) and the choice the phase is built around
+## would not exist.
+func _test_the_live_set_never_holds_the_plate_it_stands_on() -> void:
+	await _open_fight(Vector2(40.0, 40.0))
 
-	_hurt(_config.pool_per_generation)
-	await advance_physics(1)
+	for _cycle: int in 4:
+		var standing := _boss.get_plate()
+		var live := _boss.get_live_plates()
+		check(
+			not live.has(standing),
+			"the plate it is standing on (%d) is not shelter (%s)" % [standing, live],
+		)
+		check(not live.is_empty(), "and there is shelter somewhere (%s)" % [live])
+		await _reach_open_window()
+	await _close()
+
+
+## The demand, stated once: be on a plate when it lands.
+func _test_standing_off_every_plate_costs_a_point() -> void:
+	await _open_fight(Vector2(40.0, 40.0))
+	await _reach_telegraph()
+
+	# A corner, which is never a plate — the ellipse the plates sit on is inset from the walls.
+	var corner := ARENA.position + Vector2(12.0, 12.0)
+	if not require(
+		not _boss.is_on_safe_ground(corner), "the corner is not shelter"
+	):
+		await _close()
+		return
+
+	var before := _integrity()
+	await _resolve_telegraph_at(corner)
+	check(
+		_integrity() < before,
+		"resolving off every plate costs a point (%d, was %d)" % [_integrity(), before],
+	)
+	await _close()
+
+
+## And the other half, which is the half that makes it a rule rather than a tax: any live plate is
+## enough. The player does not have to reach the *destination* to survive, only shelter.
+func _test_standing_on_any_live_plate_costs_nothing() -> void:
+	await _open_fight(Vector2(40.0, 40.0))
+	await _reach_telegraph()
+
+	var target := _boss.get_target_plate()
+	var live := _boss.get_live_plates()
+	var shelter := -1
+	for index: int in live:
+		if index != target:
+			shelter = index
+			break
+	if not require(shelter >= 0, "there is a live plate that is not the destination (%s)" % [live]):
+		await _close()
+		return
+
+	var before := _integrity()
+	await _resolve_telegraph_at(_boss.get_plate_positions()[shelter])
+	check(
+		_integrity() == before,
+		"a live plate that is not the destination still shelters (%d)" % _integrity(),
+	)
+	check(
+		_boss.get_plate() == target,
+		"and the migration completed, undenied (%d)" % _boss.get_plate(),
+	)
+	await _close()
+
+
+## The turn on top of the rule: the destination denies, keeps it where it is, and pays in window.
+func _test_denying_a_migration_keeps_it_put_and_opens_it_longer() -> void:
+	await _open_fight(Vector2(40.0, 40.0))
+	await _reach_telegraph()
+
 	var target := _boss.get_target_plate()
 	var standing := _boss.get_plate()
-	var generations := _boss.get_generations_left()
-	if not require(target >= 0, "a failover was announced"):
+	if not require(target >= 0, "a migration was announced"):
 		await _close()
 		return
 
-	_stand_on(target)
-	await _resolve_telegraph()
+	await _resolve_telegraph_at(_boss.get_plate_positions()[target])
 
+	check(_boss.get_plate() == standing, "a denied migration leaves it where it was (%d)" % _boss.get_plate())
+	check(not _boss.is_telegraphing(), "and the migration is over")
+	if not require(_boss.is_open(), "and it is open"):
+		await _close()
+		return
+
+	# The reward, measured rather than asserted from the config: the window a denial buys has to
+	# outlast the one a completed migration buys, or the run across the room bought nothing.
+	var winding := TEST_TELEGRAPH / maxf(_config.telegraph_seconds, 0.001)
+	var cold := _config.cold_start_seconds * winding
+	var frames := int(cold * 60.0) + 2
+	for _frame: int in frames:
+		await get_tree().physics_frame
 	check(
-		_boss.get_generations_left() == generations - 1,
-		"standing on the destination takes a generation (%d -> %d)"
-			% [generations, _boss.get_generations_left()],
+		_boss.is_open(),
+		"and stays open past the length of a cold start (%.2fs of wound-down time)" % cold,
 	)
-	check(_boss.get_plate() == standing, "and the boss does not move (%d)" % _boss.get_plate())
-	check(not _boss.is_telegraphing(), "and the failover is over")
 	await _close()
 
 
-## The reward for the run across the room, and the only window in the fight where damage is free.
-func _test_a_denial_stuns_it() -> void:
-	await _open(Vector2(40.0, 40.0))
+## A denied migration is never also a hit.
+##
+## The destination is always a live plate, so a player standing on it is by construction sheltered —
+## but the discharge and the denial are decided in the same function, and an ordering change could
+## make the fight charge a point for its own best outcome. Asserted directly, because it is the kind
+## of bug that reads as a tuning complaint ("denying feels bad") rather than as a defect.
+func _test_a_denial_is_never_also_a_hit() -> void:
+	await _open_fight(Vector2(40.0, 40.0))
 
-	_hurt(_config.pool_per_generation)
-	await advance_physics(1)
-	var target := _boss.get_target_plate()
-	if not require(target >= 0, "a failover was announced"):
-		await _close()
-		return
-	_stand_on(target)
-	await _resolve_telegraph()
-
-	if not require(_boss.is_stunned(), "a denial stuns it"):
-		await _close()
-		return
-
-	# Damage during the stun must still land — the window is the point of denying one.
-	var before := _boss.get_pool_ratio()
-	_hurt(_config.pool_per_generation * 0.4)
-	await advance_physics(1)
-	check(_boss.get_pool_ratio() > before, "and damage during the stun still counts")
-	# ...but it must not announce a new failover while stunned, or the window is not a window.
-	check(not _boss.is_telegraphing(), "and it cannot start a new failover while stunned")
-	await _close()
-
-
-## Three denials, and that is the fight.
-func _test_three_denials_end_the_fight() -> void:
-	await _open(Vector2(40.0, 40.0))
-
-	var denied := 0
-	for _attempt: int in _config.generations:
-		if _boss == null or _defeated > 0:
-			break
-		_hurt(_config.pool_per_generation)
-		await advance_physics(1)
+	for _cycle: int in 3:
+		await _reach_telegraph()
 		var target := _boss.get_target_plate()
 		if target < 0:
-			continue
-		_stand_on(target)
-		await _resolve_telegraph()
-		denied += 1
-		# Out of the stun before the next push, so each denial is its own event.
-		await advance_physics(int(_config.denial_stun_seconds * 60.0) + 2)
+			break
+		check(
+			_boss.is_plate_live(target),
+			"the destination is live, so standing on it is shelter (%d)" % target,
+		)
+		var before := _integrity()
+		await _resolve_telegraph_at(_boss.get_plate_positions()[target])
+		check(_integrity() == before, "denying cost no integrity (%d)" % _integrity())
+		await _leave_open_window()
+	await _close()
 
-	check(
-		denied == _config.generations,
-		"%d denials were available and taken (%d)" % [_config.generations, denied],
-	)
+
+## Damage kills it, which is the claim the whole rework rests on. The fight it replaced could not be
+## killed by any quantity of damage at all.
+func _test_damage_kills_it() -> void:
+	await _open_fight(Vector2(40.0, 40.0))
+
+	# Windows only. Anything else would be measuring the gate rather than the pool.
+	for _cycle: int in 12:
+		if _defeated > 0 or _boss == null or not is_instance_valid(_boss):
+			break
+		await _reach_open_window()
+		_hurt(_config.max_health * 0.34)
+		await advance_physics(1)
+
 	check(_defeated == 1, "the boss is defeated, exactly once (%d)" % _defeated)
 	await _close()
 
 
-## Every denial reaches the player, on the denial it belongs to.
+## The escalation, and the only thing in the fight that changes between phases: there is less floor.
+func _test_the_floor_shrinks_as_the_fight_goes() -> void:
+	await _open_fight(Vector2(40.0, 40.0))
+
+	await _reach_open_window()
+	var nominal := _boss.get_live_plates().size()
+	check(
+		nominal == _config.live_plates_by_phase[0],
+		"phase 1 lights %d plates (%d)" % [_config.live_plates_by_phase[0], nominal],
+	)
+
+	# Down to the second phase, then the third, taking the damage in windows the way a player does.
+	await _drive_health_to(_config.phase_two_at - 0.05)
+	check(
+		_boss.get_phase() == Orchestrator.Phase.DEGRADED,
+		"crossing %.2f reaches phase 2 (phase %d)" % [_config.phase_two_at, _boss.get_phase()],
+	)
+	await _reach_open_window()
+	var degraded := _boss.get_live_plates().size()
+	check(
+		degraded == _config.live_plates_by_phase[1],
+		"and lights %d (%d)" % [_config.live_plates_by_phase[1], degraded],
+	)
+
+	await _drive_health_to(_config.phase_three_at - 0.05)
+	check(
+		_boss.get_phase() == Orchestrator.Phase.LAST_INSTANCE,
+		"crossing %.2f reaches phase 3 (phase %d)" % [_config.phase_three_at, _boss.get_phase()],
+	)
+	await _reach_open_window()
+	var last := _boss.get_live_plates().size()
+	check(
+		last == _config.live_plates_by_phase[2],
+		"and lights %d (%d)" % [_config.live_plates_by_phase[2], last],
+	)
+	check(degraded < nominal and last < degraded, "the floor only ever shrinks (%d, %d, %d)" % [nominal, degraded, last])
+	await _close()
+
+
+## Every phase reaches the player, on the phase it belongs to.
 ##
-## The one event in this fight that is progress is a denial, and the player's only confirmation that
-## they got one is the banner, the shake and the sting the phase change carries. Both consumers index
-## off the *number*: `CombatHUD` shows `phase_banners[phase - 1]` and `FeedbackDirector` gives a
-## phase of 1 nothing, on the shared understanding that phase one is the fight starting.
-##
-## This suite could not see the phase numbering at all before, which is how the boss shipped emitting
-## 0, 1, 2: the first denial announced nothing, the second showed the first's line, and the third
-## line was unreachable. Nothing else in the fight moved, so the only symptom was a boss that took a
-## third of its bar, refilled, and never said why — which is exactly how it was reported.
-func _test_every_denial_is_announced() -> void:
+## Both consumers index off the *number*: `CombatHUD` shows `phase_banners[phase - 1]` and
+## `FeedbackDirector` gives a phase of 1 nothing, on the shared understanding that phase one is the
+## fight starting. This boss shipped once emitting 0, 1, 2 — the first phase change announced
+## nothing, the second showed the first's line, and the third was unreachable — so the numbering is
+## pinned here rather than trusted to the enum.
+func _test_every_phase_is_announced() -> void:
 	var encounter := load(ENCOUNTER_PATH) as BossEncounter
 	if not require(encounter, "the encounter loads"):
 		return
 	check(
 		not encounter.phase_banners[0].is_empty(),
-		"the fight states its rule on the phase it opens on, before it asks for a denial",
+		"the fight states its rule on the phase it opens on, before it asks anything",
 	)
 
 	_phases = []
 	EventBus.boss_phase_changed.connect(_on_phase_changed)
-	await _open(Vector2(40.0, 40.0))
+	await _open_fight(Vector2(40.0, 40.0))
 	check(
 		_phases.size() == 1 and _phases[0] == 1,
 		"the fight opens on phase 1, like every other boss (%s)" % [_phases],
 	)
 
-	# Two denials, which is every phase change there is: the third ends the fight instead.
-	for _attempt: int in 2:
-		_hurt(_config.pool_per_generation)
-		await advance_physics(1)
-		var target := _boss.get_target_plate()
-		if target < 0:
-			continue
-		_stand_on(target)
-		await _resolve_telegraph()
-		await advance_physics(int(_config.denial_stun_seconds * 60.0) + 2)
-
+	await _drive_health_to(_config.phase_two_at - 0.05)
+	await _drive_health_to(_config.phase_three_at - 0.05)
 	EventBus.boss_phase_changed.disconnect(_on_phase_changed)
-	if not require(_phases.size() == 3, "both denials changed phase (%s)" % [_phases]):
+
+	var expected: Array[int] = [1, 2, 3]
+	if not require(_phases == expected, "and steps 1, 2, 3 (%s)" % [_phases]):
 		await _close()
 		return
-	var expected: Array[int] = [1, 2, 3]
-	check(_phases == expected, "and they are numbered 1, 2, 3 (%s)" % [_phases])
 
-	var denials: Array[int] = [1, 2]
-	for index: int in denials:
+	for index: int in [1, 2]:
 		var phase: int = _phases[index]
 		check(
 			phase > 1,
-			"denial %d is not mistaken for the fight starting, so it gets its sting (phase %d)"
+			"phase change %d is not mistaken for the fight starting, so it gets its sting (%d)"
 				% [index, phase],
 		)
-		var banner_index := phase - 1
-		var banner := ""
-		if banner_index >= 0 and banner_index < encounter.phase_banners.size():
-			banner = encounter.phase_banners[banner_index]
 		check(
-			not banner.is_empty(),
-			"and the HUD has something to say for it ('%s')" % banner,
+			not encounter.phase_banners[phase - 1].is_empty(),
+			"and the HUD has something to say for it ('%s')" % encounter.phase_banners[phase - 1],
 		)
 	check(
 		encounter.phase_banners[1] != encounter.phase_banners[2],
-		"the two denials say different things",
+		"the two escalations say different things",
 	)
-	await _close()
-
-
-## The claim the whole fight rests on, asserted directly: no quantity of damage kills it.
-##
-## Twenty pools' worth, which is far past what the worst legal build in the game does in the time
-## this takes. Every one of those hits forces a failover the player is not there to deny, so the
-## boss simply walks the ring — which is the correct behaviour and reads as a bug to anybody who
-## has not read the fight. That is why it is written down here.
-func _test_no_amount_of_damage_alone_can_kill_it() -> void:
-	await _open(Vector2(40.0, 40.0))
-
-	for _step: int in 20:
-		_hurt(_config.pool_per_generation)
-		await _resolve_telegraph()
-
-	check(_defeated == 0, "twenty pools of damage kill nothing (%d deaths)" % _defeated)
-	check(
-		_boss.get_generations_left() == _config.generations,
-		"and take no generation (%d left)" % _boss.get_generations_left(),
-	)
-	check(_boss != null and is_instance_valid(_boss), "the boss is still standing")
 	await _close()
 
 
 ## The plates are its own, and they are somewhere legal.
 func _test_the_plates_are_inside_the_arena_and_distinct() -> void:
-	await _open(Vector2(40.0, 40.0))
+	await _open_fight(Vector2(40.0, 40.0))
 
 	var plates := _boss.get_plate_positions()
 	check(plates.size() == _config.plate_count, "it lays out %d plates (%d)" % [_config.plate_count, plates.size()])
@@ -423,15 +643,18 @@ func _test_the_plates_are_inside_the_arena_and_distinct() -> void:
 			ARENA.encloses(_boss.get_plate_rect(index)),
 			"and its whole square is (%s)" % _boss.get_plate_rect(index),
 		)
-	# Distinct, and far enough apart that standing on one is never standing on another — otherwise a
-	# denial could be granted for being in the wrong place.
+	# Distinct, and far enough apart that standing on one is never standing on another — otherwise
+	# shelter could be granted for being in the wrong place. Grown by the robot's radius, which is
+	# the rect the fight actually tests against.
 	for a: int in plates.size():
 		for b: int in plates.size():
 			if a >= b:
 				continue
 			check(
-				not _boss.get_plate_rect(a).intersects(_boss.get_plate_rect(b)),
-				"plates %d and %d do not overlap" % [a, b],
+				not _boss.get_plate_rect(a).grow(Orchestrator.PLAYER_RADIUS).intersects(
+					_boss.get_plate_rect(b).grow(Orchestrator.PLAYER_RADIUS)
+				),
+				"plates %d and %d cannot both hold the robot at once" % [a, b],
 			)
 	await _close()
 
@@ -439,7 +662,7 @@ func _test_the_plates_are_inside_the_arena_and_distinct() -> void:
 ## It brings its own floor. The boss is eligible on every floor in the campaign, including three that
 ## have never heard of a migration pad, so the fight must not need the arena to contain one.
 func _test_it_needs_nothing_from_the_room_it_is_in() -> void:
-	await _open(Vector2(40.0, 40.0))
+	await _open_fight(Vector2(40.0, 40.0))
 	# The arena this suite builds has no room, no template, and therefore no pads at all — which is
 	# the condition being asserted. If the fight needed one, everything above would already have
 	# failed, so what this adds is the statement of *why* those pass.
@@ -448,9 +671,8 @@ func _test_it_needs_nothing_from_the_room_it_is_in() -> void:
 		"the boss supplies its own plates in an arena with no pads in it",
 	)
 	# And it fights: a boss that quietly did nothing without pads would satisfy the check above.
-	_hurt(_config.pool_per_generation)
-	await advance_physics(1)
-	check(_boss.is_telegraphing(), "and runs its failover loop there")
+	await _reach_telegraph()
+	check(_boss.is_telegraphing(), "and runs its migration loop there")
 	await _close()
 
 
@@ -477,10 +699,61 @@ func _test_every_floor_can_draw_it() -> void:
 	check(listing == campaign.size(), "every floor can (%d of %d)" % [listing, campaign.size()])
 
 
+# --- Geometry, reimplemented ---------------------------------------------------
+
+
+## `Orchestrator._refresh_live_plates`, restated here rather than called.
+##
+## Deliberately a second implementation. The check it feeds is about whether the *rule* leaves a
+## crossable room, and reading the answer out of the object under test would turn it into a check
+## that the boss agrees with itself. This one is written from the description in the class doc:
+## every plate but the boss's, in ring order, strided evenly, rotated.
+func _live_set(count: int, standing: int, live_count: int, rotation: int) -> PackedInt32Array:
+	var candidates: PackedInt32Array = PackedInt32Array()
+	for step: int in count - 1:
+		candidates.append((standing + 1 + step) % count)
+	var span := candidates.size()
+	var wanted := clampi(live_count, 1, span)
+	var live: PackedInt32Array = PackedInt32Array()
+	for slot: int in wanted:
+		live.append(candidates[(rotation + slot * span / wanted) % span])
+	return live
+
+
+## The furthest any point in the arena sits from the nearest plate in `live`, as a distance the
+## robot has to walk.
+##
+## Sampled on a two-pixel grid over the whole interior rather than reasoned about analytically: the
+## worst point is a corner in some configurations and a mid-wall in others, and a closed form for
+## "furthest point from the nearest of an arbitrary subset of six ellipse points" is a worse thing to
+## maintain than a loop.
+func _furthest_from_shelter(
+	plates: Array[Vector2], live: PackedInt32Array, reach: float
+) -> float:
+	var worst := 0.0
+	var x := ARENA.position.x
+	while x <= ARENA.end.x:
+		var y := ARENA.position.y
+		while y <= ARENA.end.y:
+			var here := Vector2(x, y)
+			var nearest := INF
+			for index: int in live:
+				var plate := plates[index]
+				# To the edge of the plate's square, not to its centre: the robot only has to reach
+				# the square. Measured per axis because the plate is a rect.
+				var dx := maxf(absf(here.x - plate.x) - reach, 0.0)
+				var dy := maxf(absf(here.y - plate.y) - reach, 0.0)
+				nearest = minf(nearest, Vector2(dx, dy).length())
+			worst = maxf(worst, nearest)
+			y += 2.0
+		x += 2.0
+	return worst
+
+
 # --- Harness ------------------------------------------------------------------
 
 
-func _open(player_offset: Vector2) -> void:
+func _open_fight(player_offset: Vector2) -> void:
 	_defeated = 0
 	_arena_node = Node2D.new()
 	var container := Node2D.new()
@@ -498,9 +771,19 @@ func _open(player_offset: Vector2) -> void:
 	# One ratio, applied to everything timed. See TEST_TELEGRAPH.
 	var winding := TEST_TELEGRAPH / maxf(_config.telegraph_seconds, 0.001)
 	fast.telegraph_seconds = TEST_TELEGRAPH
-	fast.denial_stun_seconds = _config.denial_stun_seconds * winding
+	fast.dwell_seconds = _config.dwell_seconds * winding
+	fast.cold_start_seconds = _config.cold_start_seconds * winding
+	fast.denial_open_seconds = _config.denial_open_seconds * winding
 	fast.volley_interval = _config.volley_interval * winding
 	fast.telegraph_volley_interval = _config.telegraph_volley_interval * winding
+	# **No projectiles.** Half of this suite measures integrity to decide whether the *floor* charged
+	# the player, and the boss fires a spread at them every 0.7 seconds of telegraph — at a robot the
+	# harness is holding still on a plate, which is a robot that cannot dodge. Left in, a volley hit
+	# and a discharge hit are the same number, so "standing off a plate costs a point" would pass on
+	# a fight that had stopped discharging entirely, and "denying is never also a hit" would fail on
+	# a fight that was working. The volleys are real and are pinned by the config checks above; what
+	# this suite is for is the rule they are fired underneath.
+	fast.shot = null
 	_boss.config = fast
 	_arena_node.add_child(_boss)
 
@@ -534,17 +817,85 @@ func _hurt(amount: float) -> void:
 		parts[0].took_damage.emit(DamageInfo.new(amount))
 
 
-## Parks the player in the middle of a plate, held there against physics for a frame so the
-## resolution finds them on it.
-func _stand_on(plate: int) -> void:
-	_player.velocity = Vector2.ZERO
-	_player.global_position = _boss.get_plate_positions()[plate]
+func _integrity() -> int:
+	return _player.get_health_component().current as int
 
 
-## Runs the clock past a telegraph, holding the player wherever they were put.
-func _resolve_telegraph() -> void:
+## Runs the clock until a migration is announced, holding the player wherever they are.
+##
+## A frame budget rather than `while`, so a fight that stopped cycling fails the check that follows
+## instead of hanging the suite.
+func _reach_telegraph() -> void:
 	var held := _player.global_position
-	for _frame: int in int(TEST_TELEGRAPH * 60.0) + 4:
-		_player.velocity = Vector2.ZERO
-		_player.global_position = held
+	for _frame: int in _budget():
+		if _boss == null or not is_instance_valid(_boss) or _boss.is_telegraphing():
+			return
+		_hold(held)
 		await get_tree().physics_frame
+
+
+## Runs the clock until the boss is open to damage, parking the player on shelter so the discharge
+## on the way does not cost integrity the caller was not expecting.
+func _reach_open_window() -> void:
+	for _frame: int in _budget():
+		if _boss == null or not is_instance_valid(_boss) or _boss.is_open():
+			return
+		# Re-read every frame: the live set rotates, and a plate that was shelter last cycle is not
+		# necessarily shelter this one.
+		var live := _boss.get_live_plates()
+		if not live.is_empty():
+			_hold(_boss.get_plate_positions()[live[0]])
+		await get_tree().physics_frame
+
+
+## Runs the clock until the boss has sealed again, so the next cycle is its own event.
+func _leave_open_window() -> void:
+	for _frame: int in _budget():
+		if _boss == null or not is_instance_valid(_boss) or not _boss.is_open():
+			return
+		var live := _boss.get_live_plates()
+		if not live.is_empty():
+			_hold(_boss.get_plate_positions()[live[0]])
+		await get_tree().physics_frame
+
+
+## Resolves the migration currently being telegraphed with the player held at `where`.
+##
+## Held every frame rather than assigned once, because `move_and_slide` runs on the robot whatever
+## the test wants and a player that had drifted a few pixels off a plate would turn a denial into a
+## miss.
+func _resolve_telegraph_at(where: Vector2) -> void:
+	for _frame: int in _budget():
+		if _boss == null or not is_instance_valid(_boss) or not _boss.is_telegraphing():
+			return
+		_hold(where)
+		await get_tree().physics_frame
+	_hold(where)
+
+
+## Damages it in windows until the bar is at or below `ratio`, the way a player reaches a phase.
+func _drive_health_to(ratio: float) -> void:
+	for _cycle: int in 12:
+		if _boss == null or not is_instance_valid(_boss) or _boss.get_health_ratio() <= ratio:
+			return
+		await _reach_open_window()
+		if _boss == null or not is_instance_valid(_boss):
+			return
+		var over := _boss.get_health() - ratio * _config.max_health
+		_hurt(maxf(over, 0.1))
+		await advance_physics(1)
+
+
+func _hold(where: Vector2) -> void:
+	_player.velocity = Vector2.ZERO
+	_player.global_position = where
+
+
+## Frames enough for any single beat of the cycle to finish, plus slack. Every clock is wound to the
+## same ratio, so the longest of them is the bound.
+func _budget() -> int:
+	var longest := maxf(
+		maxf(_boss.config.dwell_seconds, _boss.config.telegraph_seconds),
+		maxf(_boss.config.cold_start_seconds, _boss.config.denial_open_seconds),
+	)
+	return int(longest * 60.0) + 12

@@ -34,11 +34,15 @@ extends TestCase
 ## *keep moving* could not put anything under a player who had stopped, so a player who found ground
 ## the ring did not sweep was free to stand on it and shoot.
 ##
-## The fight now aims and scatters (see `CascadeFailure._step_aimed_vent` and `_step_scatter_vent`)
-## and the promise is the one that was doing the work all along: the telegraph, not the aim. That is
-## checked below on every vent from every source, and the two new sources get a check each that they
-## exist at all — because a promise about telegraphs is trivially kept by a boss that has stopped
-## venting.
+## The fight now aims and leads (see `CascadeFailure._step_aimed_vent` and `_step_lead_vent`) and
+## the promise is the one that was doing the work all along: the telegraph, not the aim. That is
+## checked below on every vent from every source, and the two aiming sources get a check each that
+## they exist at all — because a promise about telegraphs is trivially kept by a boss that has
+## stopped venting.
+##
+## Nothing in this fight is random any more, which is why the check that used to sample thirty
+## intervals of a uniform draw is gone. A lead vent lands at one computable point, so the check that
+## replaced it asserts that point directly rather than a distribution over it.
 ##
 ## The boss is damaged through its nodes rather than by reaching into its pool, because a node is
 ## the only thing a projectile can hit and the forwarding between them is exactly what could break.
@@ -106,7 +110,8 @@ func run() -> void:
 	await _test_the_heat_per_second_does_not_rise_with_load()
 	await _test_every_vent_starts_cold()
 	await _test_it_heats_the_ground_the_player_is_standing_on()
-	await _test_it_heats_ground_the_ring_never_reaches()
+	await _test_it_heats_the_ground_the_player_is_heading_for()
+	await _test_a_stationary_robot_is_led_nowhere()
 	await _test_the_floor_stays_walkable_at_every_load()
 	await _test_the_last_node_comes_for_the_player()
 	await _test_real_projectiles_drive_the_whole_fight()
@@ -133,7 +138,7 @@ func _test_config_is_a_fight() -> void:
 		_config.vent_tiles.x >= 1 and _config.vent_tiles.y >= 1,
 		"a vent covers real ground (%s tiles)" % _config.vent_tiles,
 	)
-	# Both aimed and scatter clocks have to be longer than the fill, and that is the tuning that
+	# Both aimed and lead clocks have to be longer than the fill, and that is the tuning that
 	# makes "keep moving" a rhythm rather than a treadmill: the ground the player is standing on has
 	# to be cold some of the time, or moving stops being a decision and becomes the only input.
 	check(
@@ -142,9 +147,27 @@ func _test_config_is_a_fight() -> void:
 			% [_config.aimed_vent_interval, _config.vent_seconds],
 	)
 	check(
-		_config.scatter_vent_interval > _config.vent_seconds,
-		"and the room is not being repainted faster than it can be read (%.2fs)"
-			% _config.scatter_vent_interval,
+		_config.lead_vent_interval > _config.vent_seconds,
+		"and the ground ahead of them is too (%.2fs against a %.2fs fill)"
+			% [_config.lead_vent_interval, _config.vent_seconds],
+	)
+	# The lead is short of the fill, and that is the number that decides whether the player reads a
+	# boss predicting them or a boss painting the walls. At the robot's 160 px/s a lead of
+	# `vent_seconds` is 256 pixels, which clamps into the far wall on most headings in a 416-pixel
+	# room. See `CascadeFailureConfig.lead_seconds`.
+	check(
+		_config.lead_seconds > 0.0 and _config.lead_seconds < _config.vent_seconds,
+		"the lead is real and shorter than the fill it is read against (%.2fs against %.2fs)"
+			% [_config.lead_seconds, _config.vent_seconds],
+	)
+	# Two vent widths, give or take, at the robot's walking speed. Close enough to be visibly about
+	# the robot; far enough that holding a heading walks into it.
+	var lead_px := _config.lead_seconds * 160.0
+	var vent_px := float(_config.vent_tiles.x * Room.TILE_SIZE)
+	check(
+		lead_px > vent_px * 0.5 and lead_px < vent_px * 3.0,
+		"and it lands between half a vent and three ahead of the chassis (%.0fpx against %.0fpx)"
+			% [lead_px, vent_px],
 	)
 	# The last phase is a chase the player is meant to win on foot. Its threat is the trail, not
 	# the body, and a node faster than the robot would make it the body.
@@ -434,7 +457,7 @@ func _test_the_breathing_sweeps_the_middle() -> void:
 ## that claim which fails if somebody scales the interval by something other than load.
 ##
 ## It counts *every* vent, not only the ones the nodes drop, and that is what makes it still the
-## right check now that the fight aims and scatters as well. Those two clocks are deliberately flat
+## right check now that the fight aims and leads as well. Those two clocks are deliberately flat
 ## — see `CascadeFailureConfig.aimed_vent_interval` — so adding them moved the whole line up and
 ## left it level. A source that quadrupled alongside the rack would show here as a last phase
 ## putting four times the heat down, which is the specific thing this arithmetic exists to forbid.
@@ -561,42 +584,98 @@ func _test_it_heats_the_ground_the_player_is_standing_on() -> void:
 	await _teardown()
 
 
-## The other half: ground that is neither on the ring nor under the robot still gets heated, so the
-## answer to this fight is a route rather than a spot.
+## The other half of the pincer, and the reason the lead vent replaced a die roll: heat arrives in
+## front of a robot that is holding a heading.
 ##
-## Measured against the ring's own reach rather than against a hand-picked rectangle. The ellipse at
-## full extension is `ring_radius` about the arena's centre, so a vent whose normalised distance is
-## past 1.1 is on ground no node can stand on — and with the robot parked at the centre of that
-## ellipse, it is not ground the aimed vent was reaching for either.
+## The robot is driven along a fixed heading at its own walking speed rather than parked, because a
+## parked robot has no velocity to lead and the lead vent deliberately collapses onto the aimed one
+## — see `CascadeFailureConfig.lead_seconds`. What is measured is the vents that land *ahead*: the
+## offset from the robot to the patch, projected onto the heading, against the lead the config asks
+## for.
 ##
-## The window is thirty scatter intervals rather than a handful. Roughly a third of a uniform draw
-## over the arena falls outside the ring, so a short window would be a test that fails once every
-## few hundred runs for no reason — and a flaky check is worse than no check, because the first
-## thing anybody does with one is delete it.
-func _test_it_heats_ground_the_ring_never_reaches() -> void:
+## Held to a heading that runs along the arena's long axis and starts from the far side of it, so
+## the whole window is spent with real room in front of the robot. A heading into a nearby wall
+## would be measuring `_drop_vent`'s clamp instead of the lead.
+##
+## Deliberately not a check that *every* vent leads. Three clocks are putting heat down and only one
+## of them is this one; the rack's own nodes and the aimed vent land elsewhere by design. What must
+## be true is that patches keep arriving in front of the robot, which no other source in the fight
+## can produce.
+func _test_it_heats_the_ground_the_player_is_heading_for() -> void:
 	await _begin()
 
-	var centre := ARENA.get_center()
-	_player.global_position = centre
-	var beyond := 0
+	var heading := Vector2.RIGHT
+	var speed := 160.0
+	var start := Vector2(ARENA.position.x + 40.0, ARENA.get_center().y)
+	_player.global_position = start
+
+	var expected := 5
+	var ahead := 0
 	var seen := 0
-	for _frame: int in _frames(_boss.config.scatter_vent_interval * 30.0):
+	# Walked rather than teleported: `velocity` is what the boss reads, so a robot moved by
+	# assignment alone would be standing still as far as the lead is concerned.
+	for _frame: int in _frames(_boss.config.lead_vent_interval * float(expected + 1)):
 		await advance_physics(1)
-		_player.global_position = centre
+		_player.velocity = heading * speed
+		_player.global_position = Vector2(
+			minf(_player.global_position.x, ARENA.end.x - 60.0), start.y
+		)
+		var where := _player.global_position
+		for zone: ThermalZone in _new_zones():
+			seen += 1
+			var reach := (zone.get_rect().get_center() - where).dot(heading)
+			# Half a lead clear of the chassis. Far enough that neither the aimed vent, which is
+			# centred, nor a node standing beside the robot can be counted as having led it.
+			if reach > speed * _boss.config.lead_seconds * 0.5:
+				ahead += 1
+
+	check(seen > 0, "the fight put heat down while the robot held a heading (%d vents)" % seen)
+	check(
+		ahead >= expected * 2 / 3,
+		"and it kept landing in front of it (%d of %d vents led, over %d)"
+			% [ahead, seen, expected * 2 / 3],
+	)
+
+	await _teardown()
+
+
+## And it stops leading when there is nothing to lead. A robot standing still is heated where it
+## stands, by both clocks, which is the one state in which the fight offers no choice of which vent
+## to answer.
+##
+## Parked in the same corner the aimed-vent check uses — ground the ellipse at full extension never
+## covers — so a patch landing on the robot came from a clock that aims and not from a node that
+## wandered past. What separates this from that check is the *count*: with the lead vent collapsed
+## onto the aimed one, a stationary robot is covered by both, so the ground under it is heated more
+## often than the aimed clock alone could manage.
+func _test_a_stationary_robot_is_led_nowhere() -> void:
+	await _begin()
+
+	var corner := ARENA.position + Vector2(20.0, 20.0)
+	_player.global_position = corner
+	_player.velocity = Vector2.ZERO
+
+	# Long enough for both clocks to come round several times each.
+	var window := maxf(_boss.config.aimed_vent_interval, _boss.config.lead_vent_interval) * 4.0
+	var covered := 0
+	var seen := 0
+	for _frame: int in _frames(window):
+		await advance_physics(1)
+		_player.global_position = corner
 		_player.velocity = Vector2.ZERO
 		for zone: ThermalZone in _new_zones():
 			seen += 1
-			var offset := zone.get_rect().get_center() - centre
-			var reach := Vector2(
-				offset.x / _config.ring_radius.x, offset.y / _config.ring_radius.y
-			).length()
-			if reach > 1.1:
-				beyond += 1
+			if zone.get_rect().has_point(corner):
+				covered += 1
 
 	check(seen > 0, "the fight put heat down to inspect (%d vents)" % seen)
+	# Both clocks run four times in the window; two thirds of one of them is the floor, which no
+	# single aiming source could clear on its own if the other had stopped aiming.
+	var floor_count := int(window / maxf(_boss.config.aimed_vent_interval, 0.001)) * 2 / 3
 	check(
-		beyond > 0,
-		"and some of it landed past everything the ring can reach (%d of %d)" % [beyond, seen],
+		covered >= maxi(floor_count, 2),
+		"and standing still was charged for by both clocks at once (%d of %d vents, over %d)"
+			% [covered, seen, maxi(floor_count, 2)],
 	)
 
 	await _teardown()
@@ -765,7 +844,7 @@ func _teardown() -> void:
 ## suite is here to measure.
 ##
 ## Every vent clock is wound by **one ratio** rather than each being given a chosen number. What the
-## fight's fairness rests on is the relationships between them — the aimed and scatter clocks
+## fight's fairness rests on is the relationships between them — the aimed and lead clocks
 ## against the rack's own, and all of them against the fill, which is what decides how many patches
 ## are on the floor at once. Winding one down without the others leaves this suite measuring a fight
 ## nobody plays. It also means a fourth vent source added tomorrow is one line here rather than a
@@ -776,7 +855,7 @@ func _new_boss() -> CascadeFailure:
 	var winding := TEST_VENT_INTERVAL / maxf(_config.vent_interval, 0.001)
 	fast.vent_interval = TEST_VENT_INTERVAL
 	fast.aimed_vent_interval = _config.aimed_vent_interval * winding
-	fast.scatter_vent_interval = _config.scatter_vent_interval * winding
+	fast.lead_vent_interval = _config.lead_vent_interval * winding
 	fast.vent_seconds = _config.vent_seconds * winding
 	boss.config = fast
 	return boss

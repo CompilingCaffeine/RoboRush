@@ -7,19 +7,31 @@
 script = ExtResource("1_boss")
 id = &"orchestrator"
 display_name = "Orchestrator"
-plate_count = 3
+; Six, doubled from three. The doubling is what lets plates go dark as the fight escalates without
+; ever leaving a corner of the arena out of reach of shelter — see `live_plates_by_phase`.
+plate_count = 6
 plate_radius = 0.72
 plate_size = 32.0
-; Damage buys events, not progress. See `Orchestrator` for why the fight is scored in denials — the
-; number below only decides how often the player gets a chance, which is the one thing a strong build
-; is allowed to buy more of.
-pool_per_generation = 34.0
-generations = 3
-; The player's whole budget for crossing a 416-pixel arena to deny a failover. Tuned generous on
-; purpose and flagged for the first playtest: too short and the fight is unwinnable without the
-; arena's corner pads, too long and the denial is free. This is the number to move first.
+; Five, three, two. The escalation is the arena shrinking, not the boss growing: nothing below this
+; line moves between phases. `tests/test_orchestrator.gd` recomputes the worst-case run to shelter
+; from this array and the geometry above, and fails if any phase stops being answerable.
+live_plates_by_phase = PackedInt32Array(5, 3, 2)
+; Not comparable to Runtime Error's 110 or Cascade Failure's 144, and not to be "corrected" toward
+; them. This boss is only damageable for `cold_start_seconds` out of each cycle, so what a
+; continuous-fire comparison would weigh this against is nearer 200. See `OrchestratorConfig`.
+max_health = 68.0
+phase_two_at = 0.66
+phase_three_at = 0.33
+dwell_seconds = 2.4
+; The player's whole budget for reaching ground that will still exist. The worst point in the arena
+; is 225 pixels from the nearest live plate in the last phase — 1.41 seconds at the robot's 160 px/s
+; — so this leaves about half a second and a dash of margin. This is the number to move first.
 telegraph_seconds = 1.9
-denial_stun_seconds = 1.6
+cold_start_seconds = 2.2
+; Longer than the cold start, and the gap is the entire reward for denying a migration.
+denial_open_seconds = 3.6
+off_plate_damage = 1.0
+shot = ExtResource("2_shot")
 volley_interval = 1.5
 telegraph_volley_interval = 0.7
 spread_count = 3

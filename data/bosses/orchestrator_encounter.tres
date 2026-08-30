@@ -11,14 +11,17 @@ display_name = "ORCHESTRATOR"
 defeat_banner = "NOWHERE LEFT TO PUT IT"
 ; All three announced, unlike Cascade Failure, and for the opposite reason. That fight's middle phase
 ; changes only *how much* — a number the player can already see on the bodies — so a banner would be
-; the game narrating something visible. Here every phase change is a denial, which is the one event
-; in the fight the player has to work for and the only thing that is progress. A denial that went
-; unremarked would be the game staying quiet about the only thing it is asking for.
+; the game narrating something visible. Here every phase change takes ground away, and ground going
+; away is the one thing in this fight a player can lose to without understanding why.
 ;
 ; The first slot is the fight *starting* — `CombatHUD` shows `phase_banners[phase - 1]`, and every
 ; boss opens on phase one. The other three leave it empty because their opening beat is a health
-; bar, which needs no words. This one is the only fight in the game whose win condition is not the
-; thing the player is holding, and it is the only one that has to say so before it asks: a player
-; who reads the bar drop a third, watches it come back, and concludes the boss heals is a player
-; who was told nothing else and drew the only available conclusion.
-phase_banners = Array[String](["SHOOTING IT ONLY MOVES IT  //  STAND WHERE IT LANDS", "ONE INSTANCE DOWN  //  IT IS LEARNING THE ROOM", "LAST INSTANCE  //  NOWHERE TO FAIL OVER TO"])
+; bar, which needs no words. This one is the only fight in the game where shooting the boss does
+; nothing for most of its length, and it is the only one that has to say so before it asks: a player
+; who empties a magazine into a sealed body and watches the bar sit still is a player who was told
+; nothing else and drew the only available conclusion.
+;
+; Two lines, and the order is the order they are needed in. Being on a plate is what keeps you
+; alive and comes first; the window is what makes progress and comes second, because a player who
+; has not survived a migration has no use for it yet.
+phase_banners = Array[String](["BE ON A PLATE WHEN IT LANDS  //  IT ONLY OPENS AFTER IT MOVES", "TWO PLATES DARK  //  LESS FLOOR TO LAND ON", "TWO PLATES LEFT  //  SHELTER OR DENY, NOT BOTH"])
