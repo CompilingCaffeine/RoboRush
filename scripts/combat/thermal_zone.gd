@@ -2,26 +2,55 @@ class_name ThermalZone
 extends Node2D
 ## Floor 3's signature mechanic: a patch of floor that heats up under sustained load and vents.
 ##
-## The Data Center's throughput zones are the floor's one new idea, and the idea is **stop
-## camping**. A zone gains heat while the player stands inside it firing, loses heat the moment
-## they move or stop, and when it fills it vents — a flash and one point of integrity to whoever
-## is still standing there. Nothing about it is random and nothing about it is hidden: the zone is
-## drawn on the floor as a grille of louvre bars, its heat is their colour, and the vent is
-## telegraphed by that colour having been climbing for two and a half seconds.
+## The Data Center's throughput zones are the floor's one new idea, and the idea is **this ground
+## costs you**. A zone gains heat while the player is standing on it, loses it the moment they step
+## off, and when it fills it vents — a flash and one point of integrity to whoever is still standing
+## there. Nothing about it is random and nothing about it is hidden: the zone is drawn on the floor
+## as a grille of louvre bars, its heat is their colour, and the vent is telegraphed by that colour
+## having been climbing for a second and a half.
 ##
-## **Why load and not time.** The obvious version of this mechanic charges a zone for being stood
-## in, or for shots fired in it. Both are worse, and for the same reason: they tax the build. Heat
-## per shot makes a fast weapon heat a zone faster, so `fire_rate_scale` items — Cooling Fan,
-## Unsafe Overclock — quietly become liabilities on this floor, and an item that is a liability on
-## one floor of six is an item nobody picks. Charging for occupancy alone punishes a player for
-## being in the room. Charging *stationary firing* taxes a habit instead, and habits are what a
-## floor is allowed to teach: keep moving and this floor costs you nothing at all, at any fire
-## rate.
+## **The ramp used to be slower and it used to start invisibly, and both were the same bug.** It was
+## reported the way a mechanic that does not exist is always reported: the zones "never did anything
+## or changed" across a whole playthrough. They were working exactly as written. What they were not
+## doing was ever getting *read* — the first half-second of load moved the colour a few percent off
+## cold, which is nothing at the size these are drawn, so a player standing in a heating zone had no
+## way to connect the thing they were doing to the thing the floor was about to charge them for.
+## They would move for some unrelated reason, the heat would drain, and the floor would teach
+## nothing. A hazard nobody can catch heating is a hazard that only ever arrives as a surprise.
 ##
-## The one real tension is deliberate and worth naming: an item with `fire_requires_stillness` is
-## genuinely harder to use here, because the thing it asks for is the thing this floor charges for.
-## That is a trade-off a player accepts when they take it, which is what a trade-off is supposed
-## to be — unlike a fire-rate tax, which they would be paying without having chosen anything.
+## The fix is two numbers and it is deliberately both of them. `SECONDS_TO_VENT` is shorter, so
+## standing on a zone is a decision with a deadline the player can feel; `IGNITION_HEAT` makes the
+## first *frame* of load a visible change, so the deadline is one they can see start. Either alone
+## would have been worse than neither: a faster ramp nobody can see is just a hazard that bites
+## sooner, and a visible ramp with three seconds of slack in it is a warning nobody has to answer.
+##
+## **Why occupancy, and not the player's habits.** A zone charges for the ground it covers and for
+## nothing else: stand on it and it heats, whatever the player happens to be doing while they stand
+## there.
+##
+## It used to ask for more. Heat accrued only while the player was inside a zone *and* firing *and*
+## holding still, which named the habit the floor meant to tax far more precisely and was much
+## worse to play. A hazard with three conditions on it is a hazard nobody can state, and a rule
+## nobody can state is a rule nobody learns: the player would watch a zone climb, step off, come
+## back, hold a firing position a little slower or a little faster than last time, and see nothing
+## happen. Ground that is simply hot to stand on is a sentence the floor gets to say once, in
+## colour, and never has to say again — and it is the sentence the grille was always drawing.
+##
+## What has to stay out of it is the *weapon*. Heat per shot would make a fast weapon heat a zone
+## faster, so `fire_rate_scale` items — Cooling Fan, Unsafe Overclock — would quietly become
+## liabilities on this floor, and an item that is a liability on one floor of six is an item nobody
+## picks. Occupancy taxes a *position*, and every build pays for a position identically: keep off
+## the grilles and this floor costs you nothing at all, at any fire rate, holding anything.
+##
+## It also stops the floor quarrelling with `fire_requires_stillness`. Under the old rule an item
+## that asked the player to hold still was asking for precisely the thing the floor charged for, so
+## the two were at war on every zone in ten rooms. Now the zone charges for *where* and the item
+## asks about *how*, and a player can answer both at once by standing still somewhere else.
+##
+## The floor still teaches movement, and teaches it to everyone rather than only to the players
+## who had stopped to shoot. `SECONDS_TO_VENT` is set against the robot's walking speed, not
+## against its fire rate — see there — so crossing a zone is always affordable and stopping on one
+## never is.
 ##
 ## Built from `RoomTemplate.thermal_zones` rather than from the floor number, so a Data Center
 ## template carries its own zones and a Help Desk template has none, without a single
@@ -33,7 +62,7 @@ extends Node2D
 ## rect so a body and not a centre point decides who is inside.
 ##
 ## **Two lifetimes, and two causes.** A room's zones are furniture: built with the room, switched
-## off with it, and heated by nothing but the player's own stationary fire. A *driven* zone — see
+## off with it, and heated by nothing but the player standing on them. A *driven* zone — see
 ## `spawn_vent` — is a hazard the Cascade Failure boss puts on the floor, on its own clock, and it
 ## follows `CompileLane`'s lifetime instead: parented into the session so a vent already climbing
 ## still costs something after the thing that started it is dead.
@@ -44,17 +73,32 @@ extends Node2D
 ## subject. A boss's vents are deliberately given no look of their own for that reason — see
 ## `COOL_COLOR` for what the look is, and which floor above it is being told apart from.
 
-## Seconds of stationary firing inside a zone before it vents.
+## Seconds spent standing inside a zone before it vents.
 ##
-## Long enough that the colour climbing off teal is a warning a player can act on, short
-## enough that standing still is never the right answer. Two and a half seconds is about four
-## shots of the starting weapon: the first is free, the last is a choice.
-const SECONDS_TO_VENT := 2.5
+## Long enough that the colour climbing off teal is a warning a player can act on, short enough
+## that stopping on a zone is never the right answer. The number to measure it against is the
+## robot's walking speed rather than its fire rate: a second and a half at `move_speed` is 240
+## pixels, wider than any zone the Data Center authors, so a player who walks across the widest
+## grille on the floor spends well under half the ramp and leaves with the rest of it in hand.
+## Crossing is free. Stopping is the thing being charged for, and the ramp is sized so that it is
+## the *only* thing being charged for.
+##
+## It was two and a half, which was long enough that a player could hold a position through most of
+## a zone's ramp and leave for reasons of their own before it ever resolved — see the class doc for
+## how that reads from the outside, which is as a floor whose hazards do nothing at all.
+##
+## Landing within a tenth of `CascadeFailureConfig.vent_seconds` is worth keeping. The boss's vents
+## fill on their own clock rather than under the player's feet, but they are the same zone drawn the
+## same way, and a ramp that means "about a second and a half" in nine rooms and something else in
+## the tenth is a ramp the player has to learn twice.
+const SECONDS_TO_VENT := 1.5
 
 ## Seconds from full heat back to cold, once the zone is no longer being loaded. Faster than it
 ## heats, so leaving a zone is always a complete answer rather than a partial one — a player who
-## has been driven off a hot zone can come back to it.
-const COOL_SECONDS := 1.5
+## has been driven off a hot zone can come back to it. Kept at the same six-tenths of
+## `SECONDS_TO_VENT` it has always been, so shortening the ramp did not quietly also make walking
+## away a worse answer than it was.
+const COOL_SECONDS := 0.9
 
 ## What a vent costs. One point, matching an ordinary enemy hit against the player's six: the floor
 ## teaches by being expensive to ignore, not by being lethal on first contact.
@@ -65,9 +109,30 @@ const VENT_DAMAGE := 1.0
 ## repeatedly before they could cross its edge.
 const VENT_COOLDOWN := 1.0
 
-## How long after a shot the player still counts as firing. Covers the gap between shots so a slow
-## weapon does not make heat stutter, and is short enough that stopping is felt immediately.
-const FIRING_MEMORY := 0.35
+## What a zone is *drawn* as the instant it starts taking load, before it has taken any.
+##
+## The zone's real heat still starts at zero and still climbs at one rate — this changes nothing
+## about when it vents or what it costs. What it changes is that the change is *visible on the
+## first frame*: a loaded zone jumps most of the way up the teal-to-violet ramp and then walks the
+## rest of it, instead of spending its first half-second at a colour nobody can tell from cold.
+##
+## This is the whole of the reported bug. A hazard that answers to what the player is doing has to
+## show them it is answering, on the frame they step onto it, or the thing they did is not what
+## they will think caused it.
+##
+## Four tenths, because it has to clear the noise floor of a 480x270 render — the wash is drawn at
+## `COLD_ALPHA` and a few percent of hue on top of that is nothing — while leaving most of the ramp
+## above it. A zone that snapped to full violet the moment it was loaded would be legible and
+## useless: it would say "hot" for a second and a half without ever saying "hotter".
+const IGNITION_HEAT := 0.4
+
+## Seconds the ignition floor takes to fade once a zone stops being loaded.
+##
+## Fading rather than snapping, and short rather than gentle. Snapping would strobe: a player
+## fighting along a zone's edge crosses it several times a second, and a zone that jumped a third
+## of the way up its ramp and back on every one of those would be unreadable. A quarter-second is
+## under that flicker and still fast enough that stepping off a zone reads as stepping off it.
+const IGNITION_FADE := 0.25
 
 ## The player's collision radius, from player.tscn. Duplicated for the reason `CompileLane` and
 ## `FirewallNode` both duplicate it: the zone must be able to ask who is inside it without
@@ -122,20 +187,20 @@ var _heat := 0.0
 var _vent_flash_left := 0.0
 var _cooldown_left := 0.0
 
+## One while the zone is being loaded, decaying to zero over `IGNITION_FADE` once it is not.
+## Purely a display term — see `IGNITION_HEAT`. Nothing that decides damage reads it.
+var _ignition := 0.0
+
 ## Seconds this zone takes to fill on its own, ignoring the player entirely. Zero for a room's own
-## zones, which is every zone on the floor: those fill only under stationary fire, and a floor whose
-## furniture heated by itself would be charging the player for arriving rather than for a habit.
+## zones, which is every zone on the floor: those fill only while the player is standing on them,
+## and a floor whose furniture heated by itself would be charging the player for being in the room
+## rather than for the ground they chose to stand on.
 ## Positive only for a zone from `spawn_vent`.
 var _drive_seconds := 0.0
 
 ## Set once a driven zone has spent its one vent. It frees itself as soon as the flash is finished,
 ## so the arena recovers on its own and the boss cannot pave it.
 var _spent := false
-
-## Seconds since the player last fired, counted from `EventBus.shot_fired` rather than read off the
-## weapon. The zone has no business knowing what a weapon is, and the bus already says.
-var _since_shot := FIRING_MEMORY
-
 
 ## Spawns a zone covering `rect` as a child of `parent`. A room builds its own from its template;
 ## nothing else should need this, but it takes a plain `Rect2` so a test can place one anywhere.
@@ -193,13 +258,6 @@ static func spawn_vent(spawner: Node, rect: Rect2, seconds: float) -> ThermalZon
 	return zone
 
 
-func _ready() -> void:
-	# A driven zone has no interest in who is shooting: its clock is its own. Skipped rather than
-	# connected and ignored, because a boss puts a great many of these on the floor over one fight.
-	if not is_driven():
-		EventBus.shot_fired.connect(_on_shot_fired)
-
-
 ## How hot the zone is, zero to one. For the suite and for a debug overlay; nothing in the game
 ## reads it, because the colour is how the player is told.
 func get_heat() -> float:
@@ -208,6 +266,16 @@ func get_heat() -> float:
 
 func is_venting() -> bool:
 	return _vent_flash_left > 0.0
+
+
+## What the zone is drawn as, which is not quite what it is: the real heat, floored at
+## `IGNITION_HEAT` while the zone is under load. The player reads this; `_vent` reads `get_heat`.
+##
+## Public because it is the half of the mechanic that was missing, and a thing that was once
+## invisible in the game should not also be invisible to the suite. Nothing in the game calls it —
+## `_draw` is the only reader, and the colour is how the player is told.
+func get_display_heat() -> float:
+	return maxf(_heat, IGNITION_HEAT * _ignition)
 
 
 ## The ground this zone covers, in global coordinates — the same rect `thermal_zone_vented` carries
@@ -223,13 +291,7 @@ func is_driven() -> bool:
 	return _drive_seconds > 0.0
 
 
-func _on_shot_fired(team: int, _muzzle: Vector2, _direction: Vector2) -> void:
-	if team == Teams.Id.PLAYER:
-		_since_shot = 0.0
-
-
 func _physics_process(delta: float) -> void:
-	_since_shot += delta
 	_vent_flash_left = maxf(_vent_flash_left - delta, 0.0)
 	_cooldown_left = maxf(_cooldown_left - delta, 0.0)
 
@@ -237,36 +299,49 @@ func _physics_process(delta: float) -> void:
 		_step_driven(delta)
 		return
 
-	var previous := _heat
+	var previous := get_display_heat()
 	if _is_being_loaded():
+		# Set before the heat rather than after it, so the frame a zone starts taking load is
+		# already the frame it looks like it. Waiting a step to light up would put the change one
+		# frame behind the cause, which is the whole thing this is here to fix.
+		_ignition = 1.0
 		_heat = minf(_heat + delta / SECONDS_TO_VENT, 1.0)
 		if _heat >= 1.0:
 			_vent()
 	else:
+		_ignition = maxf(_ignition - delta / IGNITION_FADE, 0.0)
 		_heat = maxf(_heat - delta / COOL_SECONDS, 0.0)
 
 	# Redrawn only when the colour would actually differ, which for a room full of zones sitting
-	# cold is the difference between a redraw per zone per frame and none at all.
-	if not is_equal_approx(previous, _heat) or _vent_flash_left > 0.0:
+	# cold is the difference between a redraw per zone per frame and none at all. Measured on the
+	# displayed heat rather than the real one: they part company at both ends of a load, and it is
+	# the displayed one that decides whether the zone looks different.
+	if not is_equal_approx(previous, get_display_heat()) or _vent_flash_left > 0.0:
 		queue_redraw()
 
 
-## Whether the zone is gaining heat: a player inside it, firing, and not moving.
+## Whether the zone is gaining heat: a player standing on it, and its vent cooldown spent.
 ##
-## All three, and the third is the mechanic. `Player.STILLNESS_SPEED` is the same threshold the
-## robot's own stillness bonus uses, read from there rather than restated, so "standing still"
-## cannot come to mean two different speeds in the same game.
+## Two conditions, and the second is only the grace period after a vent — so in every state the
+## player can actually be in, this is the question "is the robot on the grille". It asked two more
+## things than that once, and the class doc records at length why it no longer does. Anything added
+## back here is a condition the player has to infer from a colour, so the bar for adding one is
+## that the floor is unreadable without it.
 func _is_being_loaded() -> bool:
-	if _cooldown_left > 0.0 or _since_shot > FIRING_MEMORY:
+	if _cooldown_left > 0.0:
 		return false
 	var player := _find_player()
-	if player == null or not _contains(player.global_position):
-		return false
-	return player.velocity.length() <= Player.STILLNESS_SPEED
+	return player != null and _contains(player.global_position)
 
 
 ## A driven zone's whole life: climb, vent once, and go. It never cools, because nothing the player
-## does is what filled it — there is no habit to stop, only ground to leave.
+## does is what filled it — leaving stops it costing them, but it does not stop it filling.
+##
+## It never ignites either, and that is the one place the two kinds of zone are deliberately drawn
+## differently. `IGNITION_HEAT` exists to answer "what did I just start", and a boss's vent is not
+## something the player started: it is dropped on the floor cold and the ramp from cold *is* the
+## warning. Flooring it would throw away the first four tenths of the only telegraph the player
+## gets. `_ignition` is left at zero here, so `get_display_heat` returns the real heat.
 ##
 ## The heat is *not* clamped short of one and left there: it reaches full and vents on the same frame
 ## the colour finishes, so the ramp the player has been reading all floor means exactly what it meant
@@ -286,6 +361,10 @@ func _step_driven(delta: float) -> void:
 
 func _vent() -> void:
 	_heat = 0.0
+	# Dropped rather than faded. A vented zone cannot heat again until its cooldown is up, and a
+	# zone still glowing as though it were taking load would be saying the opposite of that to a
+	# player deciding whether it is safe to stand there. The flash covers the frame it goes out on.
+	_ignition = 0.0
 	_vent_flash_left = 0.18
 	_cooldown_left = VENT_COOLDOWN
 	queue_redraw()
@@ -323,8 +402,11 @@ func _draw() -> void:
 		draw_rect(rect, Color(VENT_COLOR.r, VENT_COLOR.g, VENT_COLOR.b, 0.7))
 		return
 
-	var tint := COOL_COLOR.lerp(HOT_COLOR, _heat)
-	var alpha := lerpf(COLD_ALPHA, HOT_ALPHA, _heat)
+	# The displayed heat, not the real one: a zone under load reads as hot from the first frame even
+	# though it has barely taken any. See `IGNITION_HEAT`.
+	var shown := get_display_heat()
+	var tint := COOL_COLOR.lerp(HOT_COLOR, shown)
+	var alpha := lerpf(COLD_ALPHA, HOT_ALPHA, shown)
 	draw_rect(rect, Color(tint.r, tint.g, tint.b, alpha * WASH_ALPHA_SCALE))
 
 	# The bars, brightening with the heat. Started half a spacing in, so the pattern sits inside the

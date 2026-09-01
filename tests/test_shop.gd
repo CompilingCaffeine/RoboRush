@@ -46,6 +46,9 @@ func run() -> void:
 	await _test_service_stands_say_what_they_sell()
 	await _test_reroll_replaces_unsold_stock()
 	await _test_the_player_uses_the_nearest_stand()
+	await _test_a_stand_asks_for_the_key_when_it_is_in_reach()
+	await _test_a_sold_stand_asks_for_nothing()
+	await _test_the_shop_signs_itself()
 	await _test_a_floor_cannot_afford_the_whole_shop()
 	await _test_stands_land_where_they_were_asked_to()
 	await _test_rerolling_does_not_consume_the_item_pool()
@@ -310,6 +313,18 @@ func _tag_of(stand: ShopStand) -> String:
 	return label.text if label != null else ""
 
 
+## What the player can actually read *under* a stand, reached the way `_tag_of` reaches the tag
+## above it and for the same reason.
+func _prompt_text(stand: ShopStand) -> String:
+	var label := stand.find_child("Prompt") as Label
+	return label.text if label != null else ""
+
+
+func _prompt_shown(stand: ShopStand) -> bool:
+	var label := stand.find_child("Prompt") as Label
+	return label != null and label.visible
+
+
 func _test_reroll_replaces_unsold_stock() -> void:
 	await _make_shop(400)
 	var stands := _item_stands(_shop)
@@ -351,6 +366,92 @@ func _test_the_player_uses_the_nearest_stand() -> void:
 	_player.global_position = stand.global_position
 	check(_player.use_nearest_interactable(), "standing on it buys it")
 	check(_player.get_item_inventory().has(stand.item.id), "and the item arrives")
+	await _teardown()
+
+
+## Reported by a player who read the prices, understood the shop, and left without buying: nothing
+## anywhere said which button bought. The prompt appears under the stand the player has walked up
+## to and nowhere else, so what is on screen is exactly what a press would reach.
+func _test_a_stand_asks_for_the_key_when_it_is_in_reach() -> void:
+	await _make_shop(200)
+	var stand := _first_item_stand(_shop)
+	if stand == null:
+		await _teardown()
+		return
+
+	await advance_physics(1)
+	check(not _prompt_shown(stand), "a stand nobody is standing at asks for nothing")
+
+	_player.global_position = stand.global_position
+	await advance_physics(1)
+	check(_prompt_shown(stand), "walking up to a stand asks for the key")
+	check(
+		_prompt_text(stand) == "PRESS %s" % ShopStand.interact_key_label(),
+		"and it names the key the interact action is bound to (reads '%s')" % _prompt_text(stand),
+	)
+
+	for other: ShopStand in _shop.get_stands():
+		if other != stand:
+			check(
+				not _prompt_shown(other),
+				"only the stand in reach asks — the rest of the shop stays quiet",
+			)
+
+	_player.global_position = stand.global_position + Vector2(0.0, 400.0)
+	await advance_physics(1)
+	check(not _prompt_shown(stand), "walking away takes the prompt with it")
+	await _teardown()
+
+
+## The prompt is a promise that the press will land, so it has to go out with the thing it was
+## promising. A "PRESS E" under a stand reading SOLD is an instruction the game then refuses.
+func _test_a_sold_stand_asks_for_nothing() -> void:
+	await _make_shop(200)
+	var stand := _first_item_stand(_shop)
+	if stand == null:
+		await _teardown()
+		return
+
+	_player.global_position = stand.global_position
+	await advance_physics(1)
+	check(_prompt_shown(stand), "the stand asks for the key while it has something to sell")
+
+	check(_player.use_nearest_interactable(), "the press lands")
+	check(not _prompt_shown(stand), "and the sold stand stops asking on the same frame")
+
+	await advance_physics(2)
+	check(
+		not _prompt_shown(stand),
+		"still quiet a frame later, with the player standing right on it",
+	)
+	check(not _player.use_nearest_interactable(), "which is what a second press would do: nothing")
+	await _teardown()
+
+
+## The sign is the half of the instruction that is readable from the door. Without it a player who
+## does not know there is a key to press has no reason to walk into range of the stand that would
+## have told them.
+func _test_the_shop_signs_itself() -> void:
+	await _make_shop(200)
+
+	_shop.place_sign(Vector2(90.0, -60.0))
+	# `owned` off: the sign is built in code, so it has no owner and the default search would
+	# never see it.
+	var sign_label := _shop.find_child("Sign", true, false) as Label
+	if not require(sign_label, "the shop stands a sign"):
+		await _teardown()
+		return
+
+	check(
+		sign_label.text == "PRESS %s TO BUY" % ShopStand.interact_key_label(),
+		"the sign names the same key the stands do (reads '%s')" % sign_label.text,
+	)
+	check(
+		sign_label.global_position.is_equal_approx(
+			Vector2(90.0, -60.0) - sign_label.size * 0.5
+		),
+		"and it is centred where it was asked for, not hung off that point by a corner",
+	)
 	await _teardown()
 
 

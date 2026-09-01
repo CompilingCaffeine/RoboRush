@@ -33,6 +33,8 @@ func run() -> void:
 	await _test_an_enemy_standing_on_a_pad_is_not_moved()
 	await _test_a_template_builds_its_pads_inside_the_room()
 	await _test_pads_stop_with_the_room_they_are_in()
+	await _test_a_used_pad_goes_back_to_normal()
+	_test_a_lit_pad_still_shows_which_pad_it_is()
 	_test_a_half_link_cannot_be_authored()
 	_test_the_cloud_templates_are_authored_sanely()
 
@@ -321,6 +323,79 @@ func _test_pads_stop_with_the_room_they_are_in() -> void:
 ## no arrangement of it that describes half a link. This is that claim asserted, because the day
 ## somebody replaces it with `Array[Rect2i]` is the day a pad with no partner becomes authorable —
 ## and a pad with no partner is floor that reads as a route and is not one.
+## A pad that has been used goes back to looking like a pad, and this checks the frame that used to
+## be missing rather than the state that follows it.
+##
+## The bug it pins: `_draw` runs only when something asks it to, and the pad asked on every frame the
+## flash was *running* and not on the frame it ended. So the last picture ever painted of a used pad
+## was a lit one, and it stayed that way for the rest of the room — at both ends of every link the
+## player stepped on. It reported as the pads whiting out, which is what the old flash painted; the
+## flash was doing what it was written to do, and nothing was undoing it.
+##
+## Checked through the `draw` signal, because `_flash_left` reaching zero is exactly the thing that
+## was already true. What was false is that anybody redrew afterwards, and a check that asked the pad
+## how lit it felt would have passed against the broken build.
+func _test_a_used_pad_goes_back_to_normal() -> void:
+	var arena := await _open_arena()
+	var player: Player = arena["player"]
+	var first: MigrationPad = arena["first"]
+	var second: MigrationPad = arena["second"]
+
+	var lit_at_draw: Array[float] = []
+	second.draw.connect(func() -> void: lit_at_draw.append(second.get_flash_ratio()))
+
+	player.global_position = first.get_rect().get_center()
+	# Well past the flash. The arrival pad is the one watched: it is the far end, the one the player
+	# is looking at to see where they have been sent, and it lights up without being stepped on.
+	await advance_physics(_frames(MigrationPad.FLASH_SECONDS * 4.0))
+
+	check(
+		not lit_at_draw.is_empty(),
+		"using a link redraws its far end (%d times)" % lit_at_draw.size(),
+	)
+	check(
+		lit_at_draw.max() > 0.0,
+		"and the far end is visibly lit while it is being used (peaked at %.2f)"
+			% lit_at_draw.max(),
+	)
+	check(
+		lit_at_draw.back() == 0.0,
+		"and is drawn once more with the flash over, so it does not stay lit (last draw at %.2f)"
+			% lit_at_draw.back(),
+	)
+
+	_close(arena)
+	await advance_physics(1)
+
+
+## The other half of the same complaint: a lit pad is still a pad you can read.
+##
+## The flash used to fill the plate with flat white and return before the border or the pips were
+## drawn, so for its duration a link had no colour, no exact extent and no count — in the one moment
+## the player is looking at the far end. It now raises the pad's three alphas instead, and what makes
+## that legible is the gap the wash leaves under the pips: plate and pips are the same green, so the
+## distance between their alphas is the only thing telling them apart.
+##
+## A check on the constants rather than on pixels, which is where the claim actually lives. Nothing
+## here can read what a `draw_rect` put on screen, but a build that pushed the wash up to meet the
+## pips would erase the count exactly as the white did, and that is arithmetic.
+func _test_a_lit_pad_still_shows_which_pad_it_is() -> void:
+	check(
+		MigrationPad.FLASH_WASH_ALPHA > MigrationPad.WASH_ALPHA,
+		"a used pad is visibly brighter than a resting one (%.2f against %.2f)"
+			% [MigrationPad.FLASH_WASH_ALPHA, MigrationPad.WASH_ALPHA],
+	)
+	# The gap kept at rest, kept at the top of the flash. Half of it, so the flash may close some of
+	# the distance without closing it.
+	var rest_gap := MigrationPad.PIP_ALPHA - MigrationPad.WASH_ALPHA
+	var lit_gap := MigrationPad.FLASH_PIP_ALPHA - MigrationPad.FLASH_WASH_ALPHA
+	check(
+		lit_gap >= rest_gap * 0.5,
+		"and its pips stay readable against its plate while it is lit (%.2f of %.2f)"
+			% [lit_gap, rest_gap],
+	)
+
+
 func _test_a_half_link_cannot_be_authored() -> void:
 	var link := MigrationLink.new()
 	check(link.is_valid(), "a default link has two real ends")
@@ -382,6 +457,10 @@ func _test_the_cloud_templates_are_authored_sanely() -> void:
 					)
 
 	check(links_seen > 0, "the campaign ships pad links to check (%d)" % links_seen)
+
+
+func _frames(seconds: float) -> int:
+	return int(seconds * 60.0) + 2
 
 
 func _open_arena() -> Dictionary:

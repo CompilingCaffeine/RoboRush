@@ -5,8 +5,8 @@ extends Node2D
 ##
 ## **Cloud Operations' signature mechanic, and the first thing in the game that moves the player.**
 ## Everything up to this floor answers the question "where are you standing" by changing what the
-## ground costs: a `CompileLane` denies a stripe of it, a `ThermalZone` charges for staying still on
-## it, a `CableDuct` decides which way round it you may go. All three are things done *to* the
+## ground costs: a `CompileLane` denies a stripe of it, a `ThermalZone` charges for standing on it,
+## a `CableDuct` decides which way round it you may go. All three are things done *to* the
 ## floor. A pad changes what the floor *is connected to*, which is the one property the room could
 ## not previously say anything about — and it is the player who says it, by choosing to step on one.
 ##
@@ -58,10 +58,27 @@ const WASH_ALPHA := 0.16
 const BORDER_ALPHA := 0.62
 const PIP_ALPHA := 0.92
 
-## One frame of white when the pad is used, and how long it lasts. Confirmation that the thing the
-## player just did was the thing they meant to do — a teleport with no acknowledgement at either end
-## reads as a glitch the first time it happens.
+## How long a pad stays lit after it is used. Confirmation that the thing the player just did was
+## the thing they meant to do — a teleport with no acknowledgement at either end reads as a glitch
+## the first time it happens.
 const FLASH_SECONDS := 0.16
+
+## What the three alphas above rise to at the top of that flash.
+##
+## **The flash lifts the pad's own colour and never replaces it**, which is the difference between
+## an acknowledgement and a hole in the room. It used to paint the plate solid white and return —
+## no border, no pips, no green — at both ends of the link, in the one moment the player is looking
+## at the far end to see where they have been sent. The pads are the only green thing on this floor
+## precisely so they can be picked out at a glance, and the frame that most needs picking out was
+## the frame that threw the colour away.
+##
+## The wash stops well short of opaque and the pips do not, and that gap is the whole of why this
+## still reads. A plate and its pips are the same green, so what tells them apart is the distance
+## between their alphas; a flash that pushed both to opaque would be a bright green rectangle with
+## its count erased, which is the white version again in a nicer hue.
+const FLASH_WASH_ALPHA := 0.5
+const FLASH_BORDER_ALPHA := 1.0
+const FLASH_PIP_ALPHA := 1.0
 
 ## Pip geometry, in pixels. Pips are stacked down the middle of the plate.
 const PIP_SIZE := Vector2(6.0, 2.0)
@@ -118,8 +135,13 @@ static func link(first: MigrationPad, second: MigrationPad) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	_flash_left = maxf(_flash_left - delta, 0.0)
 	if _flash_left > 0.0:
+		_flash_left = maxf(_flash_left - delta, 0.0)
+		# Asked for on the frame the flash *ends* as well as on every frame it runs through, and
+		# that is not a tidy-up. `_draw` runs only when something asks for it, so a pad that stopped
+		# asking while it was still lit stayed lit — not for a moment, but for the rest of the room,
+		# on both ends of every link the player had used. `_test_a_used_pad_goes_back_to_normal`
+		# pins the frame this line exists for.
 		queue_redraw()
 
 	var player := get_tree().get_first_node_in_group(Teams.GROUP_PLAYER) as Node2D
@@ -169,6 +191,14 @@ func is_armed() -> bool:
 	return _armed
 
 
+## How lit this pad is right now: one on the frame it was used, falling to zero over `FLASH_SECONDS`.
+##
+## Public for the reason `is_armed` is — the suite needs it — and used by `_draw` rather than
+## duplicated there, so "the flash is over" is one fact rather than two that can disagree.
+func get_flash_ratio() -> float:
+	return _flash_left / maxf(FLASH_SECONDS, 0.001)
+
+
 func _migrate(player: Node2D) -> void:
 	# The far pad is disarmed *before* the player is moved, not after. Ordering matters: the two
 	# pads' `_physics_process` calls run in tree order, and if the partner's ran later in the same
@@ -185,14 +215,15 @@ func _migrate(player: Node2D) -> void:
 	AudioManager.play_sfx(&"migrate", 0.04)
 
 
+## The plate, its border and its pips, in `PAD_COLOR` at every point in the flash.
+##
+## One drawing rather than two, which is the shape the fix took. There is no branch here for a pad
+## that has just been used: a use raises three alphas and they fall back on their own, so a lit pad
+## is the same pad and the player never loses sight of which link they are looking at.
 func _draw() -> void:
 	var rect := Rect2(Vector2.ZERO, _size)
-	if _flash_left > 0.0:
-		draw_rect(rect, Color(1.0, 1.0, 1.0, 0.7))
-		return
-
-	draw_rect(rect, Color(PAD_COLOR.r, PAD_COLOR.g, PAD_COLOR.b, WASH_ALPHA))
-	draw_rect(rect, Color(PAD_COLOR.r, PAD_COLOR.g, PAD_COLOR.b, BORDER_ALPHA), false, 1.0)
+	draw_rect(rect, _lit(WASH_ALPHA, FLASH_WASH_ALPHA))
+	draw_rect(rect, _lit(BORDER_ALPHA, FLASH_BORDER_ALPHA), false, 1.0)
 
 	# The pips, centred as a block so a two-pip pad and a three-pip pad share a midpoint and read as
 	# the same kind of marking rather than as two different ones.
@@ -203,5 +234,10 @@ func _draw() -> void:
 	for pip: int in pips:
 		draw_rect(
 			Rect2(Vector2(left, top + pip * (PIP_SIZE.y + PIP_GAP)), PIP_SIZE),
-			Color(PAD_COLOR.r, PAD_COLOR.g, PAD_COLOR.b, PIP_ALPHA),
+			_lit(PIP_ALPHA, FLASH_PIP_ALPHA),
 		)
+
+
+## `PAD_COLOR` at `rest` alpha, carried toward `flash` alpha by however lit the pad currently is.
+func _lit(rest: float, flash: float) -> Color:
+	return Color(PAD_COLOR.r, PAD_COLOR.g, PAD_COLOR.b, lerpf(rest, flash, get_flash_ratio()))

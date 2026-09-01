@@ -55,6 +55,11 @@ const BOSS_REWARD_SPACING := 128.0
 ## bottom is the HUD strip, so the HUD never covers playable floor.
 const ROOM_TOP_MARGIN := 4
 
+## Which tile row of the shop room carries its sign. The second row from the top: above the stands
+## and the two lines their tags are allowed to wrap onto, and below nothing — a shop room's own
+## scenery is four corner blocks, and none of them is in the middle of this row.
+const SHOP_SIGN_ROW := 1
+
 ## Where an item drops relative to the reward point, so it does not land underneath the
 ## scrap that drops alongside it.
 const ITEM_REWARD_OFFSET := Vector2(0.0, -18.0)
@@ -513,6 +518,10 @@ func _stock_shop(room: Room, resumed_shop: ShopStock = null) -> void:
 	var shop: ShopRoom = SHOP_ROOM_SCENE.instantiate()
 	room.add_child(shop)
 	shop.stock(config.shop, config.get_items(), positions, _shop_rng.randi(), resumed_shop)
+	# The sign, above the stands and clear of their tags. Placed from here because the shop knows
+	# where its stands are and nothing else, while the room knows where its walls are — see
+	# `ShopRoom.place_sign` for why a shop says which key buys twice, in two different voices.
+	shop.place_sign(room.get_row_rect(SHOP_SIGN_ROW).get_center())
 	_shop = shop
 
 

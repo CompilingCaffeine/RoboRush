@@ -12,9 +12,11 @@ extends Boss
 ##
 ## **Load is the whole fight.** The rack carries a fixed amount of it, split between the nodes
 ## still standing, so `load` is `node_count / nodes_alive`: one at the start, four at the end. It
-## drives how fast the ring turns, how fast the packets run, and how often each node vents. Nothing
-## else escalates, and nothing needs to — one number the player can see the consequences of is
-## worth more than three curves nobody can separate.
+## drives how fast the ring turns, how fast the packets run, and how often each node vents. Almost
+## nothing else escalates, and almost nothing needs to — one number the player can see the
+## consequences of is worth more than three curves nobody can separate. The single exception is the
+## clock that aims at the player, which counts nodes lost rather than following load and moves by a
+## fraction of what load would have moved it; see below.
 ##
 ## The vent rate is the part worth stating out loud, because it is what keeps the last phase
 ## survivable. Per node it is `vent_interval / load`, so four nodes venting every three seconds and
@@ -46,6 +48,21 @@ extends Boss
 ## would make the last phase a different, worse fight — four times the aimed heat on a player with
 ## one body left to shoot. So the rack's own heat concentrates and these two stay flat, which keeps
 ## the arithmetic in the paragraph above true of the *arena* rather than only of the nodes.
+##
+## **The aimed vent does step up, and it is the only thing here that escalates on anything other
+## than load.** It walks from `aimed_vent_interval` to `aimed_vent_interval_runaway` by one even
+## step per node lost — three seconds, 2.67, 2.33, two — which is `get_aimed_vent_interval`, and
+## the step is taken the moment the node blows out rather than at the next vent. A failure is the
+## loudest event in this fight and it used to change nothing about the pressure on the player's own
+## feet: the ring came in faster and smaller, and the clock aiming at the robot ran on exactly as
+## it had, so each phase the player earned arrived with the same private rhythm underneath it.
+##
+## The size of the step is the whole of what keeps it fair. A third off the interval is a pace the
+## player can feel; the factor of four that load would have applied is a different fight. And the
+## floor under it is `vent_seconds` — the gap between the aimed clock and the fill is how long the
+## ground the robot is standing on is cold, so an interval at or under the fill would leave none of
+## it, and *keep moving* would stop being a rhythm and become the only input. The scatter stays
+## flat throughout: it is weather, and weather does not care which node just went.
 ##
 ## **The rack breathes.** The ring contracts to `ring_inhale` of its radius and opens out again on
 ## a seven-second sine. Without it the middle of the arena is permanently safe, and a boss with a
@@ -255,6 +272,24 @@ func get_load() -> float:
 	return float(_slot_count()) / float(maxi(get_nodes_alive(), 1))
 
 
+## Seconds between aimed vents right now: `aimed_vent_interval` with the rack whole, tightening one
+## even step per node lost until it is `aimed_vent_interval_runaway` with a single node left.
+##
+## Interpolated on nodes *lost* rather than on load, which is what makes the steps even. Load is
+## `4, 2, 1.33, 1` between the same four states — it does most of its moving in the last failure,
+## and a clock following it would sit near its resting pace for three quarters of the fight and
+## then lurch. The player is being paid for a node, so each node should pay the same.
+func get_aimed_vent_interval() -> float:
+	var lost := float(_slot_count() - get_nodes_alive())
+	var span := float(maxi(_slot_count() - 1, 1))
+	var interval := lerpf(
+		config.aimed_vent_interval,
+		config.aimed_vent_interval_runaway,
+		clampf(lost / span, 0.0, 1.0),
+	)
+	return maxf(interval, 0.05)
+
+
 ## Every node still standing. Plural, like The Scrap King's and unlike Runtime Error's, because this
 ## boss genuinely has several bodies at once — and anything that wants to reach the fight through a
 ## body (a test, a targeting sweep) should not have to know which slots are empty.
@@ -331,6 +366,11 @@ func _reconcile_nodes() -> void:
 	if next != _phase:
 		_phase = next
 		EventBus.boss_phase_changed.emit(int(_phase))
+
+	# The tighter clock starts at the failure rather than at the next vent. A clock left running on
+	# the interval the previous phase set would spend one whole vent pretending the rack still had
+	# the node the player has just taken off it, which is the moment the step exists to be felt in.
+	_aimed_left = minf(_aimed_left, get_aimed_vent_interval())
 
 	# The survivors are carrying more, and they say so. Applied to every node rather than only to
 	# the ones that changed, because they all did — load is a property of the rack.
@@ -474,7 +514,7 @@ func _step_node_vents(delta: float) -> void:
 		_drop_vent(_nodes[slot].global_position)
 
 
-## Heat centred on the robot, on a clock that does not care how the fight is going.
+## Heat centred on the robot, on the one clock in the fight that counts nodes rather than load.
 ##
 ## The clock runs whether or not there is a player to aim at, and the drop is skipped rather than
 ## deferred when there is not. Holding the vent until a player appears would make the first thing a
@@ -484,7 +524,7 @@ func _step_aimed_vent(delta: float) -> void:
 	_aimed_left -= delta
 	if _aimed_left > 0.0:
 		return
-	_aimed_left = maxf(config.aimed_vent_interval, 0.05)
+	_aimed_left = get_aimed_vent_interval()
 	if _player != null:
 		_drop_vent(_player.global_position)
 

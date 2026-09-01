@@ -11,6 +11,10 @@ extends Resource
 ## one while the whole rack is standing, four when a single node is carrying all of it. The
 ## numbers here are therefore the fight at rest, and the fight at the end is the same numbers
 ## multiplied by four. See `CascadeFailure.get_load`.
+##
+## The one escalation that is not load is `aimed_vent_interval`, which ramps toward
+## `aimed_vent_interval_runaway` a step per node lost. It has its own note below, and the note is
+## mostly about why it is a step rather than a factor.
 
 @export var id: StringName = &"cascade_failure"
 @export var display_name: String = "Cascade Failure"
@@ -85,17 +89,36 @@ extends Resource
 ## sources below: three patches of ground that mean the same thing should be the same size.
 @export var vent_tiles := Vector2i(3, 3)
 
-## Seconds between the vents the rack aims at the player, wherever they are standing.
+## Seconds between the vents the rack aims at the player, wherever they are standing, while the
+## whole rack is still up. `aimed_vent_interval_runaway` is the same clock with one node left, and
+## the fight walks from this number to that one a step at a time.
 ##
-## **Not divided by load**, unlike `vent_interval`, and that is the whole of how this stays fair.
-## The rack's own vents concentrate as it fails; these are a flat, unescalating pressure underneath
-## them, so the last phase is the same fight as the first with fewer bodies in it rather than a
-## fight with four times as much aimed heat. `CascadeFailure._step_aimed_vent` is where that is
-## enforced, and `tests/test_cascade_failure.gd` measures the total rate at both extremes.
+## **Not divided by load**, unlike `vent_interval`, and the difference between that and the ramp
+## below is the whole of how this stays fair. Load quadruples; this goes from three seconds to two.
+## The rack's own vents concentrate as it fails, and underneath them the pressure on the player's
+## own feet rises by a step they can feel rather than by a factor that would make the last phase a
+## different fight — four times the aimed heat on a player with one body left to shoot.
+## `CascadeFailure.get_aimed_vent_interval` is where the ramp lives, and
+## `tests/test_cascade_failure.gd` measures the total rate at both extremes.
 ##
 ## Three seconds against `vent_seconds`'s 1.6 means the ground under the player is cold roughly
 ## half the time — enough that standing still is never a strategy and moving is never frantic.
 @export var aimed_vent_interval: float = 3.0
+
+## The same clock with one node left: the aimed vent at its fastest, and this fight's pacing knob.
+##
+## A node blowing out is the loudest thing that happens here, and it used to change nothing about
+## the pressure on the player's own feet — the ring got faster and smaller, and the clock aiming at
+## the robot ran on exactly as it had, so the phase the player had just earned arrived with the
+## same private rhythm underneath it. Each failure now tightens this by an even step: with four
+## nodes, three seconds, then 2.67, then 2.33, then two.
+##
+## **It has to stay longer than `vent_seconds`.** The gap between the two is how long the ground
+## the player is standing on is cold, and a clock that aims faster than a patch fills leaves none
+## of it — which is a treadmill rather than a rhythm, and the one unfairness the telegraph cannot
+## carry. At two seconds against a 1.6-second fill the last phase still hands the player the moment
+## they can stop in; it just makes that moment worth a great deal less.
+@export var aimed_vent_interval_runaway: float = 2.0
 
 ## Seconds between the vents it drops at a random point inside the arena. Not divided by load, for
 ## the reason above.

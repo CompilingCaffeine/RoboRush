@@ -13,7 +13,7 @@ with the ones before.
 
 The Help Desk is the fundamentals. Development adds compile lanes, a stripe of floor that
 announces itself and then goes off. The Data Center adds throughput zones that charge for
-standing still and cable ducts that stop a chassis and not a shot. Cloud Operations adds
+standing on them and cable ducts that stop a chassis and not a shot. Cloud Operations adds
 migration pads: two patches of floor that are the same place, and the first thing in the
 game that moves the player. Any floor can draw any of the four bosses, so the last fight of
 a run is not the same fight twice.
@@ -25,11 +25,17 @@ once. Stacked multipliers bend rather than compound, so the worst legal build do
 
 Engine: **Godot 4.7.1**, GDScript, GL Compatibility renderer.
 
-**It has now been played, once, and not far enough.** A beta pass produced the findings in
-[What playing it answered](#what-playing-it-answered) — one mild sentence about the Data
-Center that turned out to be three bugs — which is the strongest argument in this document
-for playing it again. Nobody has played Cloud Operations at all, or timed a run end to end
-at four floors. See [Known limitations](#known-limitations).
+**It has been played through by hand, end to end, several times over** — the whole game as it
+stands, all four floors, complete runs. The earliest of those passes produced the findings in
+[What playing it answered](#what-playing-it-answered): one mild sentence about the Data Center
+that turned out to be three bugs, none of them visible in the code, in a test, or on screen.
+That is the standing argument for why playing is not optional.
+
+What is missing is the other half. The runs since have not been written up, so every floor's
+list of open questions below is a set of questions that *has* now been put in front of a person
+and whose answers are not in this file. The gap is no longer the playing; it is the record of
+it, which is why that is the first item under [Next recommended
+task](#next-recommended-task). See [Known limitations](#known-limitations).
 
 ---
 
@@ -587,7 +593,7 @@ scripts/combat/targeting.gd               The hostile bodies near a point
 scripts/combat/explosion.gd               One blast, damage only
 scripts/combat/chain_lightning.gd         Damage that hops between enemies
 scripts/combat/compile_lane.gd             Development: a stripe of floor that announces itself
-scripts/combat/thermal_zone.gd             The Data Center: ground that charges for standing still
+scripts/combat/thermal_zone.gd             The Data Center: ground that charges for standing on it
 
 scripts/components/player_input.gd        Named actions -> movement, fire, dash, interact
 scripts/components/motion_controller.gd   Acceleration/deceleration
@@ -694,7 +700,7 @@ tests/test_shop.gd                         75 price, purchase, and refusal check
 tests/test_boss.gd                         104 phase, terminal, and defeat checks
 tests/test_runtime_error.gd                97 checks on Development's boss
 tests/test_cascade_failure.gd              101 checks on the Data Center's boss
-tests/test_thermal.gd                      183 checks on what may and may not heat a zone
+tests/test_thermal.gd                      198 checks on what may and may not heat a zone
 tests/test_migration.gd                 + 179 checks on what a pad moves, and what rearms it
 tests/test_orchestrator.gd              + 64 checks on Cloud Operations' boss, most of them
                                             asserting what the fight refuses to do
@@ -832,11 +838,14 @@ Executed on this machine, not assumed.
 
 ### Honest limits of that verification
 
-**Nobody has played this by hand.** That is the important one, and it now covers more
-ground than it did: whether four enemy types produce interesting rooms together, whether
-the Memory Leech's 0.42-second windup is enough warning, whether the boss's phase two is a
-puzzle or a wall, and whether the shop's prices bite are all open questions that need a
-controller and a person.
+**None of this is playing it.** The game has been played by hand, end to end and several times
+over — see the note at the top of this document — but no part of that is what this section
+reports, and no part of it is in the suite. Whether four enemy types produce interesting rooms
+together, whether the Memory Leech's 0.42-second windup is enough warning, whether the boss's
+phase two is a puzzle or a wall, and whether the shop's prices bite are questions a person has
+now had in front of them for several runs. They remain questions no check in this repository can
+answer, and what the person concluded is not recorded here — so nothing below should be read as
+having been confirmed by play.
 
 **The end-to-end harness proves the loop closes, not that the game is good.** It teleports
 the robot between rooms, kills enemies by applying damage to their `HealthComponent`, and
@@ -1148,11 +1157,17 @@ resulting frames, and by nothing else. The suite was green for all of them.
 
 ## Known limitations
 
-1. **Nobody has played this by hand.** Still the limitation that matters, and milestone 6
-   does not fix it — it only makes it easier to see. Difficulty, pacing, the enemy mix, the
-   boss, and the economy have all been reasoned about and none of them have been *felt*. The
-   balance suite computes what the numbers mean and refuses to let them drift somewhere
-   absurd; it cannot tell you whether the game is fun.
+1. **What playing it taught is not written down.** This entry used to read "nobody has played
+   this by hand", and that part is closed: the whole game to date has been played through, end
+   to end, several times. The limitation that replaced it is narrower and more annoying.
+   Difficulty, pacing, the enemy mix, the bosses, and the economy have now all been *felt*, and
+   this document still describes essentially all of them as *reasoned* — every floor's "what
+   playing it had to answer" list is a set of questions that has since been asked and whose
+   answers live in somebody's head rather than in this file. Nothing in `data/` has been moved
+   in response to a run, either, so the tuning is still the tuning that was argued for rather
+   than the tuning that was played. The balance suite computes what the numbers mean and
+   refuses to let them drift somewhere absurd; it cannot tell you whether the game is fun, and
+   it is no substitute for writing down what the person holding the controller thought.
 2. **Gamepad support is verified but not played.** A synthesized controller drives every
    binding and every code path from a nonzero device index, which has now caught two real
    blockers. What it cannot tell you is whether a particular controller reports the axes
@@ -1409,9 +1424,11 @@ fight the warning language the whole fight runs on. The shards are the one hones
 silhouette to be bigger than its hitbox: they are visibly detached, so nothing the player reads
 as the body is outside what they can hit.
 
-**It still has not been played by a person** — see [Known limitations](#known-limitations). The
-numbers in [`data/bosses/runtime_error.tres`](data/bosses/runtime_error.tres) are reasoned rather
-than observed. The pool is 110, which is 27.5 seconds of *perfect* starting-weapon fire — the
+**It has been played, and none of its numbers moved afterwards** — see [Known
+limitations](#known-limitations). The numbers in
+[`data/bosses/runtime_error.tres`](data/bosses/runtime_error.tres) are still the reasoned ones
+rather than observed ones, so what follows is the argument for them and not a report on how they
+played. The pool is 110, which is 27.5 seconds of *perfect* starting-weapon fire — the
 least meaningful number about this boss, and the reason it is not the 150 it started at. Perfect
 fire assumes a target that can be hit at will, and this one is a quarter of the King's area,
 moving; the pool came down because the missing went up. `tests/test_balance.gd` still holds it
@@ -1560,7 +1577,9 @@ would make the boss depend on how the RNG had been consumed getting there. Acros
 split is roughly 55/45 and no run ever fought the same boss twice, and the no-repeat rule was
 confirmed to fail when deliberately broken.
 
-**This is a real difficulty swing and it has not been played.** Runtime Error's pool is 110
+**This is a real difficulty swing, and the pools have not moved since it was played.** Runs
+since have drawn it both ways round; nothing in this document records whether the swing was
+felt, which is exactly the gap [limitation 1](#known-limitations) is about. Runtime Error's pool is 110
 against The Scrap King's 60, so about half of all runs now open with the longer fight against a
 starting build and no items, and close with the shorter one against a full build. Worse for
 readability: Runtime Error is a compile-lane fight, and the Compiler that teaches that language
@@ -1709,8 +1728,8 @@ register.
 ### The signature mechanic: throughput zones
 
 A [`ThermalZone`](scripts/combat/thermal_zone.gd) is a patch of floor that gains heat while the
-player stands inside it *firing*, loses it the moment they move or stop, and vents at full heat for
-one point of integrity. The zone is painted on the ground as a grille of louvre bars and its heat is
+player is *standing on it*, loses it the moment they step off, and vents at full heat for one point
+of integrity. The zone is painted on the ground as a grille of louvre bars and its heat is
 their colour, teal through indigo to a hard magenta. Nothing about it is random and nothing is
 hidden.
 
@@ -1724,13 +1743,27 @@ alone is one bad screen or one colourblind player away from not existing: `Compi
 filled rectangle, a thermal zone is a grille. Two hazards that mean different things now differ
 twice.
 
-What it charges for is the whole design. Heat per shot would make a fast weapon heat a zone faster,
-which quietly turns Cooling Fan and Unsafe Overclock into liabilities on one floor of six — and an
-item that is a liability on a floor is an item nobody picks. Charging for occupancy alone would
-punish the player for being in the room. Charging *stationary firing* taxes a habit, and a habit is
-what a floor is allowed to teach: keep moving and this floor costs nothing at all, at any fire rate.
-[`tests/test_thermal.gd`](tests/test_thermal.gd) asserts that directly, so the "simplification" to
-per-shot heat fails a named check rather than passing review.
+What it charges for is the whole design, and it took a revision to get right. Heat used to accrue
+only while the player was inside a zone *and* firing *and* holding still, which named the habit the
+floor meant to tax with real precision and played badly for it: a hazard with three conditions on it
+is a hazard nobody can state, so nobody learned it. Players watched a zone climb, step off, come
+back, hold a firing position at a slightly different speed, and see nothing happen. Now a zone
+charges for its ground and nothing else — stand on it and it heats, whatever you are doing.
+
+What stays out of it is the weapon. Heat per shot would make a fast weapon heat a zone faster, which
+quietly turns Cooling Fan and Unsafe Overclock into liabilities on one floor of six — and an item
+that is a liability on a floor is an item nobody picks. Occupancy taxes a *position*, and every
+build pays for a position identically. It also stops the floor quarrelling with items that ask the
+player to hold still, which under the old rule were asking for exactly what the floor charged for.
+
+The floor still teaches movement, and now teaches it to every player rather than only to the ones
+who had stopped to shoot. `SECONDS_TO_VENT` is sized against walking speed instead of fire rate: a
+second and a half is 240 pixels, wider than any zone on the floor, so crossing a grille is always
+affordable and stopping on one never is.
+[`tests/test_thermal.gd`](tests/test_thermal.gd) asserts all of it directly — that firing and moving
+change the heat by nothing at all, and that walking across the widest authored zone never vents it —
+so both the "simplification" to per-shot heat and a ramp shortened past the point of passability
+fail named checks rather than passing review.
 
 Zones are declared on `RoomTemplate` in tile coordinates, so a Data Center template carries its own
 and a Help Desk template has none, with no `if floor_number == 3` anywhere.
@@ -1840,7 +1873,8 @@ exactly what it has meant for nine rooms. What changes is who is heating it.
 
 **Load is the whole fight.** The rack carries a fixed amount of it split between the nodes still
 standing, so `load` is `node_count / nodes_alive`: one at the start, four at the end. It drives how
-fast the ring turns, how fast the packets run, and how often each node vents. Nothing else escalates.
+fast the ring turns, how fast the packets run, and how often each node vents. One other clock
+escalates — the one that aims at the player — and it counts nodes lost rather than following load.
 
 The vent rate is the part worth stating, because it is what keeps the last phase survivable. Per
 node the interval is `vent_interval / load`, so four nodes venting every three seconds and one node
@@ -1872,6 +1906,23 @@ concentrating what it already had, so two sources that quadrupled alongside it w
 phase a different and worse fight. Flat clocks keep the vent-rate arithmetic above true of the
 *arena* rather than only of the nodes, and the suite still measures it by counting every vent from
 every source at both loads.
+
+**The aimed clock does step up, once per node.** It walks from three seconds to two by an even step
+each time a node blows out — 3, 2.67, 2.33, 2 — and takes the step at the failure rather than at its
+next vent. A failure is the loudest event in this fight, and it used to change nothing about the
+pressure on the player's own feet: the ring came in faster and smaller, and the clock aiming at the
+robot ran on exactly as it had, so every phase the player earned arrived with the same private
+rhythm underneath it. The size of the step is what keeps it fair — a third off the interval is a
+pace a player can feel, while the factor of four that load would have applied is a different fight —
+the floor under it is the fill. The gap between the aimed clock and `vent_seconds` is how long the
+ground the robot stands on is cold, so an interval at or under 1.6 seconds would leave none of it,
+and *keep moving* would stop being a rhythm and become the only input.
+
+The suite measures the ramp the way it measures everything else here: it parks the robot in a corner
+the ellipse cannot reach and counts the patches that land on it, with the whole rack up and again
+two failures later. It deliberately does not measure at one node left — there the last node walks
+onto a stopped robot and lays its own trail across it, so the covered count quintuples whether the
+ramp exists or not.
 
 **There is not one projectile in it.** Both bosses before it are answered by dodging bullets; this
 floor's mechanic is positional, so its boss is positional. Heat on the ground, load running along the
@@ -1906,7 +1957,7 @@ charged every run, was a campaign whose final fight never changed.
 The reverse direction was simply never listed: The Scrap King and Runtime Error are answered with
 skills the game teaches in its first room, so nothing stopped them guarding floor 3. They arrive
 there in a room the other floors do not have — `data_core_arena` keeps its four corner zones, so the
-King's terminals stand in ground that charges for holding still to shoot them, and Runtime Error's
+King's terminals stand in ground that charges the player for standing on it, and Runtime Error's
 lanes sweep a cold-centred floor.
 
 `CampaignValidator`'s boss supply is no longer exactly tight — any dealing of three bosses to three
@@ -1960,10 +2011,12 @@ version. The fourth criterion is counted at the only place a result is actually 
 paths are supposed to file *nothing*, and a check watching for game-over could not tell filing
 nothing from filing twice.
 
-### What playing it will have to answer
+### What playing it had to answer
 
-Every number here is reasoned rather than observed, the same standing limitation the two floors
-before it carry.
+Every number here was reasoned rather than observed when it was written. The floor has been played
+several times since, and no number below has moved and no question below has been answered in
+writing — they are reproduced as they were asked, and answering them from the runs that have
+happened is the write-up [Next recommended task](#next-recommended-task) is asking for.
 
 - Is the plate readable as armour, or does a Load Balancer read as an enemy your weapon has stopped
   working on? The only feedback a blocked shot gives is the plate lighting for 0.14s, because
@@ -2017,7 +2070,7 @@ Two patches of floor that are the same place. Step onto either end of a link and
 standing on the other.
 
 Every floor before this answers *where are you standing* by changing what the ground costs — a
-`CompileLane` denies a stripe of it, a `ThermalZone` charges for holding still on it, a `CableDuct`
+`CompileLane` denies a stripe of it, a `ThermalZone` charges for standing on it, a `CableDuct`
 decides which way round it you may go. All three are things done **to** the floor. A pad changes what
 the floor is *connected to*, which is the one thing a room could not previously say — and the player
 says it, by choosing to step on one. It is the first thing in the game that moves the player.
@@ -2037,6 +2090,24 @@ hazards that both resolved to red.
 they leave it. That is a fact about where the robot is rather than about how long ago something
 happened, so there is no cooldown constant anywhere — and any constant would have been wrong for
 somebody's frame rate.
+
+**A used pad stays a pad.** Using a link lights both of its ends for 0.16 seconds, which is the
+acknowledgement that stops a teleport reading as a glitch the first time it happens. That flash used
+to paint the plate flat white and stop there — no green, no border, no pips — so for its duration a
+link had no colour, no exact extent and no count, in the one moment the player is looking at the far
+end to see where they have been put. It now raises the pad's own three alphas instead, and the wash
+stops well short of the pips: plate and pips are the same green, so the distance between their
+alphas is the only thing telling them apart, and a flash that closed it would erase the count as
+thoroughly as the white did.
+
+That was reported as the pads whiting out, and the report was more literal than it sounded. `_draw`
+runs only when something asks it to, and the pad asked on every frame the flash was *running* and
+not on the frame it ended — so the last picture ever painted of a used pad was a lit one, and it
+stayed that way for the rest of the room, at both ends of every link the player had stepped on. The
+flash was doing exactly what it was written to do and nothing was undoing it. Both halves are now
+pinned in [`tests/test_migration.gd`](tests/test_migration.gd), the second through the `draw` signal
+rather than through the pad's own state: `_flash_left` reaching zero was already true on the broken
+build, and what was false is that anybody redrew afterwards.
 
 #### What it changed underneath
 
@@ -2127,6 +2198,12 @@ The enemy count is the other one. Authored, this floor was 13% fuller than the f
 it, which is an escalation nobody designed; two rooms lost a spawn point each. It is still a step up,
 and that is deliberate for the last floor of the campaign, but it is now a step rather than a jump.
 
+The heading is history rather than status: the floor has been played several times since, and every
+weight in `data/spawns/cloud_ops/` is still the measured one. Whether 23.8 enemies a floor is the
+*right* step up from 22.9 is the question at the end of [what playing Cloud Operations had to
+answer](#what-playing-cloud-operations-had-to-answer), and it is one of the ones now waiting on a
+write-up rather than on a run.
+
 ### Floor boss: Orchestrator
 
 Named for the thing that decides where a workload runs. **It cannot be killed by being shot.**
@@ -2204,7 +2281,12 @@ Both run 48 beats against the 32 every track before them, which comes out at 22.
 the two longest loops in the game. Short music has been a known limitation since milestone 6 and the
 only cost of fixing it is writing more bars, so this floor wrote more bars. Seven tracks became nine.
 
-### What playing Cloud Operations will have to answer
+### What playing Cloud Operations had to answer
+
+The floor was written with none of this observed, and the sentence that used to stand here — that
+nobody had played it at all — is no longer true: it has been played through with the rest of the
+game, several times. What has not happened is any of these questions being answered on paper, and
+`data/bosses/orchestrator.tres` has not been touched since, so the list stands as written.
 
 - **Is 1.9 seconds the right telegraph?** It is the player's entire budget for crossing a 416-pixel
   arena to deny a failover. Too short and the fight is unwinnable without the arena's corner pads;
@@ -2226,6 +2308,12 @@ only cost of fixing it is writing more bars, so this floor wrote more bars. Seve
 The first two entries below are not reasoned, which makes them the only tuning in this document
 that is not. They came from beta playthroughs, and both are cases where the thing that was wrong
 had been sitting in plain sight behind a rule that reads as correct.
+
+**This section is behind the playing.** Everything in it came out of the early passes. The game
+has been played through end to end several times since, across all four floors, and none of those
+runs has added an entry here — not because they found nothing, but because nothing was written
+down. Anything below is what playing has taught *and been recorded*; it is not the whole of what
+playing has taught.
 
 ### Diminishing returns, because the player was the only curve
 
@@ -2501,35 +2589,60 @@ new one walks every template in the campaign.
 
 ## Next recommended task
 
-**Play it again.** It has been the first item in this section since the third milestone, and
-[What playing it answered](#what-playing-it-answered) is the argument for why it still is: one
-hour produced one mild sentence — *"I often go through it without encountering many of the new
-enemies"* — and unpacking that sentence found three bugs, including a signature mechanic that
-had never once appeared in a room written for it and the hardest room on every floor being
-unreachable. None of the three was visible in the code, in a test, or on screen. Measuring
-after a report is what caught them; nothing was going to generate the report but playing.
+**Write down what playing it taught.** "Play it again" held this slot from the third milestone
+until now, and it is finally closed — the whole game to date has been played through by hand, end
+to end, several times over, all four floors. What has not happened is the part that made the first
+pass worth anything.
 
-The open questions now are a four-floor run's, and the newest floor has the sharpest of them
-listed under [what playing Cloud Operations will have to answer](#what-playing-cloud-operations-will-have-to-answer). The
+[What playing it answered](#what-playing-it-answered) is the argument. One hour of that pass
+produced one mild sentence — *"I often go through it without encountering many of the new
+enemies"* — and unpacking that sentence found three bugs, including a signature mechanic that had
+never once appeared in a room written for it and the hardest room on every floor being unreachable.
+None of the three was visible in the code, in a test, or on screen. **Measuring after a report is
+what caught them, and the several runs since have produced no report.** A playthrough nobody writes
+up is worth roughly what not playing is worth, which is the whole of why this is the top item
+rather than "build floor 5".
+
+The shape of the task is small and specific: take each floor's "what playing it had to answer"
+list and replace the questions with what actually happened. The lists are unchanged since they
+were written, and `data/` has not moved either, so there is no risk of contradicting a tuning pass
+that already happened — there has not been one.
+
+The questions still standing are a four-floor run's, and the newest floor has the sharpest of them
+listed under [what playing Cloud Operations had to answer](#what-playing-cloud-operations-had-to-answer). The
 rest, oldest first:
 
 - **Did the Data Center fixes land where they matter?** The distribution moved a long way —
   22.9 enemies a floor from 16.9, Load Balancer from absent-on-22%-of-floors to absent on
   none — but the report was that the floor felt *thin*, and a better histogram is not the same
-  as a floor that plays fuller.
-- **Do the thermal zones and the cable ducts read?** Both are new, and the zones have
-  effectively never been played, since until now they were being built in the wrong rooms.
-- **Is four floors the right length?** Nothing has timed a full run end to end, and the run is
-  now a third longer than the last thing anybody played.
+  as a floor that plays fuller. It has been played since the fixes landed, so this one is not
+  waiting on a run; it is waiting on somebody saying whether the floor still feels thin.
+- **Do the thermal zones and the cable ducts read?** The ducts have been played. The zones have
+  been played *as a rule that no longer exists*, and this is the one question on the list that a
+  past run cannot answer. Until the placement bug was fixed they were being built in the wrong
+  rooms; since then they have been played as the three-condition version — heat only while
+  standing inside a zone *and* firing *and* holding still. They now charge for occupancy alone:
+  stand on one and it heats, whatever else you are doing. **Every run so far predates that
+  change**, so the specific thing to watch for is new: whether a room full of grilles reads as
+  ground to route around rather than as ground to avoid entirely. The ramp is sized so that
+  crossing is always affordable and `tests/test_thermal.gd` holds it to that; whether it *feels*
+  affordable mid-fight is what a test cannot answer.
+- **Is four floors the right length?** The run has been played end to end several times, so the
+  answer exists; no timing from any of those runs is recorded here, and spec section 28's "eight
+  to twelve minute run" has still never been checked against a clock.
 - **Does the economy still hold over four shops?** `tests/test_balance.gd` still reasons about
   scrap against `COMBAT_ROOMS_ON_FLOOR_1` — one floor, one shop. A rare costs 32 and a run now
-  passes four shelves; whether that is tension or an obvious surplus is unmeasured either way.
-  This is the piece of the suite most clearly left behind by the content.
+  passes four shelves. Several four-shop runs have happened; whether they came out tense or
+  obviously flush is unrecorded, and the suite is unchanged either way. This is the piece of the
+  suite most clearly left behind by the content, and the only item on this list with real work
+  in it beyond the writing.
 - **Is 6 integrity right when the run is four times longer?**
 - **Is the Orchestrator fair on floor 1?** Every floor can now draw every boss, so a first-room
   player can meet a fight whose answer is positional and whose mechanic they have not been
-  taught. The reasoning says the telegraph carries it. Cascade Failure's inclusion rests on the
-  same argument and has not been played either.
+  taught. The reasoning says the telegraph carries it, and Cascade Failure's inclusion rests on
+  the same argument. With several four-floor runs behind it an early draw of one or the other is
+  likely to have come up already; whether it was fair on arrival is exactly the kind of thing that
+  is obvious while playing and gone by the next morning.
 - Does the CRT filter look like an arcade cabinet or like a dirty screen?
 
 Then move the numbers in `data/`, which is one `.tres` edit each and the whole payoff for
@@ -2556,4 +2669,5 @@ After that, in rough order of value:
    near twenty-three and seventeen seconds; the seven before them are 10.9 to 20.0 and a boss
    fight still laps its track. The method is proven and the only cost is bars.
 5. **Elite modifiers** (spec section 15), which the spec says to add once the base enemies
-   feel good — a judgement that needs playing first.
+   feel good — a judgement that has now been made by somebody and not written down, which is
+   the top item on this page again.

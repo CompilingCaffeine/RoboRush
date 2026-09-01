@@ -18,6 +18,7 @@ vent_interval = 3.0
 vent_seconds = 1.6
 vent_tiles = Vector2i(3, 3)
 aimed_vent_interval = 3.0
+aimed_vent_interval_runaway = 2.0
 scatter_vent_interval = 2.4
 packet_speed = 150.0
 packet_damage = 1.0

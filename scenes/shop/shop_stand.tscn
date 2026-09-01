@@ -22,3 +22,14 @@ offset_bottom = -14.0
 mouse_filter = 2
 horizontal_alignment = 1
 vertical_alignment = 1
+
+[node name="Prompt" type="Label" parent="."]
+unique_name_in_owner = true
+visible = false
+offset_left = -40.0
+offset_top = 9.0
+offset_right = 40.0
+offset_bottom = 21.0
+mouse_filter = 2
+horizontal_alignment = 1
+vertical_alignment = 1

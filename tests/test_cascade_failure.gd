@@ -73,6 +73,15 @@ const TEST_VENT_INTERVAL := 0.6
 ## the ring at both extents rather than catching it mid-inhale.
 const BREATH_SECONDS := 8.0
 
+## A corner the ring cannot reach: the ellipse at full extension spans x 58-358 and y 34-158, and a
+## 3x3 vent centred anywhere on it never covers this point. So a patch that lands here came from
+## the clock that aims, and nothing else in the fight can produce that result on purpose — a
+## scattered patch can cover it, but only from a draw inside a 6x6 box, which is about one in
+## fifteen hundred. Both aimed-vent checks stand the robot here for that reason.
+##
+## Absolute, which is the same thing as inset from the corner: `ARENA` starts at the origin.
+const UNREACHABLE_CORNER := Vector2(20.0, 20.0)
+
 var _config: CascadeFailureConfig
 var _arena: Node2D
 var _boss: CascadeFailure
@@ -106,6 +115,7 @@ func run() -> void:
 	await _test_the_heat_per_second_does_not_rise_with_load()
 	await _test_every_vent_starts_cold()
 	await _test_it_heats_the_ground_the_player_is_standing_on()
+	await _test_each_failure_tightens_the_clock_that_aims()
 	await _test_it_heats_ground_the_ring_never_reaches()
 	await _test_the_floor_stays_walkable_at_every_load()
 	await _test_the_last_node_comes_for_the_player()
@@ -136,10 +146,19 @@ func _test_config_is_a_fight() -> void:
 	# Both aimed and scatter clocks have to be longer than the fill, and that is the tuning that
 	# makes "keep moving" a rhythm rather than a treadmill: the ground the player is standing on has
 	# to be cold some of the time, or moving stops being a decision and becomes the only input.
+	# Asked of the *tightest* end of the aimed ramp rather than of its resting value, because the
+	# tightest end is the one that can break it: the clock steps down one node at a time and the
+	# fight is only as fair as the last step leaves it.
 	check(
-		_config.aimed_vent_interval > _config.vent_seconds,
-		"the ground under the player is cold between aimed vents (%.2fs against a %.2fs fill)"
-			% [_config.aimed_vent_interval, _config.vent_seconds],
+		_config.aimed_vent_interval_runaway > _config.vent_seconds,
+		"the ground under the robot is cold between aimed vents at the end too (%.2fs, %.2fs fill)"
+			% [_config.aimed_vent_interval_runaway, _config.vent_seconds],
+	)
+	# A ramp that goes the other way would be a fight that relaxes as it escalates.
+	check(
+		_config.aimed_vent_interval_runaway <= _config.aimed_vent_interval,
+		"and losing a node never buys the player a slower clock (%.2fs from %.2fs)"
+			% [_config.aimed_vent_interval_runaway, _config.aimed_vent_interval],
 	)
 	check(
 		_config.scatter_vent_interval > _config.vent_seconds,
@@ -434,10 +453,12 @@ func _test_the_breathing_sweeps_the_middle() -> void:
 ## that claim which fails if somebody scales the interval by something other than load.
 ##
 ## It counts *every* vent, not only the ones the nodes drop, and that is what makes it still the
-## right check now that the fight aims and scatters as well. Those two clocks are deliberately flat
-## — see `CascadeFailureConfig.aimed_vent_interval` — so adding them moved the whole line up and
-## left it level. A source that quadrupled alongside the rack would show here as a last phase
-## putting four times the heat down, which is the specific thing this arithmetic exists to forbid.
+## right check now that the fight aims and scatters as well. The scatter is flat and the aimed clock
+## steps down by a second across the whole fight — see `CascadeFailureConfig.aimed_vent_interval` —
+## so adding them moved the whole line up and left it very nearly level, which is why the tolerance
+## below is a quarter rather than a tenth. A source that *quadrupled* alongside the rack would show
+## here as a last phase putting four times the heat down, which is what this arithmetic exists to
+## forbid; one second on one of three clocks is nowhere near it.
 func _test_the_heat_per_second_does_not_rise_with_load() -> void:
 	await _begin()
 
@@ -526,36 +547,61 @@ func _test_every_vent_starts_cold() -> void:
 func _test_it_heats_the_ground_the_player_is_standing_on() -> void:
 	await _begin()
 
-	# A corner the ring cannot reach: the ellipse at full extension spans x 58-358 and y 34-158, and
-	# a 3x3 vent centred anywhere on it never covers this point. So a patch that lands here came
-	# from the clock that aims, and nothing else in the fight can produce this result by accident.
-	var corner := ARENA.position + Vector2(20.0, 20.0)
-	_player.global_position = corner
-	_player.velocity = Vector2.ZERO
-
 	var expected := 6
-	var covered := 0
-	var seen := 0
-	for _frame: int in _frames(_boss.config.aimed_vent_interval * float(expected + 1)):
-		await advance_physics(1)
-		# Held every frame. `move_and_slide` runs on the robot whatever the test wants, and a
-		# player that had drifted a few pixels would turn a centred vent into a near miss.
-		_player.global_position = corner
-		_player.velocity = Vector2.ZERO
-		for zone: ThermalZone in _new_zones():
-			seen += 1
-			if zone.get_rect().has_point(corner):
-				covered += 1
+	var counts := await _count_vents_under_the_robot(
+		UNREACHABLE_CORNER, _boss.config.aimed_vent_interval * float(expected + 1)
+	)
 
-	check(seen > 0, "the fight put heat down while the robot stood still (%d vents)" % seen)
+	check(counts.y > 0, "the fight put heat down while the robot stood still (%d vents)" % counts.y)
 	# A count rather than "at least one", because at least one is a check the scatter clock could
 	# pass on its own. Two thirds of the aimed vents the window is long enough for, which leaves
 	# room for the polling and for one landing across a frame boundary but none for the aiming
 	# having quietly stopped.
 	check(
-		covered >= expected * 2 / 3,
+		counts.x >= expected * 2 / 3,
 		"and the ground the robot was standing on was heated repeatedly (%d of %d vents, over %d)"
-			% [covered, seen, expected * 2 / 3],
+			% [counts.x, counts.y, expected * 2 / 3],
+	)
+
+	await _teardown()
+
+
+## Losing a node is felt in the one clock that is about the player, and that is what this counts:
+## the same robot, in the same corner the ring cannot reach, with the whole rack up and then with
+## half of it gone.
+##
+## Counted rather than read off `get_aimed_vent_interval`, for the reason the vent-rate check above
+## is counted: a getter returning a smaller number proves the getter. What can actually break here
+## is the clock being *reset* from `config.aimed_vent_interval` when it fires — which is the shape
+## this code had before the ramp existed, and which passes every other check in this file.
+##
+## **Two nodes rather than one, and that is not timidity.** With a single node left the fight is a
+## chase: the node walks onto a robot that has stopped and lays its own trail across it, and the
+## corner stops being ground only the aimed clock can reach. Measured there, the covered count
+## quintuples — a number that would still quintuple with the ramp deleted, which makes it no check
+## at all. Two nodes is the furthest point at which the ring is still a ring, so the corner is still
+## the aimed clock's alone, and it is two thirds of the way along the ramp: three seconds to 2.33.
+##
+## The rise asserted is a seventh against an expected quarter. The slack is for the window dividing
+## neither interval exactly and for the scatter's own rare contribution to this corner; what it does
+## not leave room for is the ramp having gone flat.
+func _test_each_failure_tightens_the_clock_that_aims() -> void:
+	await _begin()
+
+	# Long enough that a count is a rate: thirty intervals, so the whole rack is expected to land
+	# about thirty patches here and half a rack about thirty-nine, and one vent either side of a
+	# frame boundary cannot decide the check.
+	var window := _boss.config.aimed_vent_interval * 30.0
+	var whole := await _count_vents_under_the_robot(UNREACHABLE_CORNER, window)
+
+	await _drive_to_nodes(2)
+	var half := await _count_vents_under_the_robot(UNREACHABLE_CORNER, window)
+
+	check(whole.x > 0, "the whole rack aims at a robot that has stopped (%d patches)" % whole.x)
+	check(
+		float(half.x) >= float(whole.x) * 1.15,
+		"and two failures later it aims at it more often (%d against %d in the same window)"
+			% [half.x, whole.x],
 	)
 
 	await _teardown()
@@ -776,6 +822,10 @@ func _new_boss() -> CascadeFailure:
 	var winding := TEST_VENT_INTERVAL / maxf(_config.vent_interval, 0.001)
 	fast.vent_interval = TEST_VENT_INTERVAL
 	fast.aimed_vent_interval = _config.aimed_vent_interval * winding
+	# Both ends of the aimed ramp, by the same ratio, so the wound fight tightens by the fraction
+	# the shipped one does. Winding only the resting end would leave the suite measuring a ramp
+	# that gets *shallower* as the clocks come down, which is the opposite of the thing under test.
+	fast.aimed_vent_interval_runaway = _config.aimed_vent_interval_runaway * winding
 	fast.scatter_vent_interval = _config.scatter_vent_interval * winding
 	fast.vent_seconds = _config.vent_seconds * winding
 	boss.config = fast
@@ -846,6 +896,30 @@ func _count_vents_over(seconds: float) -> int:
 		await advance_physics(1)
 		total += _new_zones().size()
 	return total
+
+
+## Parks the robot at `at` for `seconds` and counts what lands on it: `x` is the vents that covered
+## the point it was standing on, `y` is every vent the fight put down in the window.
+##
+## The pair rather than either half, because both checks that use this need both numbers — the
+## interesting figure is the covered count, and the total is what says a covered count of zero means
+## "it stopped aiming" rather than "it stopped venting".
+##
+## The player is pinned every frame rather than once: `move_and_slide` runs on the robot whatever
+## the test wants, and a player that had drifted a few pixels would turn a centred vent into a near
+## miss.
+func _count_vents_under_the_robot(at: Vector2, seconds: float) -> Vector2i:
+	var _drain := _new_zones()
+	var counts := Vector2i.ZERO
+	for _frame: int in _frames(seconds):
+		await advance_physics(1)
+		_player.global_position = at
+		_player.velocity = Vector2.ZERO
+		for zone: ThermalZone in _new_zones():
+			counts.y += 1
+			if zone.get_rect().has_point(at):
+				counts.x += 1
+	return counts
 
 
 ## Walks the player around the middle of the arena, so the vent check is asked about a robot that
