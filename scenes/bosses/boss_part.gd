@@ -63,6 +63,18 @@ const PLAYER_RADIUS := 5.0
 ## mistake.
 @export var contact_knockback: float = 190.0
 
+## What a hit looks like when the controller is not going to count it.
+##
+## Only the Orchestrator is ever shielded, and it is shielded for most of its fight: damage lands
+## only in the window after it migrates, and shots fired at it the rest of the time are discarded.
+## A body that flashed bright white for those would be telling the player their shots were working
+## in the one fight where that is the mistake — so a shielded hit pings dim steel instead, which
+## reads as a deflection rather than as damage.
+##
+## Pale rather than dark so the ping is still *visible*: the player has to see that they hit it and
+## that it did nothing, which is a different message from having missed.
+const SHIELDED_FLASH := Color(0.72, 0.86, 1.1, 1.0)
+
 @onready var _health: HealthComponent = %Health
 @onready var _sprite: Sprite2D = %Sprite
 @onready var _hurt_flash: HurtFlash = %HurtFlash
@@ -70,11 +82,17 @@ const PLAYER_RADIUS := 5.0
 
 var _contact_cooldown := 0.0
 
+## The flash colour this scene was authored with, captured before anything overwrites it, so
+## `set_shielded(false)` restores what the part actually had rather than a constant guessed at here.
+## `HurtFlash` keeps the target sprite's resting colour the same way and for the same reason.
+var _unshielded_flash := Color.WHITE
+
 
 func _ready() -> void:
 	add_to_group(Teams.GROUP_ENEMY)
 	collision_layer = Teams.body_layer(Teams.Id.ENEMY)
 	collision_mask = Teams.body_mask()
+	_unshielded_flash = _hurt_flash.flash_color
 	_health.configure(RECEIVER_POOL, 0.0)
 	_health.damaged.connect(_on_damaged)
 	HostileRegistry.register(self, Teams.Id.ENEMY, _health)
@@ -114,6 +132,16 @@ func _step_contact_damage(delta: float) -> void:
 		DamageInfo.new(contact_damage, self, direction, contact_knockback)
 	):
 		_contact_cooldown = contact_interval
+
+
+## Whether hits on this body currently count, as far as the *player* can tell.
+##
+## Presentation only: what damage actually does is the controller's business, and this changes
+## nothing about it. It exists so a controller that is discarding damage can say so on the body
+## being shot rather than only on a bar at the top of the screen. See `Orchestrator._on_part_damaged`
+## for the one fight that uses it.
+func set_shielded(shielded: bool) -> void:
+	_hurt_flash.flash_color = SHIELDED_FLASH if shielded else _unshielded_flash
 
 
 func set_tint(tint: Color) -> void:

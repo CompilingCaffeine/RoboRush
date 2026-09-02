@@ -120,15 +120,44 @@ extends Resource
 ## they can stop in; it just makes that moment worth a great deal less.
 @export var aimed_vent_interval_runaway: float = 2.0
 
-## Seconds between the vents it drops at a random point inside the arena. Not divided by load, for
-## the reason above.
+## Seconds between the vents it drops where the player is *going*. Not divided by load, for the
+## reason above.
 ##
-## The half of the change that the aimed vent cannot do on its own. A boss that only ever heated
-## the ring and the player's feet leaves the corners of a 416x192 room permanently cold, and a
-## permanently cold corner on the floor about not standing still is a place to stand: walk out
-## wide, wait for the ring to come to you, shoot it from safety. Scattering breaks that without
-## aiming at anybody — it is weather, and the player reads it the same way they read the rest.
-@export var scatter_vent_interval: float = 2.4
+## The half of the pressure the aimed vent cannot supply on its own. Aimed heat lands where the
+## robot is standing, so the complete answer to it is to walk in a straight line: the patch is
+## always behind you and never in front. This one is the front. Together they are a pincer with
+## exactly one counter — the aimed vent charges for stopping, the lead vent charges for holding a
+## heading, and the only thing that answers both is to turn.
+##
+## This used to scatter, dropping a patch at a uniformly random point in the arena, and the reason
+## given was that a 416x192 room has corners the ellipse cannot reach: heat that only appears on
+## the ring or under the robot leaves those corners permanently cold, and a permanently cold corner
+## on the floor about not standing still is a place to stand. A lead vent closes them better than a
+## die roll did, and closes them for a reason rather than by covering enough of the room to include
+## them. A player walking out wide to a cold corner is a player whose heading is *toward that
+## corner*, and the vent that leads them arrives there before they do.
+##
+## See `CascadeFailure._step_lead_vent` for how far ahead, and `lead_seconds` for why that distance
+## is not simply `vent_seconds`.
+@export var lead_vent_interval: float = 3.0
+
+## How many seconds ahead of the robot the lead vent aims, at the robot's current velocity.
+##
+## **Not `vent_seconds`**, which is the tempting number and the wrong one. Leading by the full fill
+## time puts the patch 256 pixels ahead at the player's 160 px/s — more than five vent widths, and
+## far enough that in a 416-pixel-wide room it clamps into the far wall on most headings. What the
+## player would read is not a boss predicting them but a boss painting the edges of the arena.
+##
+## Six tenths puts it about 96 pixels out, two vent widths ahead of the chassis: near enough to be
+## visibly *about* the robot, far enough that continuing forward walks into it. A player who turns
+## on sight has the whole of `vent_seconds` to be somewhere else, which is the same warning every
+## other patch on this floor gives.
+##
+## A robot standing still has no velocity to lead, so the vent lands exactly where it is standing
+## and the two clocks converge on the same square. That is the correct punishment rather than a
+## degenerate case: standing still is the one habit this floor exists to charge for, and it is the
+## one state in which the fight stops offering a choice of which vent to answer.
+@export var lead_seconds: float = 0.6
 
 @export_group("Load packets")
 

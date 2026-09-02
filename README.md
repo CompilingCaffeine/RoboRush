@@ -637,7 +637,7 @@ scenes/bosses/boss_part.tscn / .gd       + A shootable body that forwards its hi
 scenes/bosses/boss_terminal.tscn / .gd     A synchronization terminal
 scenes/bosses/runtime_error.tscn / .gd     Development's boss
 scenes/bosses/cascade_failure.tscn / .gd   The Data Center's boss
-scenes/bosses/orchestrator.tscn / .gd   + Cloud Operations' boss; migrates, cannot be shot dead
+scenes/bosses/orchestrator.tscn / .gd   + Cloud Operations' boss; migrates, open only after it lands
 scenes/bosses/orchestrator_core.tscn    + Its one body
 scenes/shop/shop_room.tscn / .gd         + A shop's stock, rerolls, and exclusive choices
 scenes/shop/shop_stand.tscn / .gd        + One thing for sale
@@ -699,11 +699,11 @@ tests/test_run.gd                          64 statistics, state, and summary che
 tests/test_shop.gd                         75 price, purchase, and refusal checks
 tests/test_boss.gd                         104 phase, terminal, and defeat checks
 tests/test_runtime_error.gd                97 checks on Development's boss
-tests/test_cascade_failure.gd              101 checks on the Data Center's boss
+tests/test_cascade_failure.gd              108 checks on the Data Center's boss
 tests/test_thermal.gd                      198 checks on what may and may not heat a zone
 tests/test_migration.gd                 + 179 checks on what a pad moves, and what rearms it
-tests/test_orchestrator.gd              + 64 checks on Cloud Operations' boss, most of them
-                                            asserting what the fight refuses to do
+tests/test_orchestrator.gd              + 224 checks on Cloud Operations' boss, including a
+                                            brute-force proof that every migration is answerable
 tests/test_save.gd                         83 settings, save format, and record checks
 tests/test_checkpoint.gd                   198 boundary-checkpoint, resume, refusal, and
                                             file-recovery checks
@@ -1890,16 +1890,28 @@ centre — on the floor about not standing still — would be arguing with the r
 The fiction does the work: this is cooling equipment, and what cooling equipment does is move air.
 
 **Heat comes from three places.** The rack vents where its bodies are. It also **aims** — a patch
-centred on wherever the robot is standing — and it **scatters**, a patch at a random point in the
-arena.
+centred on wherever the robot is standing — and it **leads**, a patch centred on where the robot
+will be in six tenths of a second if it does not turn.
 
 The first of those is what makes the fight's own sentence true, and for a while it was not. "Keep
 moving" was the stated job and heat only ever landed on the ring, so a player who found a patch of
 floor the ellipse did not sweep could stand in it and shoot: the boss about not standing still had a
 place to stand. The aimed vent takes that away everywhere in the room, and takes it away the way
 this floor takes things — by painting the ground and counting down, never by landing a hit that
-could not have been walked out of. The scatter closes the corners a 416x192 room has and the ellipse
-cannot reach; it is weather, aimed at nobody.
+could not have been walked out of.
+
+The lead vent takes away the answer the aimed one leaves open, which is the easier of the two to
+find. Heat centred on the robot is always *behind* a robot that is moving, so "keep moving" was
+satisfied by picking a heading and holding it — a straight line, requiring no reading at all. The
+two clocks are now a pincer with one counter: the aimed patch charges for stopping, the lead patch
+charges for holding a heading, and only a turn answers both.
+
+**This replaced a scatter**, a patch at a uniformly random point in the arena, whose stated job was
+closing the corners a 416x192 room has and the ellipse cannot reach. The lead vent inherits that job
+and does it for a reason rather than by covering enough of the room to eventually include them: a
+player walking out wide to a cold corner has a heading pointed at that corner, so the patch that
+leads them is already there when they arrive. Nothing in the fight is random now, which is the
+property the rest of it already had.
 
 Neither is divided by load, and that is the point. The whole escalation here is the rack
 concentrating what it already had, so two sources that quadrupled alongside it would make the last
@@ -2206,31 +2218,77 @@ write-up rather than on a run.
 
 ### Floor boss: Orchestrator
 
-Named for the thing that decides where a workload runs. **It cannot be killed by being shot.**
+Named for the thing that decides where a workload runs. **It is only open to damage in the moment
+after it lands**, and getting caught in the open when it moves costs a point.
 
-The live instance absorbs a pool of damage and then *fails over*: it names one of three plates, lights
-it, counts down for 1.9 seconds, and moves there with its pool refilled. Left alone that loop runs
-forever, and no amount of damage per second shortens it by a second. What damage buys is not progress
-but **events** — it is how the player forces a failover to happen.
+The fight is a four-beat cycle. It sits **sealed** on a plate and fires, and shots that hit it do
+nothing at all. It **telegraphs** a migration for 1.9 seconds — naming a plate, lighting it, and
+ramping the floor between the plates toward red. It **resolves**: the load moves, the floor
+discharges, and anything standing off a live plate takes a point. Then it lands and is **open** for
+2.2 seconds, holding fire, damageable. That window is the only time in the fight shooting it means
+anything.
 
-The turn is positional. **Stand on the plate it is migrating to and the failover is denied**: the load
-has nowhere to go, the boss loses a generation, and it is stunned and open. Three denials and it is
-done. So the fight is a race with a starting gun the player fires themselves — shoot to force the
-announcement, read which plate, get there first. The boss performs the floor's own verb.
+One turn sits on top of the four. **Stand on the plate it is migrating to and the migration is
+denied** — the load has nowhere to go, so the boss stays where it is and opens for 3.6 seconds
+instead. Any plate keeps you alive; *that* plate is worth running for, and it is always the live
+plate furthest from wherever you were standing when the telegraph began.
 
-Why score it that way at all: the worst legal build does about 9.4 times the damage per second the
-enemies are written for, and every boss before this one is, in the end, a health bar. A build near
-that ceiling deletes them, which is a fine reward for a good run and a poor final exam. Denials make
-this the one boss whose length is set by the player's reading rather than by their inventory — and
-they do it **without** a damage cap or an immunity phase, neither of which reads as anything but the
-game refusing to let you win. A strong build is still strongly rewarded: it fills the pool faster, so
-it gets more failovers, so it gets more chances to deny one. It is given more of the fight. What it
-cannot do is skip the reading.
+The escalation is spent on the arena rather than on the boss. Its damage, its fire rate and the time
+it gives you never change; what changes is how much ground answers a migration. **Six plates**, of
+which the one it is standing on is never shelter, and the live set shrinks from five to three to two
+across the fight. The last phase is a room with two safe squares in it, one of which is the
+destination — shelter or deny, not both.
 
-`tests/test_orchestrator.gd` is unusual among the boss suites in that most of it asserts things the
-fight *refuses* to do — six checks exist so that turning the pool into a health bar fails loudly. It
-would make the boss easier, would read as a simplification in a diff, and would delete the entire
-fight.
+**Its health number is not comparable to the other three bosses' and must not be "corrected" toward
+them.** Runtime Error's 110 and Cascade Failure's 144 are pools you can pour damage into for the
+whole fight; this one is open about a third of the clock, so 68 against continuous fire is nearer
+200 — more than any boss in the game. Measured rather than reasoned about: at the starting weapon's
+4 damage per second the fight is 51.7 seconds and eight windows, and at the 9.4x ceiling the worst
+legal build reaches it is one window and six seconds, which is what every other boss in the game
+also does against that build. Winning the races shortens it honestly, because a denial buys a window
+1.6 times longer with no number anywhere changing.
+
+#### What this replaced, and why
+
+The fight that shipped here **could not be killed by damage at all**. Damage filled a pool, a full
+pool forced a failover, and only a denied failover was progress: three denials and it was done. The
+reasoning was sound — a build near the damage ceiling deletes every other boss in the game, and
+scoring a fight in denials makes it the one whose length is set by reading rather than by inventory.
+It had two faults that between them made it unplayable.
+
+**It was solved by standing still.** The destination was `(current + 1)` around the ring, and a
+denial did not move the boss — so standing on the next plate denied every failover from a standstill,
+and the race the whole design rested on never had to happen once.
+
+**And a player who did not find that had nothing to read.** Damage moved nothing visible, nothing
+happened unless they shot, and no clock ran, so the fight could stall indefinitely. Total damage to
+kill was 102 against Runtime Error's 110 and Cascade Failure's 144, and none of it was progress.
+
+The plates, the migration and the denial all survive. What they are worth has changed: the bar is an
+honest pool that only falls, damage kills, and the positional demand moved from *the* plate to *a*
+plate — which is a rule a player can state after one migration, and a rule that has teeth, because
+missing it costs integrity.
+
+The cost of gating damage is that shots at a sealed boss are wasted, so the fight says so in four
+places at once: the body sits cold and dim and goes bright amber the instant it lands, the bar does
+not move, a hit while sealed pings dim steel rather than flashing white
+([`BossPart.set_shielded`](scenes/bosses/boss_part.gd)), and the opening banner states the rule in
+words before the first migration.
+
+#### The check this fight cannot ship without
+
+Because the discharge costs a point and the live set shrinks to two plates, the fight's fairness is a
+*geometry* claim: the furthest any point in the arena can sit from the nearest live plate must be
+crossable inside the telegraph. [`tests/test_orchestrator.gd`](tests/test_orchestrator.gd)
+brute-forces it — every plate the boss could be on, every rotation of the live set, every phase,
+sampled on a two-pixel grid over the whole room — and recomputes it from `plate_count`,
+`plate_radius`, `plate_size` and `live_plates_by_phase` rather than from a remembered number. The
+worst case in the last phase is 225 pixels, 1.41 seconds at the robot's walking speed against a
+1.9-second telegraph, and the dash is deliberately left out of that budget.
+
+Doubling the plates from three to six is what makes the shrink possible at all. Three plates cannot
+lose one without the survivors sometimes sitting on the same side of a 416x192 room, which is a
+migration nobody in the far corner can answer.
 
 It is **not called Failover**, and that is not a stylistic choice: the game already ships an item
 with that id (a death save). Two things sharing one would collide in a run's records and put the same
@@ -2637,12 +2695,22 @@ rest, oldest first:
   suite most clearly left behind by the content, and the only item on this list with real work
   in it beyond the writing.
 - **Is 6 integrity right when the run is four times longer?**
-- **Is the Orchestrator fair on floor 1?** Every floor can now draw every boss, so a first-room
-  player can meet a fight whose answer is positional and whose mechanic they have not been
-  taught. The reasoning says the telegraph carries it, and Cascade Failure's inclusion rests on
-  the same argument. With several four-floor runs behind it an early draw of one or the other is
-  likely to have come up already; whether it was fair on arrival is exactly the kind of thing that
-  is obvious while playing and gone by the next morning.
+- **Is the Orchestrator fair on floor 1, now that missing a migration costs a point?** Every
+  floor can draw every boss, so a first-room player can meet a fight whose answer is positional
+  and whose mechanic they have not been taught — and unlike before, failing to answer it is
+  charged for. The reasoning says the telegraph carries it and the geometry check says the run
+  is always makeable, but "makeable" is measured against a robot walking in a straight line and
+  not against one that has never seen a plate before. Cascade Failure's inclusion rests on the
+  same argument and has not been played either.
+- **Is 68 the right pool for the Orchestrator?** The window arithmetic is measured — 51.7
+  seconds and eight windows at the starting weapon's 4 damage per second, six seconds and one
+  window at the damage ceiling — but the low end is a player with no offensive items at all,
+  which is the case least likely to happen and the one most likely to feel long. This is the
+  first number to move if it drags.
+- **Does the lead vent read as the boss predicting you, or as heat landing at random in front
+  of you?** Cascade Failure's scatter is gone and the patch that replaced it lands 96 pixels
+  along the robot's own heading. The intent is a pincer with the aimed vent whose only counter
+  is a turn; whether a player feels that as a rule or as noise is the thing to watch for.
 - Does the CRT filter look like an arcade cabinet or like a dirty screen?
 
 Then move the numbers in `data/`, which is one `.tres` edit each and the whole payoff for
