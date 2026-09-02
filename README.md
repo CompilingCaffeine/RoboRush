@@ -690,18 +690,18 @@ tests/test_campaign.gd                     74 campaign, lookup, seed, and inject
 tests/test_determinism.gd                  155 seed-derivation, stream, manifest, and record checks
 tests/test_economy.gd                      57 reward, boss-choice, stacking, and 10k-run checks
 tests/test_post_boss.gd                    36 checks that a dead boss's hazards still resolve
-tests/test_floor.gd                        688 generation, invariant, template, and floor-advance
+tests/test_floor.gd                        690 generation, invariant, template, and floor-advance
                                             checks, including the flood fill that walks every
                                             template in the campaign
 tests/test_items.gd                        548 item, stack, inventory, and synergy checks
 tests/test_enemies.gd                      200 checks that each enemy poses its problem
 tests/test_run.gd                          64 statistics, state, and summary checks
-tests/test_shop.gd                         75 price, purchase, and refusal checks
+tests/test_shop.gd                         90 price, purchase, and refusal checks
 tests/test_boss.gd                         104 phase, terminal, and defeat checks
 tests/test_runtime_error.gd                97 checks on Development's boss
 tests/test_cascade_failure.gd              108 checks on the Data Center's boss
 tests/test_thermal.gd                      198 checks on what may and may not heat a zone
-tests/test_migration.gd                 + 179 checks on what a pad moves, and what rearms it
+tests/test_migration.gd                 + 184 checks on what a pad moves, and what rearms it
 tests/test_orchestrator.gd              + 224 checks on Cloud Operations' boss, including a
                                             brute-force proof that every migration is answerable
 tests/test_save.gd                         83 settings, save format, and record checks
