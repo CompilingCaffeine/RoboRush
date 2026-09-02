@@ -713,9 +713,12 @@ tests/test_soak.gd                         100 complete six-floor campaigns, che
                                             anything left behind
 tests/greybox_campaign.gd                  A campaign of any length, for suites needing more
                                             floors than the game has
+tests/floor_economy.gd                  +   What a floor pays out in scrap, shared by the two
+                                            suites that ask about money
 tests/test_audio.gd                        110 library, loop, crossfade, and watchdog checks
 tests/test_gamepad.gd                      96 checks driven by a synthesized controller
-tests/test_balance.gd                      165 checks on what the tuning numbers mean
+tests/test_balance.gd                      191 checks on what the tuning numbers mean, the
+                                            economy among them measured across the campaign
 
 tools/release.sh                        + Builds every target from a tag, hashed and
                                             manifested
@@ -835,6 +838,60 @@ Executed on this machine, not assumed.
   `RICOCHET DRIVER 12`, `REPAIR 6`, `REROLL 4`, amber because affordable), the boss arena
   mid-phase-two (two versions, four corner terminals, sealed door, health bar at ~62%), and
   the run summary. Looking at those frames is how the placement bug below was found.
+
+### Four shops, one purse
+
+The balance suite's economy checks were written when the game was one floor long, and they were
+still one floor long four floors later. `COMBAT_ROOMS_ON_FLOOR_1` and a hand-typed 3.5 enemies a
+room stood in for the campaign, `floor_1_help_desk.tres` stood in for every floor, and the phrase
+"a whole run's scrap" meant the Help Desk's.
+
+That is not merely a narrower claim than it should have been — it had become a false one, silently,
+while the test went on passing. The assertion spec section 17 asks for is that a run's income does
+not buy one of everything on the price table, 132 scrap. One floor earns about 41 and the check
+passed with room to spare. **Four floors earn about 170, so the sentence the test exists to defend
+stopped being true somewhere around floor 3**, and nothing noticed, because the test's idea of "a
+run" had not moved since milestone 5. A check whose subject drifts out from under it is worse than
+no check: it reports on a game that is no longer the one being shipped.
+
+What the economy actually is, computed from the shipped resources rather than typed in:
+
+| floor | combat rooms | enemies/room | at the shop | whole floor |
+|---|---|---|---|---|
+| Help Desk | 6 | 3.75 | 17.3 | 41.5 |
+| Development | 6 | 3.75 | 17.3 | 41.5 |
+| Data Center | 6 | 4.00 | 18.0 | 43.0 |
+| Cloud Operations | 6 | 4.14 | 18.4 | 43.9 |
+
+Three claims replace the single-floor one, and each is a question only four shops can ask:
+
+- **Every shelf is worth walking into**, modelled against the player who empties their purse at
+  every shop — so what they bring to one is exactly what the game paid them since the last. That
+  is 17.3 scrap at the first shop and about 42 at each of the three after it, against 12 for the
+  cheapest item and 10 for the reroll-and-repair a dead shelf is escaped with. **The first shop is
+  the tightest in the campaign by a factor of two and a half**, which is the opposite of the
+  intuition that late shops are where a long run gets poor.
+- **A whole run does not clear every shelf it passes.** Eight stands, drawn from a pool averaging
+  23.3 scrap an item, come to 187 against a run's 170. It holds — *by nine percent*. That margin
+  is the number to watch: a fifth floor adds roughly 44 of income against 47 of stock, so the
+  claim survives lengthening the campaign, but almost anything that raises drop rates breaks it.
+- **A rare stays a decision at every depth.** 32 scrap against a floor's 41.5 to 43.9, so one
+  floor buys 1.3 rares. Both failure directions are quiet: below 1x the dearest rarity is
+  decoration nobody can afford, above 3x the shelf is a vending machine.
+
+The model lives in `tests/floor_economy.gd` rather than in the suite, because the shop suite was
+already computing the same figure from the same fields — and moving it corrected that copy by one
+scrap. `LootSpawner.spawn_treasure` drops the *top* of the clear range plus two, deterministically,
+and the shop suite had been modelling it as the middle plus two. A typical Help Desk pays 39, not
+the 38 that had been written down.
+
+Two honest limits. The enemies-per-room figure is a flat average across a floor's combat templates,
+which runs slightly high — 22.5 / 22.5 / 24.0 / 24.9 against the 21.9 / 21.9 / 22.8 / 23.8 measured
+over four hundred generated floors, because `_capped_by_distance` draws the easy and emptier rooms
+more often. That error is in the strict direction for the claim that matters. And none of it models
+a player: Scrap Magnet and Compound Interest both multiply the whole table, and every figure above
+is the build holding neither. **Whether four shops feel tense or flush is still unanswered**, and
+still not a thing a suite can answer.
 
 ### Honest limits of that verification
 
@@ -2688,12 +2745,11 @@ rest, oldest first:
 - **Is four floors the right length?** The run has been played end to end several times, so the
   answer exists; no timing from any of those runs is recorded here, and spec section 28's "eight
   to twelve minute run" has still never been checked against a clock.
-- **Does the economy still hold over four shops?** `tests/test_balance.gd` still reasons about
-  scrap against `COMBAT_ROOMS_ON_FLOOR_1` — one floor, one shop. A rare costs 32 and a run now
-  passes four shelves. Several four-shop runs have happened; whether they came out tense or
-  obviously flush is unrecorded, and the suite is unchanged either way. This is the piece of the
-  suite most clearly left behind by the content, and the only item on this list with real work
-  in it beyond the writing.
+- **Does the economy still hold over four shops?** The arithmetic half of this is now done and
+  the answer is *yes, by nine percent* — see [Four shops, one
+  purse](#four-shops-one-purse). What is left is the half a suite cannot reach: several
+  four-shop runs have happened, and whether they came out tense or obviously flush is still
+  unrecorded.
 - **Is 6 integrity right when the run is four times longer?**
 - **Is the Orchestrator fair on floor 1, now that missing a migration costs a point?** Every
   floor can draw every boss, so a first-room player can meet a fight whose answer is positional
@@ -2715,7 +2771,8 @@ rest, oldest first:
 
 Then move the numbers in `data/`, which is one `.tres` edit each and the whole payoff for
 putting tuning in resources — and update `tests/test_balance.gd` to match what playing
-taught, rather than deleting it.
+taught, rather than deleting it. Its economy checks are campaign-shaped now rather than
+floor-1-shaped, so a shop number that moves is one edit and a re-run.
 
 After that, in rough order of value:
 

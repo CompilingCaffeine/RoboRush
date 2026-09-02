@@ -472,7 +472,7 @@ func _test_the_shop_signs_itself() -> void:
 ## economy having moved.
 ##
 ## The known tail, stated here so nobody rediscovers it as a bug: the cheapest shelf the pool can
-## produce is two common items, which comes to 34 against a typical floor's 38. Roughly 4% of
+## produce is two common items, which comes to 34 against a typical floor's 39. Roughly 4% of
 ## possible shelves are affordable that way. Whether that should be impossible rather than lucky is a
 ## price-table decision (`item_prices[COMMON]` at 16 rather than 12 would close it); it is not
 ## something this suite should decide by quietly averaging it away.
@@ -510,24 +510,21 @@ func _test_a_floor_cannot_afford_the_whole_shop() -> void:
 	)
 
 
-## The scrap an average floor produces: every combat room clearing for the middle of its
-## range, and every enemy dropping the middle of its.
+## The scrap an average floor produces by the time the player could have reached this shop: every
+## combat room clearing for the middle of its range, every enemy dropping the middle of its, and
+## the treasure room's fixed handful.
+##
+## The boss's clear reward is the one thing left out, and it is left out because of *when* rather
+## than how much — the shop is a dead end off the room graph and the boss arena is behind a gate,
+## so a floor's last clear is money the player cannot have spent here.
+##
+## `FloorEconomy` owns the arithmetic. It used to live inline, and the balance suite grew a second
+## copy of it when the economy question became a four-shop one; two suites computing one figure
+## from the same fields is how a drop-rate change ends up half-applied. Moving it also corrected
+## the treasure term by one: `LootSpawner.spawn_treasure` drops the *top* of the clear range plus
+## two rather than the middle of it, so a typical Help Desk pays 39 and not the 38 named below.
 func _typical_floor_scrap() -> int:
-	var combat_rooms := _floor_config.room_count - 4
-	var enemies_per_room := 0.0
-	var templates := _floor_config.templates_for(RoomTemplate.Type.COMBAT)
-	for template: RoomTemplate in templates:
-		enemies_per_room += float(template.enemy_spawns.size())
-	if not templates.is_empty():
-		enemies_per_room /= float(templates.size())
-
-	var clear_average := (_floor_config.clear_scrap_range.x + _floor_config.clear_scrap_range.y) * 0.5
-	var enemy_average := (_floor_config.enemy_scrap_range.x + _floor_config.enemy_scrap_range.y) * 0.5
-
-	var from_clears := float(combat_rooms) * clear_average
-	var from_enemies := float(combat_rooms) * enemies_per_room * enemy_average
-	var from_treasure := clear_average + 2.0
-	return int(from_clears + from_enemies + from_treasure)
+	return int(FloorEconomy.before_the_boss(_floor_config))
 
 
 ## Shops live under a room that is itself offset onto the floor grid, so a stand positioned
