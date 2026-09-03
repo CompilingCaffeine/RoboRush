@@ -55,6 +55,11 @@ func build(count: int, mutate := Callable()) -> RunDefinition:
 		var config := source.duplicate() as FloorConfig
 		config.id = StringName("greybox_%d" % (index + 1))
 		config.floor_number = index + 1
+		# Synthetic tiers keep lifecycle probes valid after the real boss draw became strict.
+		# The scene is reused intentionally here; no synthetic encounter enters shipped data.
+		var encounter := source.boss_pool[0].duplicate() as BossEncounter
+		encounter.id = StringName("greybox_boss_%d" % (index + 1))
+		config.boss_pool = [encounter]
 		config.start_templates = _reaching_floor(source.start_templates, count)
 		config.combat_templates = _reaching_floor(source.combat_templates, count)
 		config.treasure_templates = _reaching_floor(source.treasure_templates, count)

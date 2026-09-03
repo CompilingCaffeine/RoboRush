@@ -62,16 +62,8 @@ func _test_the_shipped_campaign_is_playable() -> void:
 
 	var report := CampaignValidator.validate(campaign)
 	check(report.is_valid(), "the shipped campaign has no errors:\n%s" % report.describe())
-	check(
-		report.warnings.size() == 1,
-		"and exactly one warning, that it is %d floors into its declared %d:\n%s" % [
-			campaign.size(), campaign.target_floor_count, report.describe(),
-		],
-	)
-	check(
-		_mentions(report.warnings, "floors 5-6 are missing"),
-		"which names the floors still to be written",
-	)
+	check(report.warnings.is_empty(), "and has no provisional-content warnings:\n%s" % report.describe())
+	check(campaign.require_complete, "the completed campaign refuses missing finale content")
 
 	check(campaign.id == &"main_campaign", "the campaign has a stable id")
 	check(campaign.content_version >= 1, "and a content version to record a seed against")

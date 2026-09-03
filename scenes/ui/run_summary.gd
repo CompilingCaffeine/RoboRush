@@ -48,6 +48,8 @@ const FOCUS_PADDING := " "
 @onready var _grid: GridContainer = %Grid
 @onready var _hint: Label = %Hint
 @onready var _buttons: HBoxContainer = %Buttons
+@onready var _build_title: Label = %BuildTitle
+@onready var _build_grid: GridContainer = %BuildGrid
 
 ## True while the player is holding the statistics key during play. Kept apart from the game
 ## state so releasing the key cannot dismiss a game over screen.
@@ -125,13 +127,14 @@ func _refresh() -> void:
 			_set_title("SYSTEM FAILURE", UIPalette.DANGER)
 			_hint.text = "R RESTART"
 		GameManager.State.VICTORY:
-			_set_title("FLOOR CLEARED", UIPalette.ACCENT)
+			_set_title("SYSTEM RESTORED", UIPalette.ACCENT)
 			_hint.text = "R RUN AGAIN"
 		_:
 			_set_title("DIAGNOSTICS", UIPalette.WARN)
 			_hint.text = "RELEASE TAB TO CLOSE"
 
 	_build_rows(RunManager.stats.describe())
+	_build_inventory()
 
 	if over and not _announced:
 		_announced = true
@@ -159,6 +162,10 @@ func _build_rows(rows: Array) -> void:
 	var any_record := false
 
 	for row: Array in rows:
+		# RunStats retains the complete text for reports; an unbroken list of every item
+		# cannot fit the game viewport. The adjacent grid represents that build instead.
+		if row[0] == "BUILD":
+			continue
 		var is_record: bool = GameManager.is_run_over() and (row[0] as String) in records
 		any_record = any_record or is_record
 
@@ -174,6 +181,36 @@ func _build_rows(rows: Array) -> void:
 	if any_record:
 		_grid.add_child(UIPalette.make_label("", UIPalette.TEXT_FAINT, FONT_SIZE))
 		_grid.add_child(UIPalette.make_label("* PERSONAL BEST", UIPalette.ACCENT, FONT_SIZE))
+
+
+func _build_inventory() -> void:
+	for child: Node in _build_grid.get_children():
+		_build_grid.remove_child(child)
+		child.queue_free()
+	var player := get_tree().get_first_node_in_group(Teams.GROUP_PLAYER) as Player
+	var inventory := player.get_item_inventory() if player != null else null
+	_build_title.text = "BUILD  //  %d ITEMS" % (inventory.size() if inventory != null else 0)
+	UIPalette.style(_build_title, UIPalette.WARN, FONT_SIZE)
+	if inventory == null:
+		return
+	var seen: Dictionary[StringName, bool] = {}
+	for item: ItemConfig in inventory.get_items():
+		if seen.has(item.id):
+			continue
+		seen[item.id] = true
+		var count := inventory.count_of(item.id)
+		var cell := HBoxContainer.new()
+		cell.custom_minimum_size = Vector2(20, 10)
+		cell.add_theme_constant_override("separation", 1)
+		cell.tooltip_text = item.display_name + (" x%d" % count if count > 1 else "")
+		var icon := TextureRect.new()
+		icon.texture = item.icon
+		icon.custom_minimum_size = Vector2(8, 8)
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cell.add_child(icon)
+		if count > 1:
+			cell.add_child(UIPalette.make_label(str(count), UIPalette.TEXT, FONT_SIZE))
+		_build_grid.add_child(cell)
 
 
 func _on_retry_pressed() -> void:

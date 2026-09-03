@@ -685,7 +685,8 @@ func _test_every_floor_can_draw_it() -> void:
 		return
 
 	var listing := 0
-	for index: int in campaign.size():
+	# The first act shuffles four bosses; floor 5 is the Executive Override rematch.
+	for index: int in mini(campaign.size(), 4):
 		var config := campaign.load_floor(index)
 		if config == null:
 			continue
@@ -696,7 +697,7 @@ func _test_every_floor_can_draw_it() -> void:
 		if found:
 			listing += 1
 		check(found, "floor %d can draw the Orchestrator" % (index + 1))
-	check(listing == campaign.size(), "every floor can (%d of %d)" % [listing, campaign.size()])
+	check(listing == 4, "all four first-act floors can (%d of 4)" % listing)
 
 
 # --- Geometry, reimplemented ---------------------------------------------------

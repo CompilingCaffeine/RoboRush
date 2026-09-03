@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="1_template"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/load_balancer.tscn" id="enemy_0"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/firewall_node.tscn" id="enemy_1"]
+[ext_resource type="Script" path="res://scripts/resources/migration_link.gd" id="link"]
+
+[sub_resource type="Resource" id="link_0"]
+script = ExtResource("link")
+a = Rect2i(6, 5, 2, 2)
+b = Rect2i(14, 8, 2, 2)
+
+[resource]
+script = ExtResource("1_template")
+id = &"exec_delegation"
+type = 1
+; A shielded group across a duct, with a migration route that lands on cold ground.
+obstacles = Array[Rect2i]([])
+enemy_spawns = Array[Vector2i]([Vector2i(16, 5), Vector2i(19, 3), Vector2i(20, 8), Vector2i(5, 3), Vector2i(5, 9)])
+forced_enemies = Array[PackedScene]([ExtResource("enemy_0"), ExtResource("enemy_1")])
+ducts = Array[Rect2i]([Rect2i(10, 2, 1, 8)])
+pad_links = Array[MigrationLink]([SubResource("link_0")])
+reward_spawn = Vector2i(13, 6)
+difficulty = 2
+floor_tags = Array[StringName]([&"executive_systems"])
+min_floor = 5
+max_floor = 5

@@ -565,6 +565,67 @@ def cloud_boss_track(noise: random.Random) -> list[float]:
     ], 48, beat)
 
 
+def executive_track(noise: random.Random, boss: bool = False) -> list[float]:
+    """Sixteen bars of a clipped command motif, varied through four harmonies.
+
+    The high voice answers the bass in the second half. Sixty-four beats gives a
+    mature encounter a longer phrase before repeating (30s explore / 24s boss).
+    """
+    beat = 60.0 / (160.0 if boss else 128.0)
+    lead, bass, arp = [], [], []
+    harmonies = [("D", "F", "A"), ("Bb", "D", "F"), ("G", "Bb", "D"), ("A", "C#", "E")]
+    for bar in range(16):
+        root, third, fifth = harmonies[(bar // 2) % 4]
+        octave = "5" if bar >= 8 else "4"
+        lead += [(root + octave, .5), (third + octave, .5), (fifth + octave, 1),
+                 (".", .5), (third + octave, .5), (root + octave, 1)]
+        bass += [(root + "2", 1), (".", .5), (root + "2", .5), (fifth + "2", 1), (root + "2", 1)]
+        arp += [(root + "5", .5), (fifth + "5", .5)] * 4
+    return mix([
+        render_melodic(lead, beat, lead_voice),
+        render_melodic(bass, beat, bass_voice),
+        render_melodic(arp, beat, arp_voice),
+        render_drums(("k.s.h.s.k.s.h.hh" if boss else "k...h.s.k...h.s.") * 16, beat, noise),
+    ], 64, beat)
+
+
+def executive_boss_track(noise: random.Random) -> list[float]:
+    return executive_track(noise, boss=True)
+
+
+def core_track(noise: random.Random, boss: bool = False) -> list[float]:
+    """The campaign's six-floor motif compressed into one long, unresolved machine pulse.
+
+    Explore states the six-note cell in ascending registers. The boss reverses it and doubles
+    the percussion, so the finale feels like the run being evaluated rather than a seventh mood.
+    """
+    beat = 60.0 / (172.0 if boss else 136.0)
+    cell = ["A", "C", "D", "E", "G", "B"]
+    if boss:
+        cell = list(reversed(cell))
+    lead, bass, arp = [], [], []
+    roots = ["A", "F", "D", "E"]
+    for bar in range(16):
+        root = roots[(bar // 4) % len(roots)]
+        for step, note in enumerate(cell):
+            octave = "5" if (bar + step) % 4 else "6"
+            lead.append((note + octave, 0.5))
+        lead.append((root + "5", 1.0))
+        bass += [(root + "2", 1.0), (".", 0.5), (root + "3", 0.5), ("E2", 1.0), (root + "2", 1.0)]
+        arp += [(root + "5", 0.25), ("E5", 0.25)] * 8
+    drums = ("kshhkshhkshhkshh" if boss else "k...h.s.k...h.s.") * 16
+    return mix([
+        render_melodic(lead, beat, lead_voice),
+        render_melodic(bass, beat, bass_voice),
+        render_melodic(arp, beat, arp_voice),
+        render_drums(drums, beat, noise),
+    ], 64, beat)
+
+
+def core_boss_track(noise: random.Random) -> list[float]:
+    return core_track(noise, boss=True)
+
+
 TRACKS = {
     "audio/music/menu.wav": menu_track,
     "audio/music/explore.wav": explore_track,
@@ -575,6 +636,10 @@ TRACKS = {
     "audio/music/data_boss.wav": data_boss_track,
     "audio/music/cloud_explore.wav": cloud_explore_track,
     "audio/music/cloud_boss.wav": cloud_boss_track,
+    "audio/music/exec_explore.wav": executive_track,
+    "audio/music/exec_boss.wav": executive_boss_track,
+    "audio/music/core_explore.wav": core_track,
+    "audio/music/core_boss.wav": core_boss_track,
 }
 
 

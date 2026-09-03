@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="BossEncounter" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/boss_encounter.gd" id="1_encounter"]
+[ext_resource type="PackedScene" path="res://scenes/bosses/executive_override.tscn" id="2_scene"]
+
+[resource]
+script = ExtResource("1_encounter")
+id = &"executive_override"
+scene = ExtResource("2_scene")
+display_name = "EXECUTIVE OVERRIDE"
+defeat_banner = "AUTHORITY REVOKED"
+phase_banners = Array[String]([])

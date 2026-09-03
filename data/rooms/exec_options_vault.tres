@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="1_template"]
+[ext_resource type="Script" path="res://scripts/resources/migration_link.gd" id="link"]
+
+[sub_resource type="Resource" id="link_0"]
+script = ExtResource("link")
+a = Rect2i(3, 5, 2, 2)
+b = Rect2i(13, 5, 2, 2)
+
+[resource]
+script = ExtResource("1_template")
+id = &"exec_options_vault"
+type = 3
+; A familiar migration vault. Taking a reward does not demand another fight.
+obstacles = Array[Rect2i]([Rect2i(11, 3, 5, 1), Rect2i(11, 8, 5, 1), Rect2i(11, 4, 1, 4), Rect2i(15, 4, 1, 4)])
+enemy_spawns = Array[Vector2i]([])
+pad_links = Array[MigrationLink]([SubResource("link_0")])
+reward_spawn = Vector2i(12, 4)
+difficulty = 0
+floor_tags = Array[StringName]([&"executive_systems"])
+min_floor = 5
+max_floor = 5

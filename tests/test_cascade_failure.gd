@@ -228,7 +228,8 @@ func _test_every_floor_can_draw_it() -> void:
 	if not require(campaign, "the campaign loads"):
 		return
 
-	for index: int in campaign.size():
+	# The first act shuffles four bosses; Executive Systems has an authored advanced encounter.
+	for index: int in mini(campaign.size(), 4):
 		var config := campaign.load_floor(index)
 		if config == null:
 			continue

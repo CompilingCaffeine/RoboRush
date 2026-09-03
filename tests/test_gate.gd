@@ -25,9 +25,9 @@ extends TestCase
 ## All five are checked here, against the **shipped campaign** rather than against a greybox one.
 ##
 ## That is the difference between this suite and the parts of `tests/test_floor.gd` it overlaps
-## with. Those checks use a synthetic six-floor campaign precisely so they can produce five
-## boundaries before five floors exist; this one is the same questions asked of the content the
-## player will actually be handed, and it can only be asked now that a third real floor exists.
+## with. Those checks use a synthetic campaign so malformed destinations and lifecycle faults can
+## be injected without touching shipped data; this one asks the same questions of the content the
+## player will actually be handed.
 ##
 ## The third criterion is the one that needed something building for it. "Every declared field" is
 ## not a property a test can discover — somebody has to have declared them — so `RunManager` now
@@ -60,7 +60,7 @@ const SEED_STRIDE := 37
 ## but something has to notice that the number changed at all, or a floor deleted by accident would
 ## make every loop below shorter and every check in them still pass. This is the tripwire; the loops
 ## are the coverage.
-const FLOORS_AUTHORED := 4
+const FLOORS_AUTHORED := 6
 
 var _campaign: RunDefinition
 
@@ -95,7 +95,10 @@ func _test_the_campaign_is_every_authored_floor() -> void:
 	var report := CampaignValidator.validate(_campaign)
 	check(report.is_valid(), "and passes validation:\n%s" % report.describe())
 
-	var expected: Array[StringName] = [&"help_desk", &"development", &"data_center"]
+	var expected: Array[StringName] = [
+		&"help_desk", &"development", &"data_center", &"cloud_ops", &"executive_systems",
+		&"core_intelligence",
+	]
 	for index: int in mini(expected.size(), _campaign.size()):
 		var config := _campaign.load_floor(index)
 		if not require(config, "floor %d's content loads" % (index + 1)):

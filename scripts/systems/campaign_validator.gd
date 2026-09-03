@@ -166,6 +166,10 @@ static func _validate_length(report: Report, campaign: RunDefinition) -> void:
 	var message := "the campaign lists %d of its %d floors; floors %d-%d are missing." % [
 		declared, target, declared + 1, target,
 	]
+	if target - declared == 1:
+		message = "the campaign lists %d of its %d floors; floor %d is missing." % [
+			declared, target, target,
+		]
 	if campaign.require_complete:
 		report.error(message)
 	else:

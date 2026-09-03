@@ -65,6 +65,7 @@ const BOSS_BAR_BACK := Color("2a1a1e")
 
 ## Gap between item icons in the bar, in pixels.
 const ITEM_SEPARATION := 2
+const VISIBLE_ITEM_TYPES := 12
 
 ## Integrity at or below this pulses, as the low-health warning from spec section 22.
 const LOW_INTEGRITY_THRESHOLD := 1.0
@@ -232,13 +233,13 @@ func _on_run_state_changed() -> void:
 	_refresh_top_label()
 
 
-## Floor name, scrap, and rooms cleared on one line in the bottom-right of the HUD strip.
+## Floor name above scrap and rooms cleared, in the bottom-right of the HUD strip.
 ##
 ## It began at the top-left, over the room's wall tiles, and was unreadable against them —
 ## spec section 21 puts legibility above the aesthetic. The strip below the room is the only
 ## screen space that is not playable floor, so all persistent readouts live there.
 func _refresh_top_label() -> void:
-	_top_label.text = "%s  //  SCRAP %d  //  ROOMS %d" % [
+	_top_label.text = "%s\nSCRAP %d  //  ROOMS %d" % [
 		RunManager.floor_name.to_upper(), RunManager.scrap, RunManager.rooms_cleared,
 	]
 
@@ -339,28 +340,13 @@ func _on_boss_defeated(_boss: Node) -> void:
 func _on_item_collected(item: ItemConfig) -> void:
 	_show_banner(item.display_name.to_upper(), BANNER_ITEM)
 	_rebuild_capacity_pips()
-	_add_item_icon(item)
+	_rebuild_item_bar()
 
 
-## Items accumulate left to right in the order they were found, which is the order the
-## player remembers them in. No icon for an item without one, rather than a blank slot that
-## reads as a bug.
-##
-## The tooltip names the icon and stops there, for the same reason the pickup banner does. A
-## description here would put the answer one hover away and make the discovery optional, which for
-## anyone playing with a mouse on the screen is no discovery at all.
-## The whole bar, from what the robot is actually carrying.
-##
-## The bar is otherwise built one pickup at a time, from `EventBus.item_collected` — which is the
-## right way to build it and the reason a resumed run showed nothing. `ItemInventory.restore`
-## deliberately announces nothing (a resumed run has already collected these items, and collecting
-## them again would repair the robot and file every item twice), so a HUD listening only for pickups
-## has no way to learn about a build that was put back rather than found. The items went on working;
-## the row that says which ones you have was empty for the rest of the run.
-##
-## Rebuilt rather than appended to, for the reason `_build_pips` empties its container first: this
-## is called at bind time and has to be able to run against a bar that already has icons in it, and
-## a bar that doubled its contents would read as the run having found each item twice.
+## Rebuilt from the inventory on binding and pickup, so resumed runs and stacked chips agree.
+## Twelve distinct types fit beside the floor readout at 480x270; older types are counted by
+## the overflow marker and remain visible in the summary's complete inventory grid.
+## Tooltips name items and stack counts, preserving the game's discovery-based item effects.
 func _rebuild_item_bar() -> void:
 	for existing: Node in _item_bar.get_children():
 		# Removed as well as freed, exactly as `_build_pips` does: `queue_free` alone leaves the
@@ -370,8 +356,20 @@ func _rebuild_item_bar() -> void:
 		existing.queue_free()
 	if _player == null:
 		return
+	var items: Array[ItemConfig] = []
+	var seen: Dictionary[StringName, bool] = {}
 	for item: ItemConfig in _player.get_item_inventory().get_items():
+		if item.icon != null and not seen.has(item.id):
+			seen[item.id] = true
+			items.append(item)
+	# Keep the newest types visible. The full build and stack counts are on the Tab summary.
+	var hidden := maxi(items.size() - VISIBLE_ITEM_TYPES, 0)
+	for item: ItemConfig in items.slice(hidden):
 		_add_item_icon(item)
+	if hidden > 0:
+		var overflow := UIPalette.make_label("+%d" % hidden, LABEL_COLOR, FONT_SIZE)
+		overflow.tooltip_text = "Hold Tab / L1 for the full build"
+		_item_bar.add_child(overflow)
 
 
 func _add_item_icon(item: ItemConfig) -> void:
@@ -379,6 +377,7 @@ func _add_item_icon(item: ItemConfig) -> void:
 		return
 	var icon := TextureRect.new()
 	icon.texture = item.icon
-	icon.tooltip_text = item.display_name
+	var count := _player.get_item_inventory().count_of(item.id) if _player != null else 1
+	icon.tooltip_text = item.display_name + (" x%d" % count if count > 1 else "")
 	icon.custom_minimum_size = item.icon.get_size()
 	_item_bar.add_child(icon)

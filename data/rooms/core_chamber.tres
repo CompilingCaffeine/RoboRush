@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="template"]
+[ext_resource type="Script" path="res://scripts/resources/migration_link.gd" id="link"]
+
+[sub_resource type="Resource" id="link_0"]
+script = ExtResource("link")
+a = Rect2i(3, 1, 2, 2)
+b = Rect2i(21, 9, 2, 2)
+
+[sub_resource type="Resource" id="link_1"]
+script = ExtResource("link")
+a = Rect2i(3, 9, 2, 2)
+b = Rect2i(21, 1, 2, 2)
+
+[resource]
+script = ExtResource("template")
+id = &"core_chamber"
+type = 6
+; Open sightlines preserve every projectile gap; corner migrations are optional escape routes.
+obstacles = Array[Rect2i]([])
+enemy_spawns = Array[Vector2i]([])
+pad_links = Array[MigrationLink]([SubResource("link_0"), SubResource("link_1")])
+reward_spawn = Vector2i(13, 9)
+difficulty = 4
+floor_tags = Array[StringName]([&"core_intelligence"])
+min_floor = 6
+max_floor = 6

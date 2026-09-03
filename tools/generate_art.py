@@ -87,6 +87,23 @@ PALETTE = {
     "M": (0x4B, 0x52, 0x5F, 255),  # cloud chassis mid
     "L": (0x7B, 0x86, 0x97, 255),  # cloud chassis light
     "F": (0xE8, 0xDC, 0xBE, 255),  # sodium status light — warm white, never green
+    # Executive Systems: charcoal carpet, walnut panels and muted brass. Saturated
+    # amber/red, teal/violet and green remain reserved for lanes, heat and migration.
+    "0": (0x1E, 0x19, 0x20, 255),
+    "1": (0x2D, 0x25, 0x2D, 255),
+    "2": (0x3B, 0x31, 0x38, 255),
+    "3": (0x4A, 0x38, 0x32, 255),
+    "4": (0x68, 0x53, 0x43, 255),
+    "5": (0x92, 0x7F, 0x65, 255),
+    "6": (0xD8, 0xCF, 0xB8, 255),
+    # Core Intelligence: black glass, indigo substrate and cold-white traces. The cyan/violet,
+    # amber/red and green gameplay languages remain brighter than the architecture beneath them.
+    "7": (0x08, 0x0A, 0x12, 255),
+    "8": (0x13, 0x18, 0x2A, 255),
+    "9": (0x24, 0x2D, 0x48, 255),
+    "A": (0x3D, 0x4B, 0x70, 255),
+    "B": (0x78, 0x8A, 0xB0, 255),
+    "C": (0xE2, 0xEC, 0xFF, 255),
 }
 
 
@@ -2198,6 +2215,106 @@ SPRITES = {
 }
 
 
+def executive_tile_sheet(wall: bool) -> list[str]:
+    """Sixteen subdued office panels; grain and carpet seams stay below hazard contrast."""
+    grid = [["0"] * 64 for _ in range(64)]
+    for y in range(64):
+        for x in range(64):
+            tx, ty = x % 16, y % 16
+            variant = (x // 16 + 3 * (y // 16)) % 4
+            if wall:
+                ch = "3" if (tx + variant) % 5 else "4"
+                if tx in (0, 15) or ty in (0, 15):
+                    ch = "o"
+                elif ty == 1 or tx == 1:
+                    ch = "5"
+                elif ty == 14 or tx == 14:
+                    ch = "1"
+                elif ty in (5, 10) and 4 <= tx <= 11:
+                    ch = "2"
+            else:
+                ch = "0"
+                if tx == 0 or ty == 0:
+                    ch = "1"
+                elif (tx + ty + variant) % 11 == 0:
+                    ch = "1"
+                if variant == 0 and tx in (2, 13) and ty in (2, 13):
+                    ch = "2"
+            grid[y][x] = ch
+    return ["".join(row) for row in grid]
+
+
+def executive_body() -> list[str]:
+    """A 14-pixel corporate seal in a 20-pixel canvas, matching the inherited hit circle."""
+    grid = [["."] * 20 for _ in range(20)]
+    for y in range(3, 17):
+        for x in range(3, 17):
+            distance = max(abs(x - 9.5), abs(y - 9.5))
+            if abs(x - 9.5) + abs(y - 9.5) > 10:
+                continue
+            grid[y][x] = "o" if distance > 5.5 else ("6" if distance > 4.5 else "3")
+    for y in (7, 10, 13):
+        for x in range(7, 13):
+            grid[y][x] = "6"
+    for y in range(7, 14):
+        grid[y][7] = "6"
+    return ["".join(row) for row in grid]
+
+
+def core_tile_sheet(wall: bool) -> list[str]:
+    """A black-glass circuit plane, with traces quiet enough to sit beneath every hazard."""
+    grid = [["7"] * 64 for _ in range(64)]
+    for y in range(64):
+        for x in range(64):
+            tx, ty = x % 16, y % 16
+            variant = (x // 16 + 2 * (y // 16)) % 4
+            if wall:
+                ch = "8"
+                if tx in (0, 15) or ty in (0, 15):
+                    ch = "7"
+                elif tx in (2, 13):
+                    ch = "9"
+                elif ty in (4 + variant, 11 - variant) and 4 <= tx <= 11:
+                    ch = "A"
+                elif (tx, ty) in ((4, 4), (11, 4), (4, 11), (11, 11)):
+                    ch = "B"
+            else:
+                ch = "7"
+                if tx == 0 or ty == 0:
+                    ch = "8"
+                elif (ty == 4 + variant and 3 <= tx <= 12) or (tx == 4 + variant and 3 <= ty <= 12):
+                    ch = "9"
+                if (tx, ty) in ((4 + variant, 4 + variant), (11 - variant, 11 - variant)):
+                    ch = "B"
+            grid[y][x] = ch
+    return ["".join(row) for row in grid]
+
+
+def core_intelligence_body() -> list[str]:
+    """A 24-pixel processor eye: one central intelligence, ringed by six completed floors."""
+    size = 24
+    grid = [["."] * size for _ in range(size)]
+    cx = cy = 11.5
+    for y in range(size):
+        for x in range(size):
+            radius = ((x - cx) ** 2 + (y - cy) ** 2) ** 0.5
+            if 8.2 <= radius <= 10.2:
+                grid[y][x] = "o" if radius > 9.4 else "A"
+            elif radius <= 6.5:
+                grid[y][x] = "9" if radius > 4.3 else "8"
+    # Six bright contacts around the ring are the campaign's six completed layers.
+    for x, y in ((12, 2), (20, 7), (20, 16), (12, 21), (3, 16), (3, 7)):
+        grid[y][x] = "C"
+    # A diamond aperture instead of a face: readable as a single eye at gameplay scale.
+    for offset in range(-3, 4):
+        width = 3 - abs(offset)
+        for x in range(12 - width, 13 + width):
+            grid[12 + offset][x] = "B"
+    grid[12][11] = "C"
+    grid[12][12] = "C"
+    return ["".join(row) for row in grid]
+
+
 def main() -> int:
     root = sys.argv[1] if len(sys.argv) > 1 else "."
     for relative, grid in SPRITES.items():
@@ -2215,6 +2332,12 @@ def main() -> int:
     write_png(os.path.join(root, "art/environments/dev_floor.png"), dev_floor_tile())
     write_png(os.path.join(root, "art/environments/cloud_wall.png"), cloud_wall_tile())
     write_png(os.path.join(root, "art/environments/cloud_floor.png"), cloud_floor_tile())
+    write_png(os.path.join(root, "art/environments/exec_floor.png"), executive_tile_sheet(False))
+    write_png(os.path.join(root, "art/environments/exec_wall.png"), executive_tile_sheet(True))
+    write_png(os.path.join(root, "art/bosses/executive_override.png"), executive_body())
+    write_png(os.path.join(root, "art/environments/core_floor.png"), core_tile_sheet(False))
+    write_png(os.path.join(root, "art/environments/core_wall.png"), core_tile_sheet(True))
+    write_png(os.path.join(root, "art/bosses/core_intelligence.png"), core_intelligence_body())
     return 0
 
 

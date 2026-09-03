@@ -817,9 +817,12 @@ func _test_the_game_scene_resumes_the_saved_run() -> void:
 	var hud := game.get_node("%CombatHUD") as CombatHUD
 	var icons := (hud.get_node("%ItemBar") as HBoxContainer).get_child_count()
 	var expected := 0
+	var seen_icons: Dictionary[StringName, bool] = {}
 	for item: ItemConfig in player.get_item_inventory().get_items():
-		if item.icon != null:
+		if item.icon != null and not seen_icons.has(item.id):
+			seen_icons[item.id] = true
 			expected += 1
+	expected = mini(expected, CombatHUD.VISIBLE_ITEM_TYPES) + int(expected > CombatHUD.VISIBLE_ITEM_TYPES)
 	check(
 		icons == expected,
 		"the HUD shows the build the resumed run is carrying (%d icons, expected %d)"

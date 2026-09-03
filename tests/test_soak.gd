@@ -1,5 +1,5 @@
 extends TestCase
-## Complete six-floor campaigns, run end to end, many times over.
+## Complete shipped campaigns, run end to end, many times over.
 ##
 ## Every other suite checks a boundary in isolation: that one descent keeps the run's state, that
 ## one released floor takes its projectiles with it, that five boundaries leave one floor graph.
@@ -14,11 +14,11 @@ extends TestCase
 ## leaked") with no owner, which is exactly the diagnostic the test runner's per-suite orphan
 ## accounting exists to replace.
 ##
-## The floors are greybox copies (see `GreyboxCampaign`), because the shipped campaign has two
-## floors and a six-floor claim needs six floors.
+## The completed campaign makes the workload the shipped six floors. This soak carries the actual
+## content and claims the final reward, rather than stopping at a synthetic boundary.
 
-## Complete campaigns to play. Each is six floors and five boundaries, so this is 600 floors built
-## and released and 500 transitions committed.
+## Complete campaigns to play: 600 floors built and released, 500 transitions committed,
+## and 100 terminal rewards claimed.
 ##
 ## The number is the plan's, and it is a soak rather than a sweep: the seeds are distinct so the
 ## layouts differ, but what is being measured is what is left behind after each one rather than
@@ -31,19 +31,16 @@ const FLOORS_PER_CAMPAIGN := 6
 const FLOOR_SCENE := preload("res://scenes/floors/floor.tscn")
 const PLAYER_SCENE := preload("res://scenes/player/player.tscn")
 
-var _greybox := GreyboxCampaign.new()
-
-
 func run() -> void:
 	await _test_a_hundred_campaigns_leave_nothing_behind()
-	_greybox.clean_up()
 
 
 func _test_a_hundred_campaigns_leave_nothing_behind() -> void:
-	var campaign := _greybox.build(FLOORS_PER_CAMPAIGN)
+	var campaign := load("res://data/runs/main_campaign.tres") as RunDefinition
 	if campaign == null:
-		fail(_greybox.error)
+		fail("the shipped campaign must load")
 		return
+	check(campaign.size() == FLOORS_PER_CAMPAIGN, "the soak covers every shipped floor")
 
 	var arena := Node2D.new()
 	add_child(arena)
@@ -149,6 +146,12 @@ func _play_out(
 				% [seed_value, sessions, boundary + 1])
 			return floor_node.config.floor_number
 
+	# Claim the last reward too: reaching the final floor is not completing the campaign.
+	if not await _descend(floor_node, seed_value, failures):
+		return 0
+	if GameManager.state != GameManager.State.VICTORY:
+		failures.append("seed %d: the final reward did not win the run" % seed_value)
+		return 0
 	return floor_node.config.floor_number
 
 

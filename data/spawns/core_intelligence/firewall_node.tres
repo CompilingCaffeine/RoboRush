@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="EnemySpawn" load_steps=3 format=3]
+[ext_resource type="Script" path="res://scripts/resources/enemy_spawn.gd" id="spawn"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/firewall_node.tscn" id="scene"]
+[resource]
+script = ExtResource("spawn")
+scene = ExtResource("scene")
+weight = 0.7
+min_difficulty = 2

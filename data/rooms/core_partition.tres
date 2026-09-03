@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="template"]
+[ext_resource type="Script" path="res://scripts/resources/migration_link.gd" id="link"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/firewall_node.tscn" id="enemy_0"]
+
+[sub_resource type="Resource" id="link_0"]
+script = ExtResource("link")
+a = Rect2i(5, 5, 2, 2)
+b = Rect2i(11, 5, 2, 2)
+
+[sub_resource type="Resource" id="link_1"]
+script = ExtResource("link")
+a = Rect2i(14, 5, 2, 2)
+b = Rect2i(20, 5, 2, 2)
+
+[resource]
+script = ExtResource("template")
+id = &"core_partition"
+type = 1
+; Three regions and two explicit routes. The centre Firewall must be approached, not sniped around.
+obstacles = Array[Rect2i]([])
+enemy_spawns = Array[Vector2i]([Vector2i(12, 2), Vector2i(4, 2), Vector2i(4, 9), Vector2i(12, 9), Vector2i(21, 2), Vector2i(21, 9), Vector2i(15, 8)])
+forced_enemies = Array[PackedScene]([ExtResource("enemy_0")])
+ducts = Array[Rect2i]([Rect2i(8, 0, 1, 12), Rect2i(17, 0, 1, 12)])
+pad_links = Array[MigrationLink]([SubResource("link_0"), SubResource("link_1")])
+reward_spawn = Vector2i(13, 10)
+difficulty = 3
+floor_tags = Array[StringName]([&"core_intelligence"])
+min_floor = 6
+max_floor = 6

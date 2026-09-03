@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="template"]
+
+[resource]
+script = ExtResource("template")
+id = &"core_hot_path"
+type = 1
+; Three cold islands shape the room without blocking its cardinal doors.
+obstacles = Array[Rect2i]([Rect2i(12, 5, 2, 2)])
+enemy_spawns = Array[Vector2i]([Vector2i(4, 2), Vector2i(9, 9), Vector2i(17, 2), Vector2i(22, 9), Vector2i(4, 8), Vector2i(21, 3)])
+thermal_zones = Array[Rect2i]([Rect2i(2, 4, 5, 3), Rect2i(10, 1, 6, 2), Rect2i(19, 5, 5, 3)])
+reward_spawn = Vector2i(13, 9)
+difficulty = 2
+floor_tags = Array[StringName]([&"core_intelligence"])
+min_floor = 6
+max_floor = 6

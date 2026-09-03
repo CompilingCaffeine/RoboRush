@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="RunDefinition" load_steps=5 format=3]
+[gd_resource type="Resource" script_class="RunDefinition" load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scripts/resources/run_definition.gd" id="1_run"]
 [ext_resource type="Script" path="res://scripts/resources/floor_entry.gd" id="2_entry"]
@@ -23,6 +23,16 @@ script = ExtResource("2_entry")
 id = &"cloud_ops"
 config_path = "res://data/floors/floor_4_cloud_ops.tres"
 
+[sub_resource type="Resource" id="Resource_floor_5"]
+script = ExtResource("2_entry")
+id = &"executive_systems"
+config_path = "res://data/floors/floor_5_executive_systems.tres"
+
+[sub_resource type="Resource" id="Resource_floor_6"]
+script = ExtResource("2_entry")
+id = &"core_intelligence"
+config_path = "res://data/floors/floor_6_core_intelligence.tres"
+
 [resource]
 script = ExtResource("1_run")
 id = &"main_campaign"
@@ -35,9 +45,9 @@ display_name = "RoboRush"
 ; And to 3 for Cloud Operations, which is a larger change to what a seed means than the last one: a
 ; run is four floors instead of three, so victory has moved, and every floor now draws its boss from
 ; four rather than three.
-content_version = 3
-floors = Array[FloorEntry]([SubResource("Resource_floor_1"), SubResource("Resource_floor_2"), SubResource("Resource_floor_3"), SubResource("Resource_floor_4")])
+; Version 5 completes the campaign with Core Intelligence and moves victory to the authored finale.
+; Earlier checkpoints must not resume into a run with a different ending.
+content_version = 5
+floors = Array[FloorEntry]([SubResource("Resource_floor_1"), SubResource("Resource_floor_2"), SubResource("Resource_floor_3"), SubResource("Resource_floor_4"), SubResource("Resource_floor_5"), SubResource("Resource_floor_6")])
 target_floor_count = 6
-; Still false: four of six authored, and an incomplete campaign should play and report what is
-; missing rather than refuse to start. Flipping this is the last act of the campaign, not an early one.
-require_complete = false
+require_complete = true

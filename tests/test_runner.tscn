@@ -1,4 +1,4 @@
-[gd_scene load_steps=29 format=3]
+[gd_scene load_steps=35 format=3]
 
 [ext_resource type="Script" path="res://tests/test_runner.gd" id="1_runner"]
 [ext_resource type="Script" path="res://tests/test_player_movement.gd" id="2_movement"]
@@ -18,6 +18,8 @@
 [ext_resource type="Script" path="res://tests/test_runtime_error.gd" id="16_runtime_error"]
 [ext_resource type="Script" path="res://tests/test_cascade_failure.gd" id="26_cascade"]
 [ext_resource type="Script" path="res://tests/test_gate.gd" id="27_gate"]
+[ext_resource type="Script" path="res://tests/test_executive.gd" id="31_executive"]
+[ext_resource type="Script" path="res://tests/test_core_intelligence.gd" id="32_core"]
 [ext_resource type="Script" path="res://tests/test_hud.gd" id="17_hud"]
 [ext_resource type="Script" path="res://tests/test_minimap.gd" id="30_minimap"]
 [ext_resource type="Script" path="res://tests/test_save.gd" id="11_save"]
@@ -119,6 +121,12 @@ script = ExtResource("27_gate")
 
 [node name="Soak" type="Node" parent="."]
 script = ExtResource("24_soak")
+
+[node name="Executive" type="Node" parent="."]
+script = ExtResource("31_executive")
+
+[node name="CoreIntelligence" type="Node" parent="."]
+script = ExtResource("32_core")
 
 [node name="Menus" type="Node" parent="."]
 script = ExtResource("15_menus")

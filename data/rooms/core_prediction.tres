@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="template"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/compiler.tscn" id="enemy_0"]
+
+[resource]
+script = ExtResource("template")
+id = &"core_prediction"
+type = 1
+; A Compiler asks for the old lane read while the split cover prevents one firing position.
+obstacles = Array[Rect2i]([Rect2i(12, 0, 2, 4), Rect2i(12, 8, 2, 4)])
+enemy_spawns = Array[Vector2i]([Vector2i(20, 3), Vector2i(5, 3), Vector2i(20, 8), Vector2i(5, 8), Vector2i(10, 6), Vector2i(15, 6)])
+forced_enemies = Array[PackedScene]([ExtResource("enemy_0")])
+reward_spawn = Vector2i(13, 6)
+difficulty = 2
+floor_tags = Array[StringName]([&"core_intelligence"])
+min_floor = 6
+max_floor = 6

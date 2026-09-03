@@ -1,0 +1,51 @@
+[gd_resource type="Resource" script_class="FloorConfig" load_steps=26 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/floor_config.gd" id="floor"]
+[ext_resource type="Resource" path="res://data/floors/core_intelligence_theme.tres" id="theme"]
+[ext_resource type="Resource" path="res://data/rooms/core_wake.tres" id="start"]
+[ext_resource type="Resource" path="res://data/rooms/core_bootstrap.tres" id="bootstrap"]
+[ext_resource type="Resource" path="res://data/rooms/core_prediction.tres" id="prediction"]
+[ext_resource type="Resource" path="res://data/rooms/core_hot_path.tres" id="hot_path"]
+[ext_resource type="Resource" path="res://data/rooms/core_partition.tres" id="partition"]
+[ext_resource type="Resource" path="res://data/rooms/core_consensus.tres" id="consensus"]
+[ext_resource type="Resource" path="res://data/rooms/core_recursion_gate.tres" id="recursion_gate"]
+[ext_resource type="Resource" path="res://data/rooms/core_last_instruction.tres" id="last_instruction"]
+[ext_resource type="Resource" path="res://data/rooms/core_archive.tres" id="treasure"]
+[ext_resource type="Resource" path="res://data/rooms/shop_bay.tres" id="shop_room"]
+[ext_resource type="Resource" path="res://data/rooms/core_chamber.tres" id="boss_room"]
+[ext_resource type="Resource" path="res://data/settings/shop_config.tres" id="shop"]
+[ext_resource type="Resource" path="res://data/pools/run_item_pool.tres" id="pool"]
+[ext_resource type="Resource" path="res://data/bosses/core_intelligence_encounter.tres" id="boss"]
+[ext_resource type="Resource" path="res://data/spawns/core_intelligence/ticket_bot.tres" id="ticket"]
+[ext_resource type="Resource" path="res://data/spawns/core_intelligence/code_runner.tres" id="runner"]
+[ext_resource type="Resource" path="res://data/spawns/core_intelligence/compiler.tres" id="compiler"]
+[ext_resource type="Resource" path="res://data/spawns/core_intelligence/firewall_node.tres" id="firewall"]
+[ext_resource type="Resource" path="res://data/spawns/core_intelligence/memory_leech.tres" id="leech"]
+[ext_resource type="Resource" path="res://data/spawns/core_intelligence/null_pointer.tres" id="null"]
+[ext_resource type="Resource" path="res://data/spawns/core_intelligence/pop_up_drone.tres" id="drone"]
+[ext_resource type="Resource" path="res://data/spawns/core_intelligence/deadlock.tres" id="deadlock"]
+[ext_resource type="Resource" path="res://data/spawns/core_intelligence/recursion.tres" id="recursion"]
+
+[resource]
+script = ExtResource("floor")
+id = &"core_intelligence"
+display_name = "Core Intelligence"
+floor_number = 6
+theme = ExtResource("theme")
+floor_tags = Array[StringName]([&"core_intelligence"])
+room_count = 10
+start_templates = Array[RoomTemplate]([ExtResource("start")])
+combat_templates = Array[RoomTemplate]([ExtResource("bootstrap"), ExtResource("prediction"), ExtResource("hot_path"), ExtResource("partition"), ExtResource("consensus"), ExtResource("recursion_gate"), ExtResource("last_instruction")])
+treasure_templates = Array[RoomTemplate]([ExtResource("treasure")])
+shop_templates = Array[RoomTemplate]([ExtResource("shop_room")])
+boss_templates = Array[RoomTemplate]([ExtResource("boss_room")])
+enemy_spawns = Array[EnemySpawn]([ExtResource("ticket"), ExtResource("runner"), ExtResource("compiler"), ExtResource("firewall"), ExtResource("leech"), ExtResource("null"), ExtResource("drone"), ExtResource("deadlock"), ExtResource("recursion")])
+; Finale density rises, but its sixth shop should still ask the player to choose.
+clear_scrap_range = Vector2i(1, 2)
+enemy_scrap_range = Vector2i(0, 2)
+item_pool = ExtResource("pool")
+item_clear_indices = Array[int]([2, 5])
+shop = ExtResource("shop")
+treasure_grants_item = true
+; The run ends with one authored encounter. Earlier boss pools cannot consume it.
+boss_pool = Array[BossEncounter]([ExtResource("boss")])

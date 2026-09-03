@@ -1,0 +1,37 @@
+[gd_resource type="Resource" script_class="CoreIntelligenceConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/core_intelligence_config.gd" id="1_boss"]
+[ext_resource type="Resource" path="res://data/projectiles/boss_red.tres" id="2_shot"]
+
+[resource]
+script = ExtResource("1_boss")
+id = &"core_intelligence"
+display_name = "Core Intelligence"
+max_health = 190.0
+phase_two_at = 0.66
+phase_three_at = 0.33
+shot = ExtResource("2_shot")
+phase_one_interval = 2.15
+phase_two_interval = 2.05
+phase_three_interval = 1.95
+telegraph_seconds = 0.55
+spread_count = 7
+spread_degrees = 62.0
+ring_count = 16
+ring_gap = 4
+wall_count = 13
+wall_gap = 3
+lane_telegraph_seconds = 0.95
+lane_strike_seconds = 0.25
+lane_damage = 1.0
+lane_thickness_tiles = 2
+lane_stagger_seconds = 0.55
+checker_cols = 4
+checker_rows = 3
+move_speed = 100.0
+drift_height = 68.0
+sway_amplitude = 64.0
+sway_speed = 1.35
+vent_seconds = 1.7
+vent_size_tiles = Vector2i(4, 3)
+vent_count = 3

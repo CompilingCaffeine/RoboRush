@@ -1,0 +1,51 @@
+[gd_resource type="Resource" script_class="FloorConfig" load_steps=23 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/floor_config.gd" id="floor"]
+[ext_resource type="Resource" path="res://data/floors/executive_theme.tres" id="theme"]
+[ext_resource type="Resource" path="res://data/rooms/exec_reception.tres" id="start"]
+[ext_resource type="Resource" path="res://data/rooms/exec_briefing.tres" id="exec_briefing"]
+[ext_resource type="Resource" path="res://data/rooms/exec_review_lane.tres" id="exec_review_lane"]
+[ext_resource type="Resource" path="res://data/rooms/exec_delegation.tres" id="exec_delegation"]
+[ext_resource type="Resource" path="res://data/rooms/exec_quorum.tres" id="exec_quorum"]
+[ext_resource type="Resource" path="res://data/rooms/exec_escalation.tres" id="exec_escalation"]
+[ext_resource type="Resource" path="res://data/rooms/exec_cost_centre.tres" id="exec_cost_centre"]
+[ext_resource type="Resource" path="res://data/rooms/exec_board_vote.tres" id="exec_board_vote"]
+[ext_resource type="Resource" path="res://data/rooms/exec_options_vault.tres" id="treasure"]
+[ext_resource type="Resource" path="res://data/rooms/shop_bay.tres" id="shop_room"]
+[ext_resource type="Resource" path="res://data/rooms/exec_boardroom.tres" id="boss_room"]
+[ext_resource type="Resource" path="res://data/settings/shop_config.tres" id="shop"]
+[ext_resource type="Resource" path="res://data/pools/run_item_pool.tres" id="pool"]
+[ext_resource type="Resource" path="res://data/bosses/executive_override_encounter.tres" id="boss"]
+[ext_resource type="Resource" path="res://data/spawns/executive_systems/ticket_bot.tres" id="ticket_bot"]
+[ext_resource type="Resource" path="res://data/spawns/executive_systems/code_runner.tres" id="code_runner"]
+[ext_resource type="Resource" path="res://data/spawns/executive_systems/compiler.tres" id="compiler"]
+[ext_resource type="Resource" path="res://data/spawns/executive_systems/firewall_node.tres" id="firewall_node"]
+[ext_resource type="Resource" path="res://data/spawns/executive_systems/memory_leech.tres" id="memory_leech"]
+[ext_resource type="Resource" path="res://data/spawns/executive_systems/null_pointer.tres" id="null_pointer"]
+
+[resource]
+script = ExtResource("floor")
+id = &"executive_systems"
+display_name = "Executive Systems"
+floor_number = 5
+theme = ExtResource("theme")
+floor_tags = Array[StringName]([&"executive_systems"])
+room_count = 10
+start_templates = Array[RoomTemplate]([ExtResource("start")])
+; Four to seven enemies per room, with coordination forced at authored points.
+; Load Balancers never roll at random: doubling support is a deliberate quorum encounter.
+combat_templates = Array[RoomTemplate]([ExtResource("exec_briefing"), ExtResource("exec_review_lane"), ExtResource("exec_delegation"), ExtResource("exec_quorum"), ExtResource("exec_escalation"), ExtResource("exec_cost_centre"), ExtResource("exec_board_vote")])
+treasure_templates = Array[RoomTemplate]([ExtResource("treasure")])
+shop_templates = Array[RoomTemplate]([ExtResource("shop_room")])
+boss_templates = Array[RoomTemplate]([ExtResource("boss_room")])
+enemy_spawns = Array[EnemySpawn]([ExtResource("ticket_bot"), ExtResource("code_runner"), ExtResource("compiler"), ExtResource("firewall_node"), ExtResource("memory_leech"), ExtResource("null_pointer")])
+; Denser encounters do not require proportionally more money. Keep the fifth shop a choice.
+clear_scrap_range = Vector2i(1, 2)
+enemy_scrap_range = Vector2i(0, 2)
+item_pool = ExtResource("pool")
+item_clear_indices = Array[int]([2, 5])
+shop = ExtResource("shop")
+treasure_grants_item = true
+; An explicit advanced rematch, confined to mature builds. The earlier four bosses retain
+; their shuffled order; the fifth encounter has its own identity and a different pattern cycle.
+boss_pool = Array[BossEncounter]([ExtResource("boss")])

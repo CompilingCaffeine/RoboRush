@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="1_template"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/compiler.tscn" id="enemy_0"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/memory_leech.tscn" id="enemy_1"]
+[ext_resource type="Script" path="res://scripts/resources/migration_link.gd" id="link"]
+
+[sub_resource type="Resource" id="link_0"]
+script = ExtResource("link")
+a = Rect2i(5, 5, 2, 2)
+b = Rect2i(19, 5, 2, 2)
+
+[resource]
+script = ExtResource("1_template")
+id = &"exec_escalation"
+type = 1
+; A Compiler calls the route; a Leech makes staying put costly. Cross the cold centre to change sides.
+obstacles = Array[Rect2i]([])
+enemy_spawns = Array[Vector2i]([Vector2i(13, 2), Vector2i(13, 9), Vector2i(4, 3), Vector2i(4, 8), Vector2i(21, 3), Vector2i(21, 8)])
+forced_enemies = Array[PackedScene]([ExtResource("enemy_0"), ExtResource("enemy_1")])
+ducts = Array[Rect2i]([Rect2i(8, 3, 1, 6), Rect2i(17, 3, 1, 6)])
+thermal_zones = Array[Rect2i]([Rect2i(10, 3, 3, 2), Rect2i(13, 7, 3, 2)])
+pad_links = Array[MigrationLink]([SubResource("link_0")])
+reward_spawn = Vector2i(13, 6)
+difficulty = 3
+floor_tags = Array[StringName]([&"executive_systems"])
+min_floor = 5
+max_floor = 5

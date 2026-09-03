@@ -4,19 +4,22 @@ A 2D top-down roguelite shooter built to [`robo_rush_build_spec.md`](robo_rush_b
 You play an obsolete maintenance robot scavenging hardware and software upgrades
 inside a corrupted software megacorporation.
 
-**Current state: four floors of a planned six.** A complete run exists and the game
+**Current state: the planned six-floor campaign is complete.** A full run exists and the game
 introduces itself: it opens on a title screen, tells a first-time player the one thing they
 cannot work out by pressing keys, and remembers their settings and their records between
 sessions. Each floor generates ten rooms procedurally — a start, six combat rooms, a
 treasure vault, a shop, and a boss arena — and each teaches one idea before combining it
-with the ones before.
+with the ones before; the fifth is a recombination and endurance floor, and the sixth is the
+campaign's synthesis and finale.
 
 The Help Desk is the fundamentals. Development adds compile lanes, a stripe of floor that
 announces itself and then goes off. The Data Center adds throughput zones that charge for
 standing on them and cable ducts that stop a chassis and not a shot. Cloud Operations adds
 migration pads: two patches of floor that are the same place, and the first thing in the
-game that moves the player. Any floor can draw any of the four bosses, so the last fight of
-a run is not the same fight twice.
+game that moves the player. Executive Systems combines those mechanics with coordinated enemy
+groups and an advanced Runtime Error rematch, Executive Override. The first four floors shuffle
+their four bosses; the fifth has its own fixed, explicitly authored encounter. Core Intelligence
+closes the run with every established room language and a fixed final encounter of its own.
 
 Items compose: a run that finds Ricochet Driver and Fork Bomb fires shots that bounce
 off a wall and then split, with no code anywhere aware those two items can be held at
@@ -25,8 +28,10 @@ once. Stacked multipliers bend rather than compound, so the worst legal build do
 
 Engine: **Godot 4.7.1**, GDScript, GL Compatibility renderer.
 
-**It has been played through by hand, end to end, several times over** — the whole game as it
-stands, all four floors, complete runs. The earliest of those passes produced the findings in
+**The first four floors have been played through by hand, end to end, several times over.**
+Executive Systems and Core Intelligence have automated campaign, combat, and UI coverage; their
+human playtests are still due.
+The earliest of those four-floor passes produced the findings in
 [What playing it answered](#what-playing-it-answered): one mild sentence about the Data Center
 that turned out to be three bugs, none of them visible in the code, in a test, or on screen.
 That is the standing argument for why playing is not optional.
@@ -666,9 +671,9 @@ shaders/damage_vignette.gdshader        + A red frame when the player is hit
 data/player, data/projectiles, data/weapons    Player, shot, and weapon tuning
 data/enemies/*.tres                        Four enemies, each its own config type
 data/spawns/*.tres                       + The floor's weighted enemy roster
-data/bosses/*.tres                         Four bosses: tuning, and the four things the HUD says
+data/bosses/*.tres                         Six bosses: tuning, and what the HUD says
 scripts/resources/migration_link.gd     + A pair of pads, so half a link is unauthorable
-data/rooms/*.tres                          Thirty-two templates across four floors
+data/rooms/*.tres                          Fifty-two templates across six floors
 data/runs/main_campaign.tres               Which floors a run is made of, in order
 data/floors/floor_*.tres                   One per floor: rooms, roster, economy, boss pool
 data/spawns/<floor>/*.tres                 A floor's own weights for an enemy it shares
@@ -686,11 +691,11 @@ tests/test_case.gd                         Suite base class
 tests/test_player_movement.gd              32 movement and dash checks
 tests/test_combat.gd                       126 data, component, and integration checks
 tests/test_player_input.gd                 38 arrow-key shooting checks
-tests/test_campaign.gd                     74 campaign, lookup, seed, and injected-fault checks
-tests/test_determinism.gd                  155 seed-derivation, stream, manifest, and record checks
+tests/test_campaign.gd                     86 campaign, lookup, seed, and injected-fault checks
+tests/test_determinism.gd                  183 seed-derivation, stream, manifest, and record checks
 tests/test_economy.gd                      57 reward, boss-choice, stacking, and 10k-run checks
 tests/test_post_boss.gd                    36 checks that a dead boss's hazards still resolve
-tests/test_floor.gd                        690 generation, invariant, template, and floor-advance
+tests/test_floor.gd                        974 generation, invariant, template, and floor-advance
                                             checks, including the flood fill that walks every
                                             template in the campaign
 tests/test_items.gd                        548 item, stack, inventory, and synergy checks
@@ -701,23 +706,25 @@ tests/test_boss.gd                         104 phase, terminal, and defeat check
 tests/test_runtime_error.gd                97 checks on Development's boss
 tests/test_cascade_failure.gd              108 checks on the Data Center's boss
 tests/test_thermal.gd                      198 checks on what may and may not heat a zone
-tests/test_migration.gd                 + 184 checks on what a pad moves, and what rearms it
+tests/test_migration.gd                 + 334 checks on what a pad moves, and what rearms it
 tests/test_orchestrator.gd              + 224 checks on Cloud Operations' boss, including a
                                             brute-force proof that every migration is answerable
 tests/test_save.gd                         83 settings, save format, and record checks
 tests/test_checkpoint.gd                   198 boundary-checkpoint, resume, refusal, and
                                             file-recovery checks
-tests/test_gate.gd                         72 checks of the six-floor plan's per-floor gate,
+tests/test_gate.gd                        109 checks of the six-floor plan's per-floor gate,
                                             counted off the campaign rather than hard-coded
 tests/test_soak.gd                         100 complete six-floor campaigns, checked for
                                             anything left behind
+tests/test_executive.gd                 + 502 checks on Floor 5, carried builds and compact UI
+tests/test_core_intelligence.gd         + 502 checks on the finale, its checkpoint and victory
 tests/greybox_campaign.gd                  A campaign of any length, for suites needing more
                                             floors than the game has
 tests/floor_economy.gd                  +   What a floor pays out in scrap, shared by the two
                                             suites that ask about money
-tests/test_audio.gd                        110 library, loop, crossfade, and watchdog checks
+tests/test_audio.gd                        130 library, loop, crossfade, and watchdog checks
 tests/test_gamepad.gd                      96 checks driven by a synthesized controller
-tests/test_balance.gd                      191 checks on what the tuning numbers mean, the
+tests/test_balance.gd                      203 checks on what the tuning numbers mean, the
                                             economy among them measured across the campaign
 
 tools/release.sh                        + Builds every target from a tag, hashed and
@@ -729,7 +736,7 @@ tools/engine.lock                       + The pinned engine, template and SDK ha
 tools/generate_input_map.gd                Regenerates project.godot's [input]
 tools/generate_art.py                      Regenerates every sprite and tile sheet
 tools/generate_audio.py                    Synthesizes all 20 sound effects
-tools/generate_music.py                    A small tracker; the nine music loops
+tools/generate_music.py                    A small tracker; the thirteen music loops
 tools/generate_ui_font.py               + The UI's bitmap font and its BMFont page
 ```
 
@@ -1246,24 +1253,21 @@ resulting frames, and by nothing else. The suite was green for all of them.
    it can get. The environment, the boss, and the upgrade attachments were the three things
    worth the effort this milestone; the enemy and player silhouettes are milestone 5's and
    hold up.
-5. **The music is nine short loops** — between 10.9 and 22.9 seconds each. A boss fight still
-   outlasts its track several times over. Cloud Operations is where this stopped getting worse:
-   its two run 48 beats against the 32 of every track before them, which makes them the longest
-   in the game by eight seconds, and the only cost was writing more bars. The other seven are
-   still the length they were.
+5. **The music is thirteen short loops** — between 10.9 and 30 seconds each. A boss fight still
+   outlasts its track several times over. Cloud Operations moved to 48 beats, and both closing
+   floors use 64; the seven tracks before Cloud Operations are still only 10.9–20 seconds.
 6. **Only three items visibly change the robot.** Spec section 20 asks for sprite changes
    from major items and an eleven-pixel robot has room for about that many before it stops
    being a robot. The other nine still get only a tinted cannon.
-7. **Four floors of a planned six.** Help Desk, Development, the Data Center and Cloud
-   Operations exist and chain; Executive Systems and Core Intelligence do not. The campaign
-   declares `target_floor_count = 6` against four authored floors with
-   `require_complete = false`, so it plays and reports what is missing rather than refusing to
-   start; flipping that flag is the last step of the campaign, not a thing to do early.
+7. **The six-floor campaign is authored but not fully qualified by hand.** Help Desk,
+   Development, the Data Center, Cloud Operations, Executive Systems and Core Intelligence chain
+   to a real finale. `target_floor_count = 6` and `require_complete = true`, so missing content is
+   now fatal rather than provisional. The last two floors still need human pacing/readability runs.
    [Floor 4's gate](#floor-4-cloud-operations--built) has been met, with the narrower claim
    written out there: no gameplay path anywhere branches on floor number, and a floor is data —
    but a new *mechanic* is still four files, so "a floor is only a new `.tres`" is true only of
-   floors that reuse an idea. Neither of the two remaining floors is required to introduce one,
-   and Core Intelligence is specified not to.
+   floors that reuse an idea. Executive Systems and Core Intelligence deliberately synthesize the
+   existing room mechanics and boss attack primitives.
 8. **Five of spec section 23's twelve game states exist** — main menu, run, paused, game
    over, victory. Settings and the shop are deliberately *not* states: one is a panel over
    whichever screen opened it, the other is a room the player walks into.
@@ -2052,10 +2056,9 @@ the way `CompileLane` always has, so a boss's heat outlives the boss and not the
 
 [`tests/test_gate.gd`](tests/test_gate.gd) is the plan's Floor 3 acceptance list, as a suite, run
 against the **shipped** campaign rather than a greybox one — which is the difference between it and
-the parts of `tests/test_floor.gd` it overlaps with. Those use a synthetic six-floor campaign
-precisely so they can produce five boundaries before five floors exist; this asks the same questions
-of the content a player will actually be handed, and it could not be asked until a third real floor
-existed.
+the parts of `tests/test_floor.gd` it overlaps with. Those use a synthetic campaign so malformed
+destinations and lifecycle faults can be injected without touching shipped data; this asks the same
+questions of the content a player will actually be handed.
 
 Four of the five criteria were checkable as written. The third — "both transitions preserve every
 declared run-wide field and reset every declared floor-local field" — was not, because nothing had
@@ -2784,15 +2787,151 @@ After that, in rough order of value:
 2. **Run the Windows and Linux builds on their target environments.** Web CI now exports,
    serves, and boots the browser build on every push, which is the execution test the other
    three still lack; the macOS app runs here, and Windows and Linux have never been started.
-3. **Build [Floor 5, Executive Systems](SIX_FLOOR_SCALING_GAMEPLAN.md).** The plan makes it the
-   endurance floor rather than another foundational subsystem: mature builds, compounding items,
-   dense compositions, UI capacity at 480x270, and a full five-floor soak against the frame-time
-   budgets. It is the first floor whose gate is about the *run* rather than about the floor, and
-   with Cloud Operations' pipeline proof behind it, the plan expects it to need no new mechanic
-   at all — which is the claim [limitation 7](#known-limitations) says is still only half tested.
+3. **Play and qualify the two closing floors.** Floors 5 and 6 now exist. Their density,
+   coordination pressure, Executive Override and Core Intelligence need a human pacing/readability
+   report before their numbers can be called balanced.
 4. **Longer music, for the other seven tracks.** Cloud Operations' two run 48 beats and come out
    near twenty-three and seventeen seconds; the seven before them are 10.9 to 20.0 and a boss
    fight still laps its track. The method is proven and the only cost is bars.
 5. **Elite modifiers** (spec section 15), which the spec says to add once the base enemies
    feel good — a judgement that has now been made by somebody and not written down, which is
    the top item on this page again.
+
+---
+
+## Floor 5: Executive Systems
+
+Implemented as the fifth floor of the main campaign. It uses the existing compile lanes,
+throughput zones, cable ducts and migration links, with Load Balancers coordinating returning
+enemies. There is no floor-number branch in gameplay. It introduced campaign content version 4;
+the completed six-floor campaign is now version 5 and rejects earlier checkpoints because they
+describe a different ending. Floor 5 now descends into Core Intelligence.
+
+Seven combat templates supply the usual six combat rooms. Their difficulty ladder is
+1 / 2 / 2 / 3 / 3 / 3 / 4 and their populations are 4 / 5 / 5 / 6 / 6 / 6 / 7. The briefing
+introduces a protected squad without a floor hazard; delegation adds ducts and migration;
+quorum splits attention across two protection hubs; escalation and cost centre combine
+compilers with heat and movement; board vote is the densest combination. Support enemies are
+forced at authored positions, so multiple Load Balancers are a deliberate composition rather
+than an unlucky roster roll. All migration landings remain clear of walls, ducts and heat.
+
+Across 400 deterministic version-5 seeds the floor averages **31.56 enemies**, and 399/400 contain
+coordination. This is a deliberate increase over Cloud Operations' roughly 24, for a mature
+build; it is not yet a playtested difficulty claim. Clear rewards pay 1–2 scrap and enemy drops
+remain 0–2, giving the economy model 47.93 scrap for the floor. The existing campaign-shaped
+affordability and shelf-capacity tests pass with the fifth shop included.
+
+**Executive Override** is an explicit advanced Runtime Error encounter, confined to Floor 5.
+The first four bosses keep their shuffled order. Its ivory corporate seal has 156 health and
+three authored rotations: twin lanes/spread/ring; checkerboard/spread/twin lanes/ring;
+checkerboard/wall/twin lanes/ring. The lane warning, 3-projectile wall opening, and generous
+ring gap retain the existing readable answers. Commands remain spaced beyond the complete
+staggered-lane lifetime. The inherited damage and death paths preserve committed hazards
+after defeat and end the floor only when a reward is claimed.
+
+The environment has charcoal carpet, walnut panels and muted brass, reserving saturated
+hazard colours for gameplay. Both new music loops are 64 beats: 30 seconds exploring and
+24 seconds for the boss. Their generators and generated assets are checked in.
+
+Mature builds exposed two UI failures. The item row now shows the newest twelve distinct
+types and a count of the remaining types; holding Tab/L1 opens the complete inventory grid,
+with stack counts and name tooltips. The summary no longer tries to fit a comma-separated
+inventory into one label. The floor name occupies its own line above scrap/room counts.
+The maximum legal inventory, long cause-of-death label, and ending buttons fit 480×270.
+
+### Executive Systems verification
+
+- Full regression after the finale: **33 suites, 5,472 checks**, passing on Godot 4.7.2.
+- The 502 new Executive checks also pass on pinned Godot 4.7.1. They cover 400 Floor 5
+  layouts, pad landings, the advanced encounter's damage/death contract, maximum inventory UI,
+  and JSON checkpoint round trips at all four boundaries. Every resumed path reproduces the
+  same Floor 5 content fingerprint, shop, boss ledger, scrap, scaling and item stacks.
+- The structural suite sweeps 120 seeds per authored floor. The lifecycle soak now runs
+  **100 shipped six-floor campaigns**, claiming the final reward and reaching victory.
+- The separate combat probe drives the real Main scene through every combat room and boss on all
+  six floors,
+  carrying every beneficial item at its legal stack ceiling. Player immunity keeps observation
+  running; remaining enemies and bosses are finished through their damage receivers after
+  sampling. This is a stress test, not an estimate of human clear time or proof of fair combat.
+- Two rendered six-floor campaigns on an Apple M2 Max, Godot 4.7.2 Compatibility, measured
+  frame p95 **15.486 ms**, p99 **16.426 ms**, and transition p95 **14.89 ms**. Nodes returned
+  to **31 after each run**, with zero orphan growth; static allocation rose from 52.64 to
+  53.76 MB. Peak observed hostiles/projectiles were 7/47. This seed does not cover every
+  worst-case composition, and static allocation is not process RSS.
+- Native physics p95 was **12.079 ms**, over the plan's stricter 8 ms script/physics target.
+  The rendered frame budget passes on this machine; the entire performance gate does not.
+- A local Web export using the pinned 4.7.1 template boots successfully in Chrome, with no
+  game-script or browser-page failures; the local harness does not provide the hosted
+  `WavedashJS` interface. Its two-campaign stress probe returned to 31 nodes after each run with
+  zero orphan growth and observed 7 hostiles/48 projectiles at peak. Web frame p95 was
+  **19.2 ms**, physics p95 **21.0 ms**, and transition p95 **41.6 ms**, so this machine/browser
+  does not pass the performance gate. The normal isolated Web build script is blocked on this
+  Mac by Godot's ObjectDB snapshot-directory creation during import (and needs a `timeout`
+  command available). The local export was made from a temporary copy with the verified custom
+  template; it is not a signed, published, or release-qualified artifact.
+
+Reproduce the focused checks and combat probe:
+
+```bash
+godot --headless --fixed-fps 60 res://tests/executive_runner.tscn
+godot --headless --fixed-fps 60 res://tests/soak_runner.tscn
+godot res://tests/profile_executive.tscn -- --seed=918273 --profile-cycles=2
+```
+
+The probe prints a `CAMPAIGN_PROFILE` JSON record. Use `--headless --fixed-fps 60` for a
+fast lifecycle/CPU diagnostic, but do not interpret its unpaced wall times or sampled engine
+monitors as rendered frame times. `--snapshots` saves a room and summary image under `/tmp`.
+The diagnostic scenes stay excluded from normal exports. To play Floor 5 directly:
+
+```bash
+godot res://main.tscn -- --seed=918273 --floor=5
+```
+
+**The floor is implemented; the full gameplan gate remains open.** A human report on six-floor
+length, coordination pressure and both closing bosses, the stricter CPU budget, worst-room
+profiling, and performance/persistence on the actual hosted Web origin still need qualification.
+
+---
+
+## Floor 6: Core Intelligence
+
+Core Intelligence completes the campaign and flips `require_complete` to true. Content version 5
+moves the real victory behind the sixth boss reward, and the victory summary now says **SYSTEM
+RESTORED**. Older checkpoints are refused instead of being resumed into a run with a new ending.
+
+Seven combat templates use a 1 / 2 / 2 / 3 / 3 / 3 / 4 difficulty ladder and populations of
+5 / 6 / 6 / 7 / 7 / 7 / 8. They recombine compile lanes, throughput zones, cable ducts, migration
+pads, timing enemies and protection hubs without introducing a new traversal rule. Across 400
+deterministic seeds the floor averages **37.62 enemies**; authored Load Balancer pressure appears
+on 285/400 layouts. The floor's modeled income is 53.93 scrap before purchases.
+
+The fixed final encounter is **Core Intelligence**, a 190-health, fully damageable pattern boss.
+Its three rotations are lane/spread/thermal inference, twin lanes/gapped ring/thermal inference,
+and checkerboard/gapped wall/thermal inference. Each inference paints three non-overlapping driven
+throughput zones: one on the player's position and two orthogonal follow-ups toward open space.
+They use the existing cold-to-violet warning, remain inside the arena, and still resolve if the
+boss dies after committing them.
+
+The floor uses black glass, indigo circuitry and cold-white traces, with two new 64-beat music
+loops (28.2 seconds exploring and 22.3 seconds for the boss). Saturated hazard colours remain
+reserved for gameplay.
+
+Verification on Godot 4.7.2:
+
+- **33 suites, 5,472 checks** pass in the complete regression run.
+- The focused finale runner passes **4 suites, 1,118 checks**, including 400 finale layouts,
+  boss phase/death behavior, a JSON Floor 6 boundary resume, final-victory semantics, the prior
+  Executive coverage, and 100 complete six-floor campaigns.
+- Two rendered maximum-build campaigns returned to 31 nodes with zero orphan growth. Frame p95
+  was **15.486 ms**, p99 **16.426 ms**, and transition p95 **14.89 ms**. Physics p95 was
+  **12.079 ms**, so the stricter 8 ms performance gate remains open.
+- A release-template Web export completes and its package contains the Core Intelligence floor and
+  boss while excluding test assets. Hosted-origin persistence and browser performance remain to be
+  qualified on the release build.
+
+Run the finale directly or reproduce its focused checks:
+
+```bash
+godot res://main.tscn -- --seed=918273 --floor=6
+godot --headless --fixed-fps 60 res://tests/finale_runner.tscn
+```
