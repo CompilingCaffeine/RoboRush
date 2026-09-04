@@ -25,11 +25,13 @@ extends Boss
 ## behind one body. That is a climax rather than an unwinnable room, and it is arithmetic rather
 ## than tuning.
 ##
-## ## Three places heat comes from
+## ## Four places heat comes from
 ##
 ## The rack vents where its bodies are. It also **aims** — a patch centred on wherever the robot is
 ## standing, every `aimed_vent_interval` — and it **leads**, a patch centred on where the robot will
-## be in `lead_seconds` if it does not turn, every `lead_vent_interval`.
+## be in `lead_seconds` if it does not turn, every `lead_vent_interval`. And every
+## `line_vent_interval` it lays a **wall**: a chain of patches down the whole of one of its own
+## wires, filling together, with a door in it where the packet was riding.
 ##
 ## The first of those is what makes the fight's own sentence true. "Keep moving" was the floor's
 ## lesson and the boss's stated job, and the boss was not actually asking it: heat only ever landed
@@ -54,10 +56,25 @@ extends Boss
 ## a die roll covered enough of the room to eventually include them. Nothing in the fight is now
 ## random, which is the property the rest of it already had.
 ##
-## **Neither of them is divided by load**, and that is deliberate. The whole escalation of this
-## fight is the rack concentrating what it already had; two sources that quadrupled alongside it
-## would make the last phase a different, worse fight — four times the aimed heat on a player with
-## one body left to shoot. So the rack's own heat concentrates and these two stay flat, which keeps
+## The third is the only one that denies a **route** rather than a square, and until it existed
+## nothing here did. Both patch clocks are answered by a fifth of a second of walking, so the fight
+## was a room of islands a player stepped between: the pincer above is a real sentence, but it is
+## one a player satisfies by drifting, and they can drift at range for the whole fight without ever
+## being made to choose between two bad options. A wall cannot be drifted around. It is crossed
+## while it is cold or it is accepted, and the door in it — see `_drop_line_vent` — is what makes
+## that a question rather than a coin toss.
+##
+## Its escalation is the fight's own arithmetic rather than a curve of its own. Four nodes make four
+## short chords near the rim; two make one wire straight through the middle; one makes none, and the
+## trail behind the runaway node is the only wall a room with one body in it can have. **How nearly
+## the two-node wall cuts the arena in half is decided by which two nodes the player left standing**
+## — the geometry choice the shared pool hands them, which until now paid out only in how far the
+## packets travelled.
+##
+## **None of the three is divided by load**, and that is deliberate. The whole escalation of this
+## fight is the rack concentrating what it already had; sources that quadrupled alongside it would
+## make the last phase a different, worse fight — four times the aimed heat on a player with one
+## body left to shoot. So the rack's own heat concentrates and these three stay flat, which keeps
 ## the arithmetic in the paragraph above true of the *arena* rather than only of the nodes.
 ##
 ## **The aimed vent does step up, and it is the only thing here that escalates on anything other
@@ -87,6 +104,10 @@ extends Boss
 ## boss is positional: heat on the ground, load running along the lines between the nodes, and the
 ## nodes themselves, which cost a point to stand inside like every other body in the game
 ## (`BossPart._step_contact_damage`). Everything that can hurt the player here is a place.
+##
+## **The last node leads.** It walks at where the robot is going rather than at where it is, on the
+## same `lead_seconds` the lead vent uses, which is what stops the fight's climax from being its
+## safest phase — see `_step_runaway`.
 ##
 ## ## Why the nodes do not have health of their own
 ##
@@ -132,6 +153,13 @@ const ARENA_INSET := 26.0
 ## applied to — a node "heating up" would visibly go dim. The same correction `RuntimeError` makes
 ## for the compile lane's amber, for the same reason. See `_load_tint`.
 const TINT_GAIN := 2.1
+
+## The most patches one line vent may lay, however long the wire is.
+##
+## A ceiling rather than a tuning knob: at the shipped footprint the longest wire the ring can
+## stretch needs six, so this never binds on a fight anybody plays. It exists so that a config with
+## a one-tile footprint and a wide ring cannot ask the arena for two hundred zones on one frame.
+const MAX_LINE_VENTS := 12
 
 ## The player's collision radius, from player.tscn. Duplicated for the reason `CompileLane`,
 ## `FirewallNode` and `ThermalZone` all duplicate it: a hazard has to be able to ask who it caught
@@ -194,6 +222,15 @@ var _packet_cooldown := 0.0
 var _aimed_left := 0.0
 var _lead_left := 0.0
 
+## Seconds until the rack lays a wall along one of its own wires. One clock for the rack for the
+## same reason as the two above, and flat for the same reason: a wall is the room being cut, and a
+## room does not know how many bodies are left standing in it.
+var _line_left := 0.0
+
+## Seconds of wall left on the floor, and for exactly that long the two clocks that follow the robot
+## are **held** — see `_step_aimed_vent`.
+var _wall_left := 0.0
+
 
 func _ready() -> void:
 	assert(config != null, "CascadeFailure.config is unset: assign a CascadeFailureConfig.")
@@ -238,6 +275,11 @@ func begin(arena: Rect2) -> void:
 	# one ahead of it — is the pincer stated before either half of it has been learned.
 	_aimed_left = config.aimed_vent_interval
 	_lead_left = config.lead_vent_interval * 0.5
+	# Last of the three, and by a clear margin. The wall is the loudest thing the rack does and the
+	# only one that asks the player to go somewhere rather than to leave somewhere; meeting it
+	# before the two patch clocks have been seen once would be the fight opening on its hardest
+	# sentence.
+	_line_left = config.line_vent_interval
 
 	EventBus.boss_phase_changed.emit(int(_phase))
 	_announce_health()
@@ -487,12 +529,28 @@ func _step_motion(delta: float) -> void:
 ## doing is drawing a line of hot ground through the arena behind wherever the player has been —
 ## and the arena is 416x192, so a player running from it is a player about to cross their own
 ## trail. The floor's last word, and the same one it opened with.
+##
+## **It walks at the lead point rather than at the robot**, on `lead_seconds`, which is the same
+## rule and the same number the lead vent states. Chasing the robot's current position made this
+## the safest phase in the fight: a pursuer 55 px/s slower than its target and aimed at where that
+## target already is falls behind on every frame the player turns, so the trail it was drawing
+## stayed permanently behind them and the climax of the fight was a walk. Aiming where the robot is
+## *going* means it cuts the corner instead, and a player circling the arena — which is what
+## running from it looks like in a room this size — finds it inside their own circle and their own
+## trail across the front of it.
+##
+## Leading was the fix rather than speed, and the difference is the fight's whole character. A node
+## at 135 would be a chase the player can lose by holding a direction; a node at 105 that leads is
+## a chase they lose by holding a *turn*, which is the thing this floor has spent ten rooms and
+## three vent clocks asking for. It also keeps the config's promise that the last node cannot
+## outrun the robot, so the phase remains one the player wins on foot.
 func _step_runaway(delta: float, living: Array[int]) -> void:
 	if living.is_empty() or _player == null:
 		return
 	var node := _nodes[living[0]]
+	var target := _player.global_position + _player_velocity() * config.lead_seconds
 	node.global_position = node.global_position.move_toward(
-		_player.global_position, config.runaway_speed * node.get_status_speed_scale() * delta
+		target, config.runaway_speed * node.get_status_speed_scale() * delta
 	)
 	node.global_position = node.global_position.clamp(_body_bounds.position, _body_bounds.end)
 
@@ -513,12 +571,15 @@ func _slot_position(slot: int) -> Vector2:
 # --- Vents --------------------------------------------------------------------
 
 
-## The three sources, in the order the player learns them: the bodies, then where the robot is, then
-## where it is going. See the class doc for why only the first is scaled by load.
+## The four sources, in the order the player learns them: the bodies, then where the robot is, then
+## where it is going, then the wires between the bodies. See the class doc for why only the first is
+## scaled by load.
 func _step_vents(delta: float) -> void:
+	_wall_left = maxf(_wall_left - delta, 0.0)
 	_step_node_vents(delta)
 	_step_aimed_vent(delta)
 	_step_lead_vent(delta)
+	_step_line_vent(delta)
 
 
 func _step_node_vents(delta: float) -> void:
@@ -537,7 +598,20 @@ func _step_node_vents(delta: float) -> void:
 ## deferred when there is not. Holding the vent until a player appears would make the first thing a
 ## returning robot met a patch that had been waiting for it, which is the one kind of hazard this
 ## floor does not have.
+##
+## **It stops while a wall is filling**, along with the lead clock, and the clock is *held* rather
+## than allowed to run down and skip — so the rhythm the player was reading resumes where it left
+## off instead of arriving late by a random fraction. The rack does one thing at a time.
+##
+## That is a fairness rule as much as a legibility one. A wall is the only hazard here that asks the
+## player to go somewhere rather than to leave somewhere, and it is answerable because it has a door
+## in it (`_drop_line_vent`). A patch dropped on that door while the wall was still cold would close
+## the one answer the wall offered, after the player had already committed to it — the single way
+## this fight could put damage somewhere the telegraph did not warn about. Holding the two clocks
+## that chase the robot is what makes that impossible rather than merely unlikely.
 func _step_aimed_vent(delta: float) -> void:
+	if _wall_left > 0.0:
+		return
 	_aimed_left -= delta
 	if _aimed_left > 0.0:
 		return
@@ -560,6 +634,8 @@ func _step_aimed_vent(delta: float) -> void:
 ## is the correct place for it: a robot running at a wall is led into that wall, and the patch that
 ## meets them there is a whole patch flush against it rather than half of one outside the room.
 func _step_lead_vent(delta: float) -> void:
+	if _wall_left > 0.0:
+		return
 	_lead_left -= delta
 	if _lead_left > 0.0:
 		return
@@ -578,6 +654,126 @@ func _player_velocity() -> Vector2:
 	if _player is CharacterBody2D:
 		return (_player as CharacterBody2D).velocity
 	return Vector2.ZERO
+
+
+## Heat along one of the rack's own wires: a chain of patches from one living node to its
+## neighbour, dropped on a single frame and filling together, which makes it a **wall** rather than
+## a patch.
+##
+## This is the only thing in the fight that denies a *route* instead of a square, and the fight
+## needed one. Everything else it lays down is a patch the robot leaves in a fifth of a second, so
+## a player circling at range was never once asked to choose between two bad options — they
+## sidestepped, for the whole length of the fight. A wall cannot be sidestepped. It is crossed
+## while it is cold, or it is accepted, and either answer has to be chosen inside `vent_seconds`.
+##
+## **The wire is chosen, not rolled** — nothing in this fight is random — and it picks the one
+## nearest the player. That is the only choice that makes the mechanic mean anything: a wall laid
+## across the far side of the arena is scenery, and the wall that is worth reading is the one across
+## the ground the robot is actually standing on. Distance is how the rack says so without a die.
+##
+## The clock runs whether or not there is a wire to lay a wall on, and the drop is skipped rather
+## than deferred when the rack is down to one node — `_step_aimed_vent`'s convention, for its
+## reason. The last phase therefore has no walls in it at all, which is correct twice over: there is
+## nothing left to route load along, and the trail behind the runaway node is already the only wall
+## a room with one body in it can have.
+func _step_line_vent(delta: float) -> void:
+	_line_left -= delta
+	if _line_left > 0.0:
+		return
+	_line_left = maxf(config.line_vent_interval, 0.05)
+
+	var living := _living_slots()
+	if _edge_count(living.size()) == 0:
+		return
+	# The two clocks that chase the robot are held until this wall has finished filling — but only
+	# if a wall was actually laid. A wire too short to carry one lays nothing, and holding them for
+	# a wall that does not exist would quietly buy the player a second of calm the fight never
+	# charged for.
+	if _drop_line_vent(_nearest_edge(living), living):
+		_wall_left = config.vent_seconds
+
+
+## Which wire the wall goes on: the one whose *segment* passes closest to the robot, not the one
+## whose midpoint does. A chord the player is standing near the end of is a chord that cuts them
+## off, and measuring to the midpoint would hand that wall to a wire on the other side of the room.
+##
+## Falls back to the first wire when there is nobody to measure against, so a fight running without
+## a player still lays walls for a test to inspect.
+func _nearest_edge(living: Array[int]) -> int:
+	if _player == null:
+		return 0
+	var at := _player.global_position
+	var best := 0
+	var best_distance := INF
+	for index: int in _edge_count(living.size()):
+		var from := _nodes[living[index]].global_position
+		var to := _nodes[living[(index + 1) % living.size()]].global_position
+		var distance := Geometry2D.get_closest_point_to_segment(at, from, to).distance_to(at)
+		if distance < best_distance:
+			best_distance = distance
+			best = index
+	return best
+
+
+## Lays the wall along wire `index`, leaves a door in it, and reports whether there was enough wire
+## to lay one at all.
+##
+## Spaced by the vent's own width so consecutive patches meet at their edges rather than leaving
+## gaps between them. That is what `CascadeFailureConfig.vent_tiles` is four tiles for: a chain of
+## islands is four sidesteps, and only a continuous shape is a wall.
+##
+## **The door is where the packet is**, and it is the half of this mechanic that keeps it fair. A
+## solid wall across a 416x192 room is one the player can be on the wrong side of through no
+## decision of their own, and the fight would have nothing to offer them; a wall with a gap is a
+## route, and finding it inside `vent_seconds` is the question the mechanic exists to ask.
+##
+## Putting that gap under the packet makes it the load's doing rather than a mercy the fight hands
+## out. The one stretch of wire that did not overheat is the stretch the load was occupying, which
+## is the fiction the packets have been drawing since the first frame — and the first thing in this
+## fight they have ever been *for*. It also moves the door between one wall and the next without a
+## die, because the packet has moved.
+##
+## The chain is laid at the nodes' positions on the frame it is dropped and does not follow them
+## afterwards. That is correct rather than a shortcut: the wire is where the heat came from and the
+## ground is where the heat *is*, and ground does not orbit. A wall that tracked the spinning ring
+## would be a hazard whose final position the player could not have read while it was still cold,
+## which is the one thing nothing in this fight is allowed to be.
+func _drop_line_vent(index: int, living: Array[int]) -> bool:
+	var from := _nodes[living[index]].global_position
+	var to := _nodes[living[(index + 1) % living.size()]].global_position
+	var width := float(maxi(config.vent_tiles.x, 1) * Room.TILE_SIZE)
+	var length := from.distance_to(to)
+	if length < width * 2.0:
+		# Not enough wire to make a wall out of. The rack has inhaled, or two nodes have drifted
+		# together, and what a chain would come to here is a patch or two with no room for a door
+		# between them — a hazard the player cannot pass rather than a wall they must find their way
+		# through. Two footprints of wire is the shortest that yields three patches, which is the
+		# shortest thing that is still a wall once the door is taken out of it.
+		#
+		# The clock is spent either way, and that is what quietly hands the pacing to the breath:
+		# the rack lays walls while it is open and lays none while it is drawn in. It is the right
+		# fiction — a rack with its nodes clustered has no long wire to overheat — and it is the
+		# right rhythm, because the wall then arrives on the beat the player is already watching.
+		return false
+
+	# Spaced by exactly one footprint from the first node, rather than by the wire divided into
+	# equal parts. Even division is the tempting arithmetic and it is what makes the door
+	# unprovable: it puts consecutive patches anywhere from half a footprint to a whole one apart
+	# depending on how long the wire happens to be, and at the near end of that range a single
+	# missing patch leaves a gap narrower than the patches either side of it grow by, which is a
+	# door the robot does not fit through. A fixed stride means every door this leaves is the same
+	# door — a full footprint of clear wire, at every length of wire the ring can stretch.
+	#
+	# The cost is a stub of up to one footprint of unheated wire at the far end, where the stride
+	# does not divide the wire evenly. That is a second door rather than a defect, it is never wider
+	# than the one the packet leaves, and it moves as the ring breathes.
+	var count := clampi(floori(length / width) + 1, 3, MAX_LINE_VENTS)
+	var door := clampi(roundi(_packet_progress[index] * length / width), 0, count - 1)
+	for step: int in count:
+		if step == door:
+			continue
+		_drop_vent(from.lerp(to, width * float(step) / length))
+	return true
 
 
 ## Puts one zone on the floor under `at`.

@@ -15,6 +15,12 @@ extends Resource
 ## The one escalation that is not load is `aimed_vent_interval`, which ramps toward
 ## `aimed_vent_interval_runaway` a step per node lost. It has its own note below, and the note is
 ## mostly about why it is a step rather than a factor.
+##
+## Three clocks are deliberately left flat — `aimed_vent_interval` in the sense of not being
+## multiplied, `lead_vent_interval`, and `line_vent_interval`. Each has the same argument under it:
+## load is the *rack* concentrating what it already had, and a hazard aimed at the player or laid
+## across the room is not the rack, it is the room. Quadrupling those alongside the nodes would
+## make the last phase a different and worse fight rather than a louder one.
 
 @export var id: StringName = &"cascade_failure"
 @export var display_name: String = "Cascade Failure"
@@ -66,6 +72,11 @@ extends Resource
 ##
 ## Deliberately below the robot's 160: the last phase is not a fight the player can lose by being
 ## caught, it is one they lose by being herded onto ground they made hot two seconds ago.
+##
+## It stays below 160 and the node still catches nobody, but it no longer walks at where the robot
+## *is* — it walks at where the robot is going, on `lead_seconds`, the same rule the lead vent
+## states. See `CascadeFailure._step_runaway` for why leading at 105 is worth more than chasing
+## faster would be.
 @export var runaway_speed: float = 105.0
 
 @export_group("Vents")
@@ -82,12 +93,31 @@ extends Resource
 ## Seconds a dropped zone takes to fill before it vents. The player's whole warning, and it is the
 ## same warning the floor has been giving them for nine rooms: a patch of ground going from teal
 ## to violet. See `ThermalZone.spawn_vent`.
-@export var vent_seconds: float = 1.6
+##
+## **A fifth quicker than the floor's own `ThermalZone.SECONDS_TO_VENT`**, which is 1.5, and the
+## divergence is deliberate rather than drift. The colour means here exactly what it means out
+## there — this ground is about to vent — and the warning is still enormous next to what answering
+## it costs: a patch centred on the robot is left in 37 pixels, which is under a quarter of a
+## second at the robot's 160. What the shorter fill buys is that the arena *recovers* faster, and
+## that is what lets the rack put more ground down at once without paving the room. The rooms teach
+## the ramp at a walking pace; the boss speaks the same sentence faster.
+@export var vent_seconds: float = 1.2
 
 ## The footprint of one vent, in tiles. Read against `Room.TILE_SIZE`, so a vent lines up with the
-## floor it is painted on exactly as a room's own zones do. The same footprint for all three vent
-## sources below: three patches of ground that mean the same thing should be the same size.
-@export var vent_tiles := Vector2i(3, 3)
+## floor it is painted on exactly as a room's own zones do. The same footprint for all four vent
+## sources below: four patches of ground that mean the same thing should be the same size.
+##
+## Four rather than three, and the reason is not the escape margin. A 3x3 patch centred on the
+## robot was left in 29 pixels and a 4x4 is left in 37 — a fifth of a second either way against a
+## 1.2-second fill, and nowhere near enough to be the thing that makes a patch worth respecting.
+## Sizing one patch has never been what makes this fight hard.
+##
+## What the fourth tile buys is that neighbouring patches **join**. At three tiles the rack laid a
+## room of islands and the answer to every one of them was a sidestep; at four the arc of vents the
+## ring leaves behind it closes into a band, and the chain a line vent lays becomes a continuous
+## wall rather than a dashed one. The difference between stepping around a patch and pathing around
+## a shape is the whole of it, and `line_vent_interval` is a wall or it is nothing.
+@export var vent_tiles := Vector2i(4, 4)
 
 ## Seconds between the vents the rack aims at the player, wherever they are standing, while the
 ## whole rack is still up. `aimed_vent_interval_runaway` is the same clock with one node left, and
@@ -101,7 +131,7 @@ extends Resource
 ## `CascadeFailure.get_aimed_vent_interval` is where the ramp lives, and
 ## `tests/test_cascade_failure.gd` measures the total rate at both extremes.
 ##
-## Three seconds against `vent_seconds`'s 1.6 means the ground under the player is cold roughly
+## Three seconds against `vent_seconds`'s 1.2 means the ground under the player is cold well over
 ## half the time — enough that standing still is never a strategy and moving is never frantic.
 @export var aimed_vent_interval: float = 3.0
 
@@ -116,7 +146,7 @@ extends Resource
 ## **It has to stay longer than `vent_seconds`.** The gap between the two is how long the ground
 ## the player is standing on is cold, and a clock that aims faster than a patch fills leaves none
 ## of it — which is a treadmill rather than a rhythm, and the one unfairness the telegraph cannot
-## carry. At two seconds against a 1.6-second fill the last phase still hands the player the moment
+## carry. At two seconds against a 1.2-second fill the last phase still hands the player the moment
 ## they can stop in; it just makes that moment worth a great deal less.
 @export var aimed_vent_interval_runaway: float = 2.0
 
@@ -157,7 +187,40 @@ extends Resource
 ## and the two clocks converge on the same square. That is the correct punishment rather than a
 ## degenerate case: standing still is the one habit this floor exists to charge for, and it is the
 ## one state in which the fight stops offering a choice of which vent to answer.
+##
+## The last node steers by this number too — see `CascadeFailure._step_runaway`. One lead for both
+## is deliberate: a player who has learned to turn away from the patch in front of them has learned
+## the thing the last phase asks, and meeting it twice in one fight is a rule being confirmed
+## rather than a second rule being introduced.
 @export var lead_seconds: float = 0.6
+
+@export_group("The line vent")
+
+## Seconds between the vents the rack lays **along one of its own wires**: a chain of patches from
+## one living node to its neighbour, dropped together, filling together, and becoming a wall across
+## the room.
+##
+## This is the only thing the rack does that denies a *route* rather than a square, and the fight
+## needed one. Everything else it puts down is a patch the robot leaves in a fifth of a second, so
+## a player circling at range was never once asked to choose between two bad options — they
+## sidestepped, forever, for the length of the fight. A wall cannot be sidestepped. It has to be
+## crossed before it fills, or accepted, and either answer has to be chosen while it is still cold.
+##
+## It is drawn on geometry the player has been reading since the first second of the fight. The
+## lines between the nodes are already on screen, already dim, already the thing that says where a
+## packet can appear; the wall arrives on one of them, so the telegraph is not only the colour ramp
+## but the wire it is painted along. Nothing new has to be learned to see it coming.
+##
+## **Not divided by load**, for `aimed_vent_interval`'s reason, and it does not need to be — the
+## mechanic escalates on its own and does it out of the fight's own arithmetic. Four nodes make
+## four short chords near the rim. Two make a single wire straight through the middle, and how
+## nearly that wire cuts the room in half is decided by *which* two nodes the player chose to leave
+## standing. One node makes no wires at all, and the wall the last phase has instead is the trail
+## behind the node itself. The fight's loudest hazard is the one the player picked the shape of.
+##
+## Five seconds is about seven walls across a fight at the starting weapon's damage — often enough
+## to be the rhythm the phases are counted in, rare enough that the room is open most of the time.
+@export var line_vent_interval: float = 5.0
 
 @export_group("Load packets")
 

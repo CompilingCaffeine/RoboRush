@@ -22,6 +22,17 @@ extends TestCase
 ##    in an empty corner — it fills from nothing over `vent_seconds`, so there is no hazard in this
 ##    fight the player could not have walked out of. Checked the way the player meets it: run the
 ##    fight and catch each zone on the frame it appears.
+## 4. **Every wall has a door the robot fits through.** The line vent is the one hazard here that
+##    denies a route rather than a square, and a wall laid solid across a 416x192 room is one the
+##    player can be on the wrong side of through no decision of their own. The check measures what
+##    the player needs — a point on the wire clear of every patch, against the robot's own radius —
+##    rather than the mechanism that provides it, which is a missing link where the packet was.
+##
+## What is deliberately *not* pinned is that a route across the arena always exists. That was the
+## obvious fifth promise and it is the wrong one: a wall cutting the room is the mechanic, and
+## forbidding it forbids the thing the check was written to protect. What replaced it is a floor on
+## the ground the robot can still reach — see `_test_the_floor_stays_walkable_at_every_load`, which
+## carries the argument in full.
 ##
 ## The third one has been written the wrong way round twice, which is worth recording because both
 ## mistakes were the same mistake.
@@ -87,6 +98,51 @@ const BREATH_SECONDS := 8.0
 ## Absolute, which is the same thing as inset from the corner: `ARENA` starts at the origin.
 const UNREACHABLE_CORNER := Vector2(20.0, 20.0)
 
+## The arena as a tile grid, which is what `_blocked_tiles` and `_reachable_tiles` reason over.
+## 26x12, the interior a boss room actually is.
+const _TILES := Vector2i(26, 12)
+
+## The most of the arena the rack may have hot at once, as a fraction of its tiles.
+##
+## A tripwire for a fifth vent source rather than a budget for one, and the weaker of this check's
+## two numbers: what actually keeps the fight survivable is `REACHABLE_FLOOR` below. This is here so
+## that "the robot has somewhere to go" cannot one day be true of a room paved except for one
+## corridor. The fight peaks at 39% against it.
+##
+## The number is far above the quarter this check used to cap, and the fight is genuinely hotter
+## than it was — but a good half of the difference is the instrument rather than the boss. The old
+## figure summed zone rectangles and counted every overlap twice; this one is a union over tiles,
+## and the rack's patches overlap constantly.
+const WALKABLE_CEILING := 0.50
+
+## The least of the arena the robot may be able to reach, as a fraction of its tiles.
+##
+## The fight's survivability rule, and the one number in this check worth arguing about. A wall
+## across the room is allowed to take the far side away — that is what a wall is for — but no
+## combination of the four vent sources may leave the robot with less than this much ground to move
+## on, because at that point *keep moving* has stopped being a demand and become an impossibility.
+##
+## Three tenths of the arena is about ninety tiles, near enough a third of the room: more than
+## enough to walk the whole of a fill without meeting an edge, which is the only thing the robot
+## ever actually has to do. The fight measures 42% at its worst against this, so there are twelve
+## points of margin — real headroom, but headroom a fifth vent source, a longer fill or a wider
+## footprint would spend, and it should be argued about before it is moved rather than after.
+const REACHABLE_FLOOR := 0.30
+
+## What `_nearest_free_tile` returns when there is no free tile at all. Outside the grid, so it can
+## never be mistaken for an answer.
+const NO_TILE := Vector2i(-1, -1)
+
+## Radians per frame `_orbit_player` walks the robot around the middle of the arena.
+##
+## Chosen so the robot covers ground at its own `move_speed` rather than at whatever a round number
+## happened to produce: the orbit runs at radius 70, so 160 px/s is 160/70 radians per second and
+## this is that over 60 frames. It was 0.06, which is 252 px/s — half again as fast as the robot can
+## actually move, and a lie that mattered as soon as a check started measuring the *shape* of what
+## the fight leaves on the floor. A boss that vents at where the robot is going lays a much tighter
+## trail behind a target moving faster than any robot can.
+const ORBIT_STEP := 0.038
+
 var _config: CascadeFailureConfig
 var _arena: Node2D
 var _boss: CascadeFailure
@@ -123,8 +179,11 @@ func run() -> void:
 	await _test_each_failure_tightens_the_clock_that_aims()
 	await _test_it_heats_the_ground_the_player_is_heading_for()
 	await _test_a_stationary_robot_is_led_nowhere()
+	await _test_the_rack_lays_a_wall_along_its_own_wire()
+	await _test_a_wall_always_has_a_door()
 	await _test_the_floor_stays_walkable_at_every_load()
 	await _test_the_last_node_comes_for_the_player()
+	await _test_the_last_node_cuts_the_corner()
 	await _test_real_projectiles_drive_the_whole_fight()
 	await _test_the_floor_spawns_it_in_a_real_boss_room()
 
@@ -190,10 +249,20 @@ func _test_config_is_a_fight() -> void:
 			% [lead_px, vent_px],
 	)
 	# The last phase is a chase the player is meant to win on foot. Its threat is the trail, not
-	# the body, and a node faster than the robot would make it the body.
+	# the body, and a node faster than the robot would make it the body. Still true now that the
+	# node leads rather than chases — leading is what made the phase dangerous, and the speed is
+	# what keeps it winnable, and the two must not be confused for each other.
 	check(
 		_config.runaway_speed < 160.0,
 		"the last node cannot outrun the robot (%.0f against 160)" % _config.runaway_speed,
+	)
+	# A wall has to stand long enough to be a wall and clear long enough to leave the room open. Any
+	# interval at or under the fill would mean the next wall lands before the last one has vented,
+	# which is not a rhythm of walls but a permanently divided arena.
+	check(
+		_config.line_vent_interval > _config.vent_seconds * 2.0,
+		"the room is open between walls for longer than a wall takes to fill (%.2fs, %.2fs fill)"
+			% [_config.line_vent_interval, _config.vent_seconds],
 	)
 
 
@@ -535,7 +604,7 @@ func _test_every_vent_starts_cold() -> void:
 			# The robot keeps moving, because a stationary player is the easy case: parked in a
 			# corner it would sit clear of the ring by accident. Circling puts it where the nodes
 			# are, which is where the most vents of every kind land at once.
-			_orbit_player(0.06)
+			_orbit_player(ORBIT_STEP)
 			for zone: ThermalZone in _new_zones():
 				caught += 1
 				# A quarter, not zero. Zones are inspected on the frame after they appear at the
@@ -740,37 +809,179 @@ func _test_a_stationary_robot_is_led_nowhere() -> void:
 ##
 ## The rack's total vent rate does not rise with load — see the check above this one — but "the rate
 ## is constant" and "the floor stays walkable" are different claims, and only the second one is what
-## keeps the last phase winnable. This measures the second directly: the hot ground on screen, every
-## frame, at every load, as a fraction of the arena.
+## keeps the last phase winnable. This measures the second directly, every frame, at every load.
 ##
-## Summed rather than unioned, which overstates the coverage wherever two zones overlap. That is the
-## safe direction for a ceiling — the real figure is never worse than the one asserted here.
+## **It measures the room the robot has, not the area the rack covers, and that is a change of
+## instrument rather than a loosening of the bar.** The check here used to cap hot ground as a
+## fraction of the arena, and it capped it by summing zone rectangles — so overlapping patches were
+## counted twice and the fight read as half again as dangerous as it was. Worse, an area cannot tell
+## twenty percent scattered in islands, which is nothing, from twenty percent laid in one unbroken
+## bar, which is a room cut in half. The line vent makes exactly that distinction the whole point.
 ##
-## **The margin is no longer generous, and that is a fact worth carrying rather than hiding.** The
-## fight used to peak around thirteen percent here; the aimed and lead clocks put it at twenty,
-## against a ceiling of twenty-five. Two of those five remaining points are an artefact of the
-## compression — the 0.18s vent flash is a fixed cost that does not wind down with the clocks, so a
-## wound-in zone spends proportionally longer on screen than a shipped one, and the shipped fight
-## measures nearer eleven percent. What is left is still real headroom, but it is headroom a third
-## vent source would spend. Anyone adding one should expect to move a rate down to pay for it.
+## The obvious replacement was "a route across the arena always exists", and it is wrong, which is
+## worth recording because it is the mistake this file was one commit away from pinning. A wall that
+## cuts the room **is the mechanic**; a test forbidding it forbids the thing it was written to
+## protect. Crossing is not what keeps a player alive here — standing somewhere is. A player who
+## cannot get to the far side of the room for a second has been asked a question. A player who
+## cannot get anywhere at all has been cheated, and only the second is a fairness failure.
+##
+## So what is measured is **the ground the robot can still reach**: rasterise the arena into tiles,
+## mark every tile the robot cannot stand in — zone rects grown by `PLAYER_RADIUS`, the same test
+## `ThermalZone` applies when it decides who it caught — and flood outward from the robot's own tile.
+## The floor under that region is what says the fight has left them a room to fight in rather than a
+## square to die on, and the ceiling on total coverage stays as a second, weaker tripwire for a
+## fifth vent source.
 func _test_the_floor_stays_walkable_at_every_load() -> void:
 	await _begin()
 
-	var arena_area := ARENA.size.x * ARENA.size.y
-	var worst := 0.0
+	var tiles := float(_TILES.x * _TILES.y)
+	var worst_cover := 0.0
+	var worst_room := 1.0
+	var frames := 0
 	for phase_target: int in [4, 3, 2, 1]:
 		await _drive_to_nodes(phase_target)
 		for _frame: int in _frames(TEST_VENT_INTERVAL * 5.0):
 			await advance_physics(1)
-			worst = maxf(worst, _hot_area() / arena_area)
+			# The robot is walked around the middle rather than parked, because three of the four
+			# vent sources follow it: two aim at it and the fourth picks the wire nearest it. A
+			# robot parked in a corner measures a fight nobody is fighting.
+			_orbit_player(ORBIT_STEP)
+			frames += 1
+			var blocked := _blocked_tiles()
+			worst_cover = maxf(worst_cover, float(blocked.size()) / tiles)
+			worst_room = minf(worst_room, float(_reachable_tiles(blocked).size()) / tiles)
 
-	# A quarter. Well clear of the point at which a route across the room stops existing, and low
-	# enough that a build creeping toward it — a second vent source, a longer fill, a bigger
-	# footprint — trips this before a player has to find out by dying to it.
+	check(frames > 0, "the fight ran long enough to measure (%d frames)" % frames)
 	check(
-		worst < 0.25,
-		"hot ground never covers more than a quarter of the arena (peaked at %.0f%%)"
-			% (worst * 100.0),
+		worst_room > REACHABLE_FLOOR,
+		"the robot can always reach at least %.0f%% of the arena (worst was %.0f%%)"
+			% [REACHABLE_FLOOR * 100.0, worst_room * 100.0],
+	)
+	check(
+		worst_cover < WALKABLE_CEILING,
+		"and hot ground never covers more than %.0f%% of it (peaked at %.0f%%)"
+			% [WALKABLE_CEILING * 100.0, worst_cover * 100.0],
+	)
+
+	await _teardown()
+
+
+## The wall, and the fight's only answer to a player who has learned to drift.
+##
+## Checked with the other three clocks silenced, so every batch of zones that appears is a wall and
+## nothing else. What must be true is that the patches lie **along one of the wires the player can
+## already see** — the mechanic's whole telegraph is that it arrives on drawn geometry, and a wall
+## laid anywhere else would be a hazard with no warning but its own colour.
+func _test_the_rack_lays_a_wall_along_its_own_wire() -> void:
+	await _begin()
+	_silence_all_but_the_wall()
+
+	await _drain_the_clocks_already_running()
+
+	var walls := 0
+	var chains := 0
+	var strayed := 0
+	for _frame: int in _frames(_boss.config.line_vent_interval * 4.0):
+		await advance_physics(1)
+		_orbit_player(ORBIT_STEP)
+		var batch := _new_zones()
+		if batch.is_empty():
+			continue
+		walls += 1
+		if batch.size() > 1:
+			chains += 1
+		var wire := _nearest_wire(batch[0].get_rect().get_center())
+		for zone: ThermalZone in batch:
+			var at := zone.get_rect().get_center()
+			var on_wire := Geometry2D.get_closest_point_to_segment(at, wire[0], wire[1])
+			# Half a footprint of slack: the chain is laid on the wire, and a centre that is further
+			# off it than the patch is wide came from somewhere else.
+			if at.distance_to(on_wire) > float(_config.vent_tiles.x * Room.TILE_SIZE) * 0.5:
+				strayed += 1
+
+	check(walls > 0, "the rack laid walls to inspect (%d)" % walls)
+	check(strayed == 0, "every patch in them landed on a wire (%d did not)" % strayed)
+	# Not every wall: the ring breathes, and a wall laid on an inhaled rack is laid on a short wire.
+	# What would be wrong is a fight in which the wall is *never* a chain, which is what this catches
+	# if the length rule in `CascadeFailure._drop_line_vent` is ever tightened past the ring.
+	check(chains > 0, "and most of them were chains rather than single patches (%d)" % chains)
+
+	await _teardown()
+
+
+## The rule that makes the wall answerable, and the one this mechanic cannot ship without.
+##
+## A wall with no gap in a 416x192 room is one the player can be on the wrong side of through no
+## decision of their own, and the fight would have nothing to offer them. So every wall leaves a
+## door — `CascadeFailure._drop_line_vent` puts it wherever the packet was riding — and this checks
+## the property the player actually needs rather than the mechanism that provides it: that there is
+## a point on the wire the robot fits through.
+##
+## Measured with the robot's own radius, against the same grown rect `ThermalZone` uses to decide
+## who it caught, so "fits" means fits rather than "the centre would clear it".
+func _test_a_wall_always_has_a_door() -> void:
+	await _begin()
+	_silence_all_but_the_wall()
+	await _drain_the_clocks_already_running()
+
+	var walls := 0
+	var solid := 0
+	for _frame: int in _frames(_boss.config.line_vent_interval * 3.0):
+		await advance_physics(1)
+		_orbit_player(ORBIT_STEP)
+		var batch := _new_zones()
+		if batch.is_empty():
+			continue
+		walls += 1
+		if not _has_a_door(batch):
+			solid += 1
+
+	check(walls > 0, "the rack laid walls to inspect (%d)" % walls)
+	check(solid == 0, "and the robot fits through every one of them (%d were solid)" % solid)
+
+	await _teardown()
+
+
+## The last phase, and the change that stopped it being the safest part of the fight.
+##
+## The node walks at where the robot is *going* rather than at where it is, so it cuts the corner
+## instead of falling in behind. Set up so the two headings are as far apart as they can be: the
+## robot is pinned directly below the node and moving sideways at its own walking speed, which puts
+## the lead point ninety-odd pixels to one side of it. A node that chased would come straight down
+## and gain no ground sideways at all; a node that leads arrives beside the robot.
+##
+## The player is pinned every frame, position and velocity both, for `_count_vents_under_the_robot`'s
+## reason: `move_and_slide` runs on the robot whatever the test wants, and a velocity left to decay
+## would leave nothing to lead.
+func _test_the_last_node_cuts_the_corner() -> void:
+	await _begin()
+	await _drive_to_nodes(1)
+
+	var node := _boss.get_node_at(_last_slot())
+	if not require(node, "one node is left standing"):
+		await _teardown()
+		return
+
+	var at := ARENA.get_center()
+	var heading := Vector2.RIGHT * 160.0
+	node.global_position = at - Vector2(0.0, 60.0)
+	var sideways_before := node.global_position.x - at.x
+
+	for _frame: int in _frames(0.5):
+		_player.global_position = at
+		_player.velocity = heading
+		await advance_physics(1)
+
+	var sideways := node.global_position.x - at.x
+	check(
+		sideways > sideways_before + 8.0,
+		"the last node moves toward where the robot is going, not where it is (%.0f px across, was %.0f)"
+			% [sideways, sideways_before],
+	)
+	check(
+		node.global_position.y > at.y - 60.0,
+		"and it is still closing rather than only sidestepping (%.0f px above)"
+			% (at.y - node.global_position.y),
 	)
 
 	await _teardown()
@@ -915,6 +1126,7 @@ func _new_boss() -> CascadeFailure:
 	# that gets *shallower* as the clocks come down, which is the opposite of the thing under test.
 	fast.aimed_vent_interval_runaway = _config.aimed_vent_interval_runaway * winding
 	fast.lead_vent_interval = _config.lead_vent_interval * winding
+	fast.line_vent_interval = _config.line_vent_interval * winding
 	fast.vent_seconds = _config.vent_seconds * winding
 	boss.config = fast
 	return boss
@@ -964,17 +1176,78 @@ func _new_zones() -> Array[ThermalZone]:
 	return fresh
 
 
-## Total ground currently covered by the boss's vents, in square pixels.
-func _hot_area() -> float:
-	var area := 0.0
+## Every arena tile the robot cannot currently stand in, as a set keyed by `Vector2i`.
+##
+## A tile counts as blocked when its centre falls inside a vent **grown by `PLAYER_RADIUS`**, which
+## is the rect `ThermalZone._contains` uses to decide who it caught. Measuring against the raw rect
+## would call a tile walkable that the robot's edge is already standing in.
+##
+## A set rather than a count, because the interesting question the caller asks is not how many
+## there are but whether what is left joins up.
+func _blocked_tiles() -> Dictionary[Vector2i, bool]:
+	var blocked: Dictionary[Vector2i, bool] = {}
 	var container := get_tree().get_first_node_in_group(ProjectileFactory.CONTAINER_GROUP)
 	if container == null:
-		return area
+		return blocked
+	var rects: Array[Rect2] = []
 	for child: Node in container.get_children():
 		var zone := child as ThermalZone
 		if zone != null:
-			area += zone.get_rect().size.x * zone.get_rect().size.y
-	return area
+			rects.append(zone.get_rect().grow(ThermalZone.PLAYER_RADIUS))
+	for x: int in _TILES.x:
+		for y: int in _TILES.y:
+			var centre := ARENA.position + Vector2(float(x) + 0.5, float(y) + 0.5) * Room.TILE_SIZE
+			for rect: Rect2 in rects:
+				if rect.has_point(centre):
+					blocked[Vector2i(x, y)] = true
+					break
+	return blocked
+
+
+## Every tile the robot can reach from where it is standing, four-connected, without crossing a
+## vent. The size of this set is what says the fight has left them somewhere to fight.
+##
+## Seeded from the robot's own tile, and when that tile is itself blocked — which is legal and
+## common, since a zone spends `vent_seconds` cold under whoever is standing on it — from the
+## nearest free tile instead. A robot inside a filling patch has not been boxed in; it has been told
+## to move, and the question this answers is how much room it has to move *to*.
+func _reachable_tiles(blocked: Dictionary[Vector2i, bool]) -> Dictionary[Vector2i, bool]:
+	var seen: Dictionary[Vector2i, bool] = {}
+	var from := _nearest_free_tile(blocked)
+	if from == NO_TILE:
+		return seen
+
+	var queue: Array[Vector2i] = [from]
+	seen[from] = true
+	while not queue.is_empty():
+		var at: Vector2i = queue.pop_back()
+		for step: Vector2i in [Vector2i.RIGHT, Vector2i.LEFT, Vector2i.DOWN, Vector2i.UP]:
+			var next := at + step
+			if next.x < 0 or next.x >= _TILES.x or next.y < 0 or next.y >= _TILES.y:
+				continue
+			if seen.has(next) or blocked.has(next):
+				continue
+			seen[next] = true
+			queue.append(next)
+	return seen
+
+
+## The free tile closest to the robot, or `NO_TILE` if the rack has somehow paved every one of them
+## — which would be a failure of the check above rather than something to paper over here.
+func _nearest_free_tile(blocked: Dictionary[Vector2i, bool]) -> Vector2i:
+	var at := ((_player.global_position - ARENA.position) / Room.TILE_SIZE).floor()
+	var best := NO_TILE
+	var best_distance := INF
+	for x: int in _TILES.x:
+		for y: int in _TILES.y:
+			var tile := Vector2i(x, y)
+			if blocked.has(tile):
+				continue
+			var distance := Vector2(tile).distance_squared_to(at)
+			if distance < best_distance:
+				best_distance = distance
+				best = tile
+	return best
 
 
 func _count_vents_over(seconds: float) -> int:
@@ -1008,6 +1281,69 @@ func _count_vents_under_the_robot(at: Vector2, seconds: float) -> Vector2i:
 			if zone.get_rect().has_point(at):
 				counts.x += 1
 	return counts
+
+
+## Winds the three patch clocks out of the way so that every batch of zones the fight puts down is a
+## wall. `_boss.config` is this suite's own duplicate — see `_new_boss` — so this is local to the
+## check that asks for it, and it is the same silencing the aimed-ramp check does for the same
+## reason: a count is only about one source if the others are not contributing to it.
+func _silence_all_but_the_wall() -> void:
+	_boss.config.vent_interval = 1_000_000.0
+	_boss.config.aimed_vent_interval = 1_000_000.0
+	_boss.config.aimed_vent_interval_runaway = 1_000_000.0
+	_boss.config.lead_vent_interval = 1_000_000.0
+
+
+## Runs out the vent clocks that were already counting down when `_silence_all_but_the_wall` was
+## called, and throws away what they land.
+##
+## The rack staggers its nodes' first vents across a whole interval — see `CascadeFailure.begin` —
+## so winding an interval up to a million does not stop the vent already scheduled against the old
+## one. Without this the first wall inspected arrives mixed in with a node's parting patch, and the
+## check reads a stray in a batch the rack laid correctly.
+func _drain_the_clocks_already_running() -> void:
+	await advance_physics(_frames(TEST_VENT_INTERVAL * 1.5))
+	var _drain := _new_zones()
+
+
+## The wire nearest `at`, as its two endpoints. The wall is laid along one of them and this is how a
+## check finds out which without reaching into the boss for the index it chose.
+func _nearest_wire(at: Vector2) -> Array[Vector2]:
+	var parts := _boss.get_parts()
+	var best: Array[Vector2] = [Vector2.ZERO, Vector2.ZERO]
+	var best_distance := INF
+	for index: int in parts.size():
+		var from := parts[index].global_position
+		var to := parts[(index + 1) % parts.size()].global_position
+		var distance := Geometry2D.get_closest_point_to_segment(at, from, to).distance_to(at)
+		if distance < best_distance:
+			best_distance = distance
+			best = [from, to]
+	return best
+
+
+## Whether the robot fits through a gap somewhere in `wall`.
+##
+## Walks the wire the wall was laid on in small steps and asks whether any point on it is clear of
+## every patch, measured against the rects grown by `PLAYER_RADIUS` — the same rect `ThermalZone`
+## checks a body against, so a point that passes here is a point the robot can occupy.
+func _has_a_door(wall: Array[ThermalZone]) -> bool:
+	var wire := _nearest_wire(wall[0].get_rect().get_center())
+	var grown: Array[Rect2] = []
+	for zone: ThermalZone in wall:
+		grown.append(zone.get_rect().grow(ThermalZone.PLAYER_RADIUS))
+
+	var steps := maxi(int(wire[0].distance_to(wire[1]) / 4.0), 1)
+	for step: int in steps + 1:
+		var at := wire[0].lerp(wire[1], float(step) / float(steps))
+		var blocked := false
+		for rect: Rect2 in grown:
+			if rect.has_point(at):
+				blocked = true
+				break
+		if not blocked:
+			return true
+	return false
 
 
 ## Walks the player around the middle of the arena, so the vent check is asked about a robot that

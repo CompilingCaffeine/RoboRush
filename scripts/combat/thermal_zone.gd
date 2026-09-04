@@ -87,10 +87,17 @@ extends Node2D
 ## a zone's ramp and leave for reasons of their own before it ever resolved — see the class doc for
 ## how that reads from the outside, which is as a floor whose hazards do nothing at all.
 ##
-## Landing within a tenth of `CascadeFailureConfig.vent_seconds` is worth keeping. The boss's vents
-## fill on their own clock rather than under the player's feet, but they are the same zone drawn the
-## same way, and a ramp that means "about a second and a half" in nine rooms and something else in
-## the tenth is a ramp the player has to learn twice.
+## **`CascadeFailureConfig.vent_seconds` is 1.2 rather than this**, and the gap is deliberate. It
+## used to be within a tenth of this number and the argument for that was legibility: a ramp meaning
+## "about a second and a half" in nine rooms and something else in the tenth is a ramp the player
+## has to learn twice.
+##
+## What that argument got wrong is which half of the sentence the player is reading. The ramp is not
+## a duration they time, it is a *state* they read off a colour — teal is cold, violet is about to
+## vent — and that reading is identical at either speed. The boss says it a fifth faster because it
+## needs the ground to recover faster: it has four vent sources against a room's one, and the fill
+## is what decides how much of the arena is hot at any moment. Nothing about what the colour means
+## changes, and the boss's own warning stays enormous next to what answering it costs.
 const SECONDS_TO_VENT := 1.5
 
 ## Seconds from full heat back to cold, once the zone is no longer being loaded. Faster than it

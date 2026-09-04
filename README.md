@@ -704,7 +704,7 @@ tests/test_run.gd                          64 statistics, state, and summary che
 tests/test_shop.gd                         90 price, purchase, and refusal checks
 tests/test_boss.gd                         104 phase, terminal, and defeat checks
 tests/test_runtime_error.gd                97 checks on Development's boss
-tests/test_cascade_failure.gd              108 checks on the Data Center's boss
+tests/test_cascade_failure.gd              119 checks on the Data Center's boss
 tests/test_thermal.gd                      198 checks on what may and may not heat a zone
 tests/test_migration.gd                 + 334 checks on what a pad moves, and what rearms it
 tests/test_orchestrator.gd              + 224 checks on Cloud Operations' boss, including a
@@ -1950,9 +1950,10 @@ seven-second sine. Without it the middle of the arena is permanently safe, and a
 centre — on the floor about not standing still — would be arguing with the room it is standing in.
 The fiction does the work: this is cooling equipment, and what cooling equipment does is move air.
 
-**Heat comes from three places.** The rack vents where its bodies are. It also **aims** — a patch
+**Heat comes from four places.** The rack vents where its bodies are. It also **aims** — a patch
 centred on wherever the robot is standing — and it **leads**, a patch centred on where the robot
-will be in six tenths of a second if it does not turn.
+will be in six tenths of a second if it does not turn. And every five seconds it lays a **wall**:
+a chain of patches down the whole of one of its own wires, filling together, with a door in it.
 
 The first of those is what makes the fight's own sentence true, and for a while it was not. "Keep
 moving" was the stated job and heat only ever landed on the ring, so a player who found a patch of
@@ -1974,11 +1975,39 @@ player walking out wide to a cold corner has a heading pointed at that corner, s
 leads them is already there when they arrive. Nothing in the fight is random now, which is the
 property the rest of it already had.
 
-Neither is divided by load, and that is the point. The whole escalation here is the rack
-concentrating what it already had, so two sources that quadrupled alongside it would make the last
-phase a different and worse fight. Flat clocks keep the vent-rate arithmetic above true of the
-*arena* rather than only of the nodes, and the suite still measures it by counting every vent from
-every source at both loads.
+**The wall is the only thing here that denies a route rather than a square**, and until it existed
+nothing did. Both patch clocks are answered by a fifth of a second of walking, so the pincer above
+is a real sentence that a player satisfies by *drifting* — and drifting at range, for the whole
+fight, without ever being made to choose between two bad options. A wall cannot be drifted around.
+It is crossed while it is cold or it is accepted.
+
+It arrives on geometry the player has been reading since the first second: the wires between the
+nodes are already drawn, already the thing that says where a packet can appear, and the wall is
+painted along one of them — the one nearest the robot, chosen by distance rather than by a die. The
+door in it is **wherever the packet was riding**, which is the first thing in this fight the packets
+have ever been for: the one stretch of wire that did not overheat is the stretch the load was
+occupying. It moves between one wall and the next because the packet has moved, and it is a full
+footprint of clear wire at every length of wire the ring can stretch, which is a property of the
+fixed stride the chain is laid at rather than a number anybody tuned.
+
+The mechanic escalates out of the fight's own arithmetic rather than on a curve of its own. Four
+nodes make four short chords near the rim; two make one wire straight through the middle; one makes
+none, and the trail behind the runaway node is the only wall a room with one body in it can have.
+**How nearly the two-node wall cuts the arena in half is decided by which two nodes the player left
+standing** — which finally pays out the geometry choice the shared pool has always handed them. The
+ring's breath decides the rhythm: a wire shorter than two footprints has no room for a door, so the
+rack lays walls while it is open and none while it is drawn in.
+
+None of the three is divided by load, and that is the point. The whole escalation here is the rack
+concentrating what it already had, so sources that quadrupled alongside it would make the last phase
+a different and worse fight. Flat clocks keep the vent-rate arithmetic above true of the *arena*
+rather than only of the nodes, and the suite still measures it by counting every vent from every
+source at both loads.
+
+While a wall is filling, the two clocks that chase the robot are **held**. The rack does one thing
+at a time, and a patch dropped on the door while the wall was still cold would close the one answer
+the wall offered after the player had committed to it — the single way this fight could put damage
+somewhere the telegraph had not warned about.
 
 **The aimed clock does step up, once per node.** It walks from three seconds to two by an even step
 each time a node blows out — 3, 2.67, 2.33, 2 — and takes the step at the failure rather than at its
@@ -1988,8 +2017,8 @@ robot ran on exactly as it had, so every phase the player earned arrived with th
 rhythm underneath it. The size of the step is what keeps it fair — a third off the interval is a
 pace a player can feel, while the factor of four that load would have applied is a different fight —
 the floor under it is the fill. The gap between the aimed clock and `vent_seconds` is how long the
-ground the robot stands on is cold, so an interval at or under 1.6 seconds would leave none of it,
-and *keep moving* would stop being a rhythm and become the only input.
+ground the robot stands on is cold, so an interval at or under the 1.2-second fill would leave none
+of it, and *keep moving* would stop being a rhythm and become the only input.
 
 The suite measures the ramp the way it measures everything else here: it parks the robot in a corner
 the ellipse cannot reach and counts the patches that land on it, with the whole rack up and again
@@ -2001,6 +2030,28 @@ ramp exists or not.
 floor's mechanic is positional, so its boss is positional. Heat on the ground, load running along the
 lines between the nodes, and the nodes themselves, which cost a point to stand inside like every
 other body in the game. Everything that can hurt the player here is a place.
+
+**The last node leads.** It walks at where the robot is going rather than at where it is, on the same
+six tenths of a second the lead vent uses. Chasing the robot's current position made the climax the
+safest phase in the fight: a pursuer 55 px/s slower than its target, aimed at ground the target has
+already left, falls further behind on every turn, so the trail it draws stays permanently behind them
+and the last act is a walk. Leading means it cuts the corner instead, and a player circling the arena
+— which is what running from it looks like in a room this size — finds it inside their own circle
+with their own trail across the front of it. Leading was the fix rather than speed, and the
+difference is the phase's whole character: a node at 135 px/s would be a chase lost by holding a
+direction, and a node at 105 that leads is one lost by holding a *turn*, which is what this floor has
+spent ten rooms and four vent clocks asking for. It still cannot outrun the robot, so the phase
+remains one the player wins on foot.
+
+**What the suite pins is the room the robot has left, not the ground the rack has taken.** The check
+here used to cap hot area at a quarter of the arena, summing zone rectangles and double-counting
+every overlap. The obvious replacement — a route across the room must always exist — is wrong, and
+is worth recording because it was one commit from being pinned: a wall that cuts the room *is* the
+mechanic, and a test forbidding it forbids the thing it was written to protect. Crossing is not what
+keeps a player alive here; standing somewhere is. So the arena is rasterised into tiles, every tile
+the robot cannot stand in is marked, and the flood outward from the robot's own tile must always
+reach at least 30% of the room. It measures 42% at its worst, against 39% of the floor hot at the
+peak.
 
 #### Why the nodes have no health of their own
 
@@ -2024,7 +2075,7 @@ Failure to the Data Center, on the reasoning that a player meeting its vents bef
 throughput zones would be meeting an unexplained mechanic in the worst room to meet one in.
 
 The fight does not bear that out. Every hazard it puts down is a `ThermalZone` that starts cold and
-climbs visibly for 1.6 seconds before it bites — a telegraph read on its own terms at any depth. The Data Center teaches the ramp *faster*, not first. What the lock cost, and
+climbs visibly for 1.2 seconds before it bites — a telegraph read on its own terms at any depth. The Data Center teaches the ramp *faster*, not first. What the lock cost, and
 charged every run, was a campaign whose final fight never changed.
 
 The reverse direction was simply never listed: The Scrap King and Runtime Error are answered with
@@ -2770,6 +2821,16 @@ rest, oldest first:
   of you?** Cascade Failure's scatter is gone and the patch that replaced it lands 96 pixels
   along the robot's own heading. The intent is a pincer with the aimed vent whose only counter
   is a turn; whether a player feels that as a rule or as noise is the thing to watch for.
+- **Is the door in Cascade Failure's wall findable while the wall is still cold?** It is a full
+  footprint of clear wire and it sits wherever the packet was riding, so it is readable twice —
+  as a gap in a heating chain, and as the dot that was there when the chain landed. Whether a
+  player reads either of those in 1.2 seconds, or just runs and hopes, is the thing that decides
+  whether the mechanic is a question or a coin toss. The fallback if it is a coin toss is a
+  wider door rather than a slower clock.
+- **Is 39% of the floor hot too much?** The fight roughly doubled its coverage when the wall
+  landed, and the suite's answer is that the robot can still reach 42% of the room at the worst
+  moment — which is a survivability floor, not a comfort one. If the fight reads as busy rather
+  than as dangerous, `line_vent_interval` is the knob, not `vent_seconds`.
 - Does the CRT filter look like an arcade cabinet or like a dirty screen?
 
 Then move the numbers in `data/`, which is one `.tres` edit each and the whole payoff for
