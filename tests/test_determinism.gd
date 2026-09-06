@@ -738,7 +738,13 @@ func _descend(floor_node: FloorController) -> void:
 
 
 func _claim_reward(floor_node: FloorController) -> void:
-	floor_node._on_boss_reward_taken(floor_node.config.get_items()[0])
+	# The last floor's boss stands over a trophy rather than over three stands (see `Trophy`), so
+	# what is claimed here depends on which floor this is. Claiming the wrong one would descend a
+	# floor that has nothing on it to take.
+	if floor_node._trophy != null:
+		floor_node._trophy.claim()
+	else:
+		floor_node._on_boss_reward_taken(floor_node.config.get_items()[0])
 	# The rebuild is deferred, and so is the physics flush after it. One frame is not enough.
 	await advance_physics(4)
 

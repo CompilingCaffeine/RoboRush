@@ -877,6 +877,32 @@ SCRAP = [
     "..oooo..",
 ]
 
+# --- The trophy: the run's last object, and the only sprite in the game that is not
+# --- machinery. Twice the size of a pickup because it is not one — it is the prize the
+# --- final boss stands over, and it also goes on the title screen afterwards, where a
+# --- 8x8 badge would read as an icon rather than as something won. Gold rather than the
+# --- amber every other reward uses, so the one that ends the campaign cannot be mistaken
+# --- for the scrap and cells the other fifty-nine rooms drop.
+TROPHY = [
+    "................",
+    "..oooooooooooo..",
+    ".ooyyyyyyyyyyoo.",
+    "oaoyYYyyyyyyyoao",
+    "oaoyYyyyyyyyyoao",
+    "oaoyyyyyyyyyyoao",
+    "ooooyyyyyyyyoooo",
+    "..oooyyyyyyooo..",
+    "....oyyyyyyo....",
+    ".....oyyyyo.....",
+    "......oyyo......",
+    "......oyyo......",
+    ".....ooyyoo.....",
+    "....oaaaaaao....",
+    "...oaaaaaaaao...",
+    "...oooooooooo...",
+]
+
+
 # --- Repair cell: a green power cell. Deliberately the only green pickup, so
 # --- "green means health" needs no explanation.
 REPAIR_CELL = [
@@ -2212,6 +2238,7 @@ SPRITES = {
     "art/effects/spark.png": SPARK,
     "art/ui/scrap.png": SCRAP,
     "art/ui/repair_cell.png": REPAIR_CELL,
+    "art/ui/trophy.png": TROPHY,
 }
 
 

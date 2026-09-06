@@ -201,5 +201,11 @@ func _claim_boss_reward(floor_node: FloorController) -> void:
 	floor_node._on_boss_defeated(stand_in, boss_room)
 	stand_in.free()
 	await advance_physics(1)
-	floor_node._on_boss_reward_taken(floor_node.config.get_items()[0])
+	# The last floor's boss stands over a trophy rather than over three stands (see `Trophy`), so
+	# what is claimed here depends on which floor this is. Claiming the wrong one would descend a
+	# floor that has nothing on it to take.
+	if floor_node._trophy != null:
+		floor_node._trophy.claim()
+	else:
+		floor_node._on_boss_reward_taken(floor_node.config.get_items()[0])
 	await advance_physics(4)

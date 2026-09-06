@@ -26,6 +26,12 @@ extends Control
 var _boss_name := "THE BOSS"
 var _boss_defeat_banner := "THE BOSS IS DEFEATED"
 
+## Whether the boss now bound is the campaign's last. Decides which half of `_on_boss_defeated`'s
+## banner is printed, and nothing else: every floor's boss leaves a prize in the arena, and this is
+## which prize to send the player toward. False by default, which is the safe way round — a HUD
+## that had not been told would say "choose one reward" on a floor with three stands in it.
+var _boss_is_final := false
+
 ## What this floor's boss announces as each phase begins, indexed from phase one. Empty until
 ## `bind_boss` runs, and legitimately empty for a boss with nothing to say — see
 ## `FloorConfig.boss_phase_banners` for why this is data and not the constants it used to be.
@@ -42,6 +48,15 @@ const BOSS_DEFEAT_BANNER := "THE KING IS DEAD"
 ## Phase one's feint and the real defeat both keep BOSS_DEFEAT_BANNER: the first of those is the
 ## King going down, and so is the last.
 const CLAIMANTS_DEFEAT_BANNER := "THE CLAIMANTS ARE DEAD"
+
+## What a dead boss leaves behind, appended to its defeat banner. Two of them because the last floor
+## pays out in a trophy rather than in hardware (see `Trophy`), and a player who has been told to
+## choose one of three, five times, will walk into the last arena looking for three stands.
+##
+## The words are here rather than in the floor for the reason every other string on this screen is:
+## the HUD owns what the player reads, and `FloorController` owns what is standing in the room.
+const CHOOSE_REWARD_PROMPT := "CHOOSE ONE REWARD"
+const CLAIM_TROPHY_PROMPT := "TAKE THE TROPHY"
 
 const PIP_SIZE := Vector2(5, 8)
 const PIP_SEPARATION := 1
@@ -142,10 +157,13 @@ func _ready() -> void:
 
 ## Called once per floor, before its boss room is reachable — see
 ## `FloorController.boss_encountered`.
-func bind_boss(display_name: String, defeat_banner: String, phase_banners: Array[String]) -> void:
+func bind_boss(
+	display_name: String, defeat_banner: String, phase_banners: Array[String], is_final := false
+) -> void:
 	_boss_name = display_name
 	_boss_defeat_banner = defeat_banner
 	_boss_phase_banners = phase_banners
+	_boss_is_final = is_final
 
 
 ## Called as each floor begins, from main.gd. The floor's *name* already lives in the persistent
@@ -328,7 +346,8 @@ func _on_boss_feigned_defeat(_boss: Node, _at: Vector2) -> void:
 
 func _on_boss_defeated(_boss: Node) -> void:
 	_hide_boss_bar()
-	_show_banner("%s  //  CHOOSE ONE REWARD" % _boss_defeat_banner, BANNER_CLEAR)
+	var prompt := CLAIM_TROPHY_PROMPT if _boss_is_final else CHOOSE_REWARD_PROMPT
+	_show_banner("%s  //  %s" % [_boss_defeat_banner, prompt], BANNER_CLEAR)
 
 
 ## The name and nothing else. The item's effect is deliberately not stated anywhere on screen: what

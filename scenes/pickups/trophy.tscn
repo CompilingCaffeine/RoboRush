@@ -1,0 +1,36 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scenes/pickups/trophy.gd" id="1_trophy"]
+[ext_resource type="Texture2D" path="res://art/ui/trophy.png" id="2_texture"]
+[ext_resource type="Texture2D" path="res://art/effects/spark.png" id="3_spark"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_trophy"]
+radius = 10.0
+
+[node name="Trophy" type="Area2D"]
+collision_layer = 32
+collision_mask = 2
+monitorable = false
+script = ExtResource("1_trophy")
+
+[node name="Shape" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_trophy")
+
+[node name="Sparks" type="CPUParticles2D" parent="."]
+position = Vector2(0, 4)
+amount = 10
+lifetime = 1.1
+texture = ExtResource("3_spark")
+emission_shape = 3
+emission_rect_extents = Vector2(9, 9)
+direction = Vector2(0, -1)
+spread = 20.0
+gravity = Vector2(0, -14)
+initial_velocity_min = 6.0
+initial_velocity_max = 16.0
+scale_amount_min = 0.6
+scale_amount_max = 1.2
+color = Color(1, 0.823529, 0.235294, 1)
+
+[node name="Sprite" type="Sprite2D" parent="."]
+texture = ExtResource("2_texture")

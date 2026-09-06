@@ -1,4 +1,4 @@
-[gd_scene load_steps=35 format=3]
+[gd_scene load_steps=36 format=3]
 
 [ext_resource type="Script" path="res://tests/test_runner.gd" id="1_runner"]
 [ext_resource type="Script" path="res://tests/test_player_movement.gd" id="2_movement"]
@@ -9,6 +9,7 @@
 [ext_resource type="Script" path="res://tests/test_determinism.gd" id="21_determinism"]
 [ext_resource type="Script" path="res://tests/test_performance.gd" id="22_performance"]
 [ext_resource type="Script" path="res://tests/test_post_boss.gd" id="19_post_boss"]
+[ext_resource type="Script" path="res://tests/test_trophy.gd" id="33_trophy"]
 [ext_resource type="Script" path="res://tests/test_economy.gd" id="20_economy"]
 [ext_resource type="Script" path="res://tests/test_items.gd" id="6_items"]
 [ext_resource type="Script" path="res://tests/test_enemies.gd" id="7_enemies"]
@@ -82,6 +83,9 @@ script = ExtResource("26_cascade")
 
 [node name="PostBoss" type="Node" parent="."]
 script = ExtResource("19_post_boss")
+
+[node name="Trophy" type="Node" parent="."]
+script = ExtResource("33_trophy")
 
 [node name="HUD" type="Node" parent="."]
 script = ExtResource("17_hud")

@@ -98,6 +98,14 @@ signal room_cleared()
 ## one of them means "a thing died", the other means "the run is over".
 signal boss_defeated(boss: Node)
 
+## The campaign's trophy was picked up, which happens once per run and only on the last floor.
+## Distinct from `item_collected`, which every other prize on the floor emits: an item changes what
+## the robot does, and this one changes nothing about the run it ends. It is here rather than
+## called directly on `SaveManager` for the reason every signal here exists — see
+## `SaveManager._on_boss_defeated`, which is the same rule applied to the fight before it: nothing
+## in a scene should have to know that a save file exists.
+signal trophy_claimed(at: Vector2)
+
 ## Boss health changed, for the boss bar. `ratio` is 0..1 of the *current phase*, not of the
 ## fight: The Scrap King's bar empties at the end of every phase and refills when the next one
 ## begins, which is deliberate (see MergeConflict._begin_feint). Nothing reading this signal can

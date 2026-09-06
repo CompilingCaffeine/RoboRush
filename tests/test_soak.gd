@@ -182,7 +182,13 @@ func _descend(
 			% [seed_value, floor_node.config.floor_number])
 		return false
 
-	floor_node._on_boss_reward_taken(items[0])
+	# The last floor's boss stands over a trophy rather than over three stands (see `Trophy`), so
+	# what is claimed here depends on which floor this is. Claiming the wrong one would descend a
+	# floor that has nothing on it to take.
+	if floor_node._trophy != null:
+		floor_node._trophy.claim()
+	else:
+		floor_node._on_boss_reward_taken(items[0])
 	# The rebuild is deferred, and so is the physics flush that follows it.
 	await advance_physics(4)
 	return true

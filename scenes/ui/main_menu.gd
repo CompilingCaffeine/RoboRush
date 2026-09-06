@@ -39,6 +39,8 @@ const FOCUS_MARKER := "> "
 const FOCUS_PADDING := "  "
 
 @onready var _buttons: VBoxContainer = %Buttons
+@onready var _trophy: TextureRect = %Trophy
+@onready var _trophy_label: Label = %TrophyLabel
 @onready var _records_upper: Label = %RecordsUpper
 @onready var _records_lower: Label = %RecordsLower
 @onready var _tagline: Label = %Tagline
@@ -67,6 +69,7 @@ func _ready() -> void:
 
 	_build_buttons()
 	_refresh_records()
+	_refresh_trophy()
 
 	CloudSaveCoordinator.status_changed.connect(_on_cloud_status_changed)
 	_refresh_cloud_status()
@@ -153,6 +156,25 @@ func _refresh_records() -> void:
 	_records_lower.text = "MOST ROOMS %d    MOST SCRAP %d    HIGHEST HIT %.1f" % [
 		best.most_rooms_cleared, best.most_scrap_collected, best.highest_hit,
 	]
+
+
+## The trophy the player carried out of Core Intelligence, on the shelf under the title.
+##
+## Hidden until it has been won, for the same reason the records lines are: a greyed-out trophy on
+## a first-time player's title screen tells them the game has an ending they have not seen, which
+## is both obvious and discouraging, and it makes the moment it finally appears worth nothing.
+##
+## `SaveManager.trophy_claimed` is what decides it, and it is a saved fact rather than anything
+## about this session — which is the whole feature. The player who finished the campaign last month
+## opens the game today and the trophy is where they left it.
+func _refresh_trophy() -> void:
+	var won := SaveManager.trophy_claimed
+	_trophy.visible = won
+	_trophy_label.visible = won
+	if not won:
+		return
+	UIPalette.style(_trophy_label, UIPalette.ACCENT)
+	_trophy_label.text = "CAMPAIGN COMPLETE"
 
 
 func _on_cloud_status_changed(_status: CloudSaveCoordinator.Status) -> void:

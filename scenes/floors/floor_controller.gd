@@ -34,12 +34,20 @@ signal floor_theme_changed(theme: FloorTheme)
 ## Emitted once the boss is in its arena, carrying this floor's boss identity — plain signal
 ## for the same reason `floor_advanced` is: only main.gd needs it, to hand the HUD a name it
 ## has no other way to learn (see `FloorConfig.boss_display_name`).
-signal boss_encountered(display_name: String, defeat_banner: String, phase_banners: Array[String])
+##
+## `is_final` is the one thing here that is not the boss's own: it says what the fight leaves behind
+## rather than who is in it, because the last floor's boss stands over a trophy and every other
+## floor's stands over three items to choose between. The HUD is what tells the player which, and
+## the campaign order is the only thing that knows — see `is_final_floor`.
+signal boss_encountered(
+	display_name: String, defeat_banner: String, phase_banners: Array[String], is_final: bool
+)
 
 const ROOM_SCENE := preload("res://scenes/rooms/room.tscn")
 const DOOR_SCENE := preload("res://scenes/rooms/door.tscn")
 const SHOP_ROOM_SCENE := preload("res://scenes/shop/shop_room.tscn")
 const SESSION_SCENE := preload("res://scenes/floors/floor_session.tscn")
+const TROPHY_SCENE := preload("res://scenes/pickups/trophy.tscn")
 
 ## How many rare items the boss offers, and where they stand relative to the reward point.
 ## Spec section 16: choose one of three.
@@ -134,6 +142,11 @@ var _boss: Boss
 ## the choice is taken, which is exactly the window a checkpoint has to be able to describe — see
 ## `get_pending_boss_reward_ids`.
 var _boss_reward: ShopRoom
+
+## The campaign's trophy, while it stands unclaimed in the last floor's arena, and null on every
+## floor before it. The counterpart of `_boss_reward` above, and held for the same reason: it is
+## what a checkpoint taken in that window has to be able to describe — see `_restore_boss_reward`.
+var _trophy: Trophy
 
 ## Which boss guards this floor, drawn once in `build()`.
 var _boss_encounter: BossEncounter
@@ -306,9 +319,12 @@ func _open_session(generated: FloorLayout, seed_value: int) -> void:
 		campaign.preload_floor(floor_index + 1)
 
 
-## Stands the boss's offer back up in a resumed floor's arena, if the run was saved with one
-## unclaimed. Nothing to do for every other checkpoint, which is nearly all of them: the list is
-## empty unless the save was taken between the killing blow and the choice.
+## Stands the boss's prize back up in a resumed floor's arena, if the run was saved with one
+## unclaimed. Nothing to do for every other checkpoint, which is nearly all of them: that window is
+## the seconds between the killing blow and the claim.
+##
+## Two prizes, decided by which floor this is. Every floor but the last puts back the three items
+## the checkpoint names; the last puts back the trophy, which needs no names — see below.
 ##
 ## The items are resolved rather than drawn, for the reason `_place_boss_reward` gives — they were
 ## struck off the run's pool when they were first offered, and the run is still carrying that.
@@ -318,13 +334,27 @@ func _open_session(generated: FloorLayout, seed_value: int) -> void:
 ## a state that cannot happen is to build the floor as though it did not say so — the player then
 ## fights the boss and is offered a reward by the ordinary path.
 func _restore_boss_reward(ids: Array[StringName]) -> void:
-	if ids.is_empty():
-		return
-
 	var arenas := layout.find_by_type(RoomTemplate.Type.BOSS)
 	if arenas.is_empty():
 		return
 	var plan: RoomPlan = arenas[0]
+
+	# The last floor's prize is not in the checkpoint, because there is nothing about it to record:
+	# every trophy is the same object, and a cleared arena on the final floor can only mean one is
+	# standing in it — the one thing that takes it also ends the run, and ending a run clears the
+	# checkpoint. So the arena being cleared *is* the saved state, and it is enough to put it back.
+	#
+	# Without this the finale had the failure the item stands were given `floor_boss_reward_ids` to
+	# fix, in its worst form: a run saved between the last killing blow and the trophy came back to
+	# an empty arena on the last floor of the campaign, with the boss gone and no way left to win.
+	if is_final_floor():
+		if is_room_cleared(plan.id):
+			_place_trophy(_rooms[plan.id])
+		return
+
+	if ids.is_empty():
+		return
+
 	if not is_room_cleared(plan.id):
 		push_warning(
 			"FloorController: the saved run left a boss reward on floor %d, whose arena is not "
@@ -647,6 +677,7 @@ func _spawn_boss(room: Room) -> void:
 		_boss_encounter.display_name,
 		_boss_encounter.defeat_banner,
 		_boss_encounter.phase_banners,
+		is_final_floor(),
 	)
 	# One-shot: a boss is defeated exactly once per floor, and this controller now outlives a
 	# single floor. Without it, the next floor's boss spawn would stack a second connection,
@@ -702,6 +733,14 @@ func _on_boss_defeated(_boss_node: Node, room: Room) -> void:
 	_cleared[room.plan.id] = true
 	_set_doors_locked(room.plan.id, false)
 
+	# The last floor pays out in a trophy instead, and takes nothing out of the item pool to do it.
+	# A choice of three is a decision about the rest of the run, and on this floor there is no rest
+	# of the run: whichever stand the player read, weighed and pressed E on, the next thing that
+	# happened was the victory screen. See `Trophy`.
+	if is_final_floor():
+		_place_trophy(room)
+		return
+
 	var items := _draw_boss_reward()
 	if items.is_empty():
 		# Nothing left in the pool to offer. Winning must not depend on there being a prize:
@@ -738,15 +777,56 @@ func _place_boss_reward(room: Room, items: Array[ItemConfig]) -> void:
 	_boss_reward = reward
 
 
+## Stands the campaign's prize in the last arena. Reached twice: when the final boss falls, and
+## when a run saved in the window between that and picking it up is resumed — see
+## `_restore_boss_reward`, which is what decides the second case.
+##
+## Nothing is spent, nothing is drawn, and nothing is recorded against the run. That is the point
+## of it: the trophy is the same object for every player and every seed, so unlike the three stands
+## it replaces there is no state a checkpoint has to carry to put it back.
+func _place_trophy(room: Room) -> void:
+	var trophy: Trophy = TROPHY_SCENE.instantiate()
+	trophy.position = room.to_local(room.get_reward_position())
+	trophy.claimed.connect(_on_trophy_claimed)
+	room.add_child(trophy)
+	_trophy = trophy
+
+
+## Picking it up is what wins the campaign, and it goes through `_finish_floor` rather than calling
+## `GameManager.win_run` itself. That is deliberate: the last floor must lose the same races every
+## other floor loses. A compile lane that was already painted when the boss fell can kill the
+## player on their walk to the trophy, and `_finish_floor` is the one place that knows a run which
+## has already ended does not then win.
+func _on_trophy_claimed() -> void:
+	_trophy = null
+	_finish_floor()
+
+
+## Whether this is the floor the campaign ends on, and therefore the floor whose boss stands over a
+## trophy rather than over three stands. The same question `_finish_floor` asks to decide between
+## winning and descending, asked once and by one name so the two answers cannot disagree — a floor
+## that offered a trophy and then descended, or offered hardware and then won, would be worse than
+## either mistake on its own.
+##
+## Content with no campaign — a test arena, a floor opened on its own — is terminal, exactly as it
+## is for `_finish_floor`: a floor with nothing after it is the last one.
+func is_final_floor() -> bool:
+	return campaign == null or campaign.is_terminal(floor_index)
+
+
 ## What the boss's offer is holding, for a checkpoint taken while it is standing unclaimed. Empty
 ## whenever there is nothing to put back: before the boss dies, and after the choice is taken.
 ##
 ## This is the second half of what `ShopStock` does for the floor's shop, and it exists for a
 ## sharper reason than a leak. The boss room is marked cleared the instant the boss falls, so a
 ## resumed floor rebuilds it with no boss in it — and the stands died with the session that owned
-## them. Nothing else can descend a floor: `_finish_floor` runs only from `choice_taken`. A run
-## saved in the seconds between the killing blow and taking the prize therefore came back to a
-## cleared arena with nothing in it and no way off the floor, for the rest of the run.
+## them. Nothing else can descend a floor: `_finish_floor` runs from a claimed prize and from
+## nothing else. A run saved in the seconds between the killing blow and taking the prize therefore
+## came back to a cleared arena with nothing in it and no way off the floor, for the rest of the
+## run.
+##
+## Always empty on the last floor, where the prize is a trophy rather than a choice and there is
+## nothing about it to write down — `_restore_boss_reward` says what puts that one back.
 func get_pending_boss_reward_ids() -> Array[StringName]:
 	var ids: Array[StringName] = []
 	if _boss_reward == null or not is_instance_valid(_boss_reward):
@@ -764,7 +844,8 @@ func _on_boss_reward_taken(_item: ItemConfig) -> void:
 
 ## Winning the run and advancing to the next floor are the same event from the boss's point of
 ## view — "this floor is done" — so both call sites funnel through here rather than deciding for
-## themselves. Being the last floor the *campaign* lists is what makes a floor the run's last one;
+## themselves. There are two ways in and only two, and both are the player choosing to leave: a
+## stand emptied of its item, and a trophy picked up off the floor. Being the last floor the *campaign* lists is what makes a floor the run's last one;
 ## it used to be having no `next_floor`, which was the same fact restated once per floor.
 func _finish_floor() -> void:
 	# The loss wins the race. A hazard committed before the boss died is allowed to kill the player
@@ -906,6 +987,7 @@ func _release_session() -> void:
 	# next floor's checkpoint recording the shelves of the floor the run has left.
 	_shop = null
 	_boss_reward = null
+	_trophy = null
 
 	_rooms.clear()
 	_doors_by_room.clear()

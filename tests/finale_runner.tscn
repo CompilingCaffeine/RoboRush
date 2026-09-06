@@ -1,10 +1,11 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://tests/test_runner.gd" id="runner"]
 [ext_resource type="Script" path="res://tests/test_gate.gd" id="gate"]
 [ext_resource type="Script" path="res://tests/test_executive.gd" id="executive"]
 [ext_resource type="Script" path="res://tests/test_core_intelligence.gd" id="core"]
 [ext_resource type="Script" path="res://tests/test_soak.gd" id="soak"]
+[ext_resource type="Script" path="res://tests/test_trophy.gd" id="trophy"]
 
 [node name="FinaleRunner" type="Node"]
 script = ExtResource("runner")
@@ -17,6 +18,9 @@ script = ExtResource("executive")
 
 [node name="CoreIntelligence" type="Node" parent="."]
 script = ExtResource("core")
+
+[node name="Trophy" type="Node" parent="."]
+script = ExtResource("trophy")
 
 [node name="Soak" type="Node" parent="."]
 script = ExtResource("soak")

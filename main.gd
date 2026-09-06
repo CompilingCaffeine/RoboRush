@@ -23,6 +23,8 @@ const FLOOR_SEED_OVERRIDE := 0
 @onready var _minimap: Minimap = %Minimap
 @onready var _debug_hud: DebugHUD = %DebugHUD
 @onready var _pause_menu: PauseMenu = %PauseMenu
+@onready var _victory_card: VictoryCard = %VictoryCard
+@onready var _run_summary: RunSummary = %RunSummary
 
 ## Set when this scene has decided not to build anything and has asked to be replaced by the
 ## title screen. The scene change is deferred — it cannot happen inside `_ready` — so there is a
@@ -90,6 +92,11 @@ func _ready() -> void:
 	# middle of a floor has to record which of its rooms are already done. Wired here rather than in
 	# either of them, for the same reason as everything else in this file.
 	_pause_menu.save_requested.connect(_on_save_requested)
+	# The card puts itself up when the run is won and takes itself down when the player presses
+	# something; all it needs from here is somewhere to send the keyboard afterwards. Wired in this
+	# file rather than between the two screens, for the reason everything else here is: neither of
+	# them should have to know the other exists.
+	_victory_card.closed.connect(_run_summary.focus_buttons)
 
 	# The campaign is the floor order, so the opening floor comes from it too rather than from
 	# whatever `floor.tscn` happens to have in its `config` slot. One authority, including for

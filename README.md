@@ -517,6 +517,13 @@ The boss reward reuses those same stands in an *exclusive* mode — three rare i
 and taking one closes the others. The interaction is identical to shopping, so a second
 almost-identical pedestal would be a second thing to keep working.
 
+**The last floor is the exception, and it is the only one.** Core Intelligence's boss stands
+over a trophy rather than over three stands: a choice of three is a decision about the rest of
+the run, and on the sixth floor there is no rest of the run. The player walks into it, the
+campaign ends, and the trophy is on the title screen from then on. One question —
+`FloorController.is_final_floor` — decides both which prize is put up and whether claiming it
+descends or wins, so a floor cannot offer a trophy and then build a seventh underneath it.
+
 **The boss arena is one room, and that was re-examined rather than assumed.** Milestone 4's
 README listed "the boss needs an arena larger than one grid cell" as a limitation. It was
 speculation, not a spec requirement: section 16 asks for a *rectangular server room with
@@ -659,6 +666,8 @@ scenes/floors/floor.tscn / .gd             Instantiates the layout, runs the roo
 scenes/pickups/pickup.tscn / .gd           One scene, behaviour from PickupConfig
 scenes/ui/combat_hud.tscn / .gd            Integrity, dash, weapon, scrap, items, boss bar
 scenes/ui/run_summary.tscn / .gd         + Game over, victory, pause, and the Tab peek
+scenes/ui/victory_card.tscn / .gd       + YOU WIN!, over the summary, once per campaign
+scenes/pickups/trophy.tscn / .gd        + The last floor's prize; taking it wins the run
 scenes/ui/minimap.tscn / .gd               Explored floor; unvisited types stay hidden
 scenes/ui/debug_hud.tscn / .gd             Developer diagnostics (F1), off by default
 scenes/ui/pause_menu.tscn / .gd         + Resume, settings, controls, abandon, quit
@@ -695,6 +704,8 @@ tests/test_campaign.gd                     86 campaign, lookup, seed, and inject
 tests/test_determinism.gd                  183 seed-derivation, stream, manifest, and record checks
 tests/test_economy.gd                      57 reward, boss-choice, stacking, and 10k-run checks
 tests/test_post_boss.gd                    36 checks that a dead boss's hazards still resolve
+tests/test_trophy.gd                    +  62 checks on the finale's prize: what it replaces,
+                                            what taking it does, and that it outlives the session
 tests/test_floor.gd                        974 generation, invariant, template, and floor-advance
                                             checks, including the flood fill that walks every
                                             template in the campaign
@@ -2902,7 +2913,7 @@ The maximum legal inventory, long cause-of-death label, and ending buttons fit 4
 
 ### Executive Systems verification
 
-- Full regression after the finale: **33 suites, 5,472 checks**, passing on Godot 4.7.2.
+- Full regression after the finale: **34 suites, 5,545 checks**, passing on Godot 4.7.2.
 - The 502 new Executive checks also pass on pinned Godot 4.7.1. They cover 400 Floor 5
   layouts, pad landings, the advanced encounter's damage/death contract, maximum inventory UI,
   and JSON checkpoint round trips at all four boundaries. Every resumed path reproduces the
@@ -2957,7 +2968,7 @@ profiling, and performance/persistence on the actual hosted Web origin still nee
 ## Floor 6: Core Intelligence
 
 Core Intelligence completes the campaign and flips `require_complete` to true. Content version 5
-moves the real victory behind the sixth boss reward, and the victory summary now says **SYSTEM
+moves the real victory behind the sixth boss's prize, and the victory summary says **SYSTEM
 RESTORED**. Older checkpoints are refused instead of being resumed into a run with a new ending.
 
 Seven combat templates use a 1 / 2 / 2 / 3 / 3 / 3 / 4 difficulty ladder and populations of
@@ -2979,16 +2990,53 @@ reserved for gameplay.
 
 Verification on Godot 4.7.2:
 
-- **33 suites, 5,472 checks** pass in the complete regression run.
-- The focused finale runner passes **4 suites, 1,118 checks**, including 400 finale layouts,
-  boss phase/death behavior, a JSON Floor 6 boundary resume, final-victory semantics, the prior
-  Executive coverage, and 100 complete six-floor campaigns.
+- **34 suites, 5,545 checks** pass in the complete regression run.
+- The focused finale runner passes **5 suites, 1,180 checks**, including 400 finale layouts,
+  boss phase/death behavior, a JSON Floor 6 boundary resume, final-victory semantics, the trophy
+  that now carries it, the prior Executive coverage, and 100 complete six-floor campaigns.
 - Two rendered maximum-build campaigns returned to 31 nodes with zero orphan growth. Frame p95
   was **15.486 ms**, p99 **16.426 ms**, and transition p95 **14.89 ms**. Physics p95 was
   **12.079 ms**, so the stricter 8 ms performance gate remains open.
 - A release-template Web export completes and its package contains the Core Intelligence floor and
   boss while excluding test assets. Hosted-origin persistence and browser performance remain to be
   qualified on the release build.
+
+### The trophy, and what happens after it
+
+The sixth boss does not put up a choice of three. It leaves a **trophy** on the arena floor, and
+walking into it is what ends the campaign — no stand, no price, no press. The five floors before it
+are unchanged, and the banner over a dead boss now says which of the two is waiting: `TAKE THE
+TROPHY` on the last floor, `CHOOSE ONE REWARD` on every other.
+
+The reason is what the old choice actually was. Three rare items, weighed against a build, on the
+floor where the next thing that happens is the statistics screen — a decision the player could not
+act on, offered at the one moment they had earned something to keep. The trophy also costs the run
+nothing: the three stands *spend* what they offer out of the run's item pool, and the finale now
+draws nothing at all.
+
+Taking it does three things and they are deliberately separate:
+
+- **It wins the run**, through `_finish_floor` like every other floor, so the last floor loses the
+  same races the others do. A compile lane painted before the boss fell can still kill the player on
+  the walk over, and a run that has already ended does not then win — the post-boss contract, on
+  the one floor where breaking it costs the whole campaign.
+- **It puts up a celebration.** `YOU WIN!`, the trophy, confetti, and the run summary waiting
+  behind it. Sixty rooms used to end on the same grey panel a death produces, with two different
+  words at the top of it. The card is dismissed by any button, exactly as the controls card is.
+- **It is written to the save.** `trophy_claimed` is its own field rather than `runs_won > 0`,
+  because it is an object the player picked up rather than a number that went up, and the title
+  screen puts it on a shelf under the logo from then on — the next launch, and every launch after.
+
+Two states that are easy to get wrong are covered explicitly. A run saved between the killing blow
+and the pickup comes back to a trophy still standing: nothing about it is written to the
+checkpoint, because a cleared arena on the final floor can only mean one is there — the only thing
+that takes it also ends the run. And a player standing on the reward point when the boss falls is
+refused for `Trophy.ARM_DELAY` and then collected on the spot, rather than having to step off the
+prize and walk back onto it.
+
+The save format is version 3. A version 2 file reads as a campaign not yet finished, which is what
+every save written before the trophy existed describes; a version 2 *build* reading a version 3
+file freezes its writes rather than dropping the flag, which is what that number is for.
 
 Run the finale directly or reproduce its focused checks:
 

@@ -50,7 +50,7 @@ const SAVE_BACKUP_PATH := "user://save.json.bak"
 ## broke, and a growing pile of them in `user://` is its own problem.
 const SAVE_CORRUPT_PATH := "user://save.json.corrupt"
 
-const SAVE_VERSION := 2
+const SAVE_VERSION := 3
 
 ## The most a save file may be. A save with a run checkpoint in it is about four kilobytes and
 ## nothing in the format grows with play except the per-floor records, which are capped at six.
@@ -99,6 +99,17 @@ var bosses_defeated: Array[StringName] = []
 ## Spec section 24. Set once the player has been through the controls card, so it is shown
 ## automatically to a first-time player and never again after that.
 var tutorial_completed := false
+
+## Whether the campaign's trophy has ever been picked up. What the title screen puts on its shelf
+## from then on, which is the whole reason it is a field of its own rather than `best.runs_won > 0`.
+##
+## Those two are nearly the same fact and deliberately not the same field. `runs_won` is a count
+## kept by the records — a number that goes up, next to how many runs were started and how fast the
+## quickest was. This is an object the player walked across an arena and picked up, and the title
+## screen shows it as one. Deriving the trophy from a statistic would also mean any future way of
+## finishing a run — a shortcut, a debug win, a campaign that ends somewhere else — silently
+## awarded it; this is set by the trophy itself and by nothing else.
+var trophy_claimed := false
 
 ## Set false by the test runner. The suite exercises the real manager, and a test must never
 ## overwrite the save file of whoever is running it.
@@ -150,6 +161,7 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	EventBus.item_collected.connect(_on_item_collected)
 	EventBus.boss_defeated.connect(_on_boss_defeated)
+	EventBus.trophy_claimed.connect(_on_trophy_claimed)
 	_watch_web_unload()
 
 
@@ -330,6 +342,16 @@ func mark_tutorial_completed() -> void:
 	request_save()
 
 
+## Records that the campaign has been finished, once and for good. Nothing takes it back: a player
+## who wins with a lucky build and then loses forty runs has still won, and a title screen that
+## could withdraw the trophy would be measuring the current run rather than the campaign.
+func record_trophy_claimed() -> void:
+	if trophy_claimed:
+		return
+	trophy_claimed = true
+	request_save()
+
+
 ## Read off the EventBus rather than reported by the boss, so no gameplay script has to know
 ## that a save file exists — the same rule that keeps enemies from spawning their own
 ## particles.
@@ -349,6 +371,12 @@ func _on_boss_defeated(boss: Node) -> void:
 	var id: Variant = config.get("id")
 	if id is StringName:
 		record_boss_defeated(id)
+
+
+## Read off the EventBus, exactly as the boss credit above is and for the same reason: `Trophy` is
+## a sprite in a room, and nothing in a room should have to know a save file exists.
+func _on_trophy_claimed(_at: Vector2) -> void:
+	record_trophy_claimed()
 
 
 func _on_item_collected(item: ItemConfig) -> void:
@@ -487,6 +515,7 @@ func _write_save_file() -> String:
 		"bosses_defeated": _to_string_array(bosses_defeated),
 		"statistics": best.to_dict(),
 		"tutorial_completed": tutorial_completed,
+		"trophy_claimed": trophy_claimed,
 		# Present and null rather than absent when there is no run, so "this build does not write
 		# checkpoints" and "this player has no run in progress" are distinguishable in a file
 		# somebody is looking at to work out why a run did not come back.
@@ -555,6 +584,7 @@ func load_game() -> void:
 	unlocked_items = _to_name_array(data.get("unlocks"))
 	bosses_defeated = _to_name_array(data.get("bosses_defeated"))
 	tutorial_completed = data.get("tutorial_completed") == true
+	trophy_claimed = data.get("trophy_claimed") == true
 	_checkpoint = _read_checkpoint(data)
 	apply_settings()
 
@@ -662,6 +692,13 @@ func _discard_file(path: String) -> void:
 ## Version 1 had no run checkpoint. Nothing else about the format changed, so migrating a version
 ## 1 file is reading it: every field it has is still a field, and the checkpoint it lacks reads
 ## as "no run in progress", which is exactly what a version 1 player had.
+##
+## Version 2 had no trophy, and migrates the same way: the field it lacks reads as "the campaign has
+## not been finished", which is true of every save written before the trophy existed — the finale
+## paid out in items, so there was no trophy for anyone to have picked up. The bump is what stops
+## the *reverse* trip being silent: a version 2 build reading this file would drop the flag on its
+## next write and take the trophy off the title screen, and freezing its writes is the whole of
+## what this number is for.
 ##
 ## A file from a *newer* build is read for what is recognised and then **frozen**. Every reader
 ## here already ignores fields it does not know, so a player who rolls back a build can still see

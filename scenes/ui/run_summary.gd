@@ -145,6 +145,15 @@ func _refresh() -> void:
 			(_buttons.get_child(0) as Button).grab_focus()
 
 
+## Puts the keyboard back on this screen's first button. Called when something that was covering
+## it goes away — today that is the victory card, which releases focus on the way up so that
+## `ui_accept` cannot press RETRY through it, and has to give it back on the way down. Ignored
+## unless the buttons are actually on screen, so it cannot focus a hidden panel mid-run.
+func focus_buttons() -> void:
+	if visible and _buttons.visible and _buttons.get_child_count() > 0:
+		(_buttons.get_child(0) as Button).grab_focus()
+
+
 func _set_title(text: String, color: Color) -> void:
 	_title.text = text
 	UIPalette.style(_title, color, TITLE_FONT_SIZE)
