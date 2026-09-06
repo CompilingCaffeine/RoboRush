@@ -381,6 +381,36 @@ RECURSION = [
     "................",
 ]
 
+# --- Elder Recursion: the same nested-squares silhouette one rung up, in hostile red, with
+# --- *two* smaller bodies drawn inside it instead of one. Everything the Recursion sprite does
+# --- it does louder: the outline reaches the edge of the cell rather than sitting inside it, so
+# --- the elder reads as bigger before its scale is applied, and the two inner squares say how
+# --- many things are about to come out of it. A player who has met a Recursion can read this
+# --- one without being told anything.
+# ---
+# --- Red rather than violet, which is the only colour decision here. Violet is the Recursion's,
+# --- and the roster it appears in already spends violet on the Memory Leech; the hostile screen
+# --- red is what this game paints on the things that are about to cost you something.
+ELDER_RECURSION = [
+    "oooooooooooooooo",
+    "orrrrrrrrrrrrrro",
+    "orooooooooooooro",
+    "orowwwwwwwwwworo",
+    "orowRRRRwwwwworo",
+    "orowRYYRwwwwworo",
+    "orowRYYRwwwwworo",
+    "orowRRRRwwwwworo",
+    "orowwwwwRRRRworo",
+    "orowwwwwRYYRworo",
+    "orowwwwwRYYRworo",
+    "orowwwwwRRRRworo",
+    "orowwwwwwwwwworo",
+    "orooooooooooooro",
+    "orrrrrrrrrrrrrro",
+    "oooooooooooooooo",
+]
+
+
 # --- Load Balancer: a wide banded slab. The only enemy silhouette that is markedly wider
 # --- than it is tall, which is what a rack of blades looks like end-on and, more usefully,
 # --- what nothing else in the roster looks like. The bright band across the middle is the
@@ -2221,6 +2251,7 @@ SPRITES = {
     "art/enemies/null_pointer.png": NULL_POINTER,
     "art/enemies/deadlock.png": DEADLOCK,
     "art/enemies/recursion.png": RECURSION,
+    "art/enemies/elder_recursion.png": ELDER_RECURSION,
     "art/enemies/load_balancer.png": LOAD_BALANCER,
     "art/enemies/stale_replica.png": STALE_REPLICA,
     "art/effects/projectile_drone.png": DRONE_SHOT,

@@ -42,6 +42,7 @@ func run() -> void:
 	_test_the_validator_catches_content_faults()
 	_test_the_validator_counts_the_reward_budget()
 	_test_the_validator_reports_an_incomplete_campaign()
+	_test_the_last_boss_cannot_be_fought_early()
 	await _test_direct_start_and_arrival_agree_on_a_floor()
 	_clean_up()
 
@@ -394,6 +395,78 @@ func _test_the_validator_reports_an_incomplete_campaign() -> void:
 		_campaign(entries, 1),
 		"lists 2 floors but targets 1",
 		"a campaign longer than it says it is",
+	)
+
+
+## The campaign ends on one fight, and it is the last one. Both halves of that are refused when a
+## finished campaign breaks them: a final floor that offers a choice of endings, and an earlier
+## floor that can draw the ending.
+##
+## Injected rather than described, like everything else here. The floors are Help Desk copies whose
+## pools are set deliberately, and the campaign is marked complete because that is the flag the
+## rule is asked under — an unfinished campaign has no last floor yet, and its floors legitimately
+## share one pool of bosses.
+func _test_the_last_boss_cannot_be_fought_early() -> void:
+	var source := load(FLOOR_CONFIG_PATH) as FloorConfig
+	if not require(source and source.boss_pool.size() >= 2, "floor 1 supplies bosses to share"):
+		return
+	var first_boss := source.boss_pool[0]
+	var second_boss := source.boss_pool[1]
+
+	var opener := _write_floor(
+		"finale_open", &"opener", 1,
+		func(config: FloorConfig) -> void:
+			var pool: Array[BossEncounter] = [first_boss]
+			config.boss_pool = pool,
+	)
+	var shared := _write_floor(
+		"finale_shared", &"opener_two", 1,
+		func(config: FloorConfig) -> void:
+			var pool: Array[BossEncounter] = [second_boss]
+			config.boss_pool = pool,
+	)
+	var ending := _write_floor(
+		"finale_end", &"ending", 2,
+		func(config: FloorConfig) -> void:
+			var pool: Array[BossEncounter] = [second_boss]
+			config.boss_pool = pool,
+	)
+	var undecided := _write_floor(
+		"finale_undecided", &"ending_two", 2,
+		func(config: FloorConfig) -> void:
+			var pool: Array[BossEncounter] = [first_boss, second_boss]
+			config.boss_pool = pool,
+	)
+	if opener.is_empty() or shared.is_empty() or ending.is_empty() or undecided.is_empty():
+		return
+
+	var honest := _campaign([[&"opener", opener], [&"ending", ending]])
+	honest.require_complete = true
+	check(
+		not _mentions(CampaignValidator.validate(honest).errors, "cannot be fought early"),
+		"one boss on the last floor and a different one before it is the shape the rule wants",
+	)
+
+	var early := _campaign([[&"opener_two", shared], [&"ending", ending]])
+	early.require_complete = true
+	check(
+		_mentions(CampaignValidator.validate(early).errors, "cannot be fought early"),
+		"but a floor that can draw the campaign's ending is refused",
+	)
+
+	var two_endings := _campaign([[&"opener", opener], [&"ending_two", undecided]])
+	two_endings.require_complete = true
+	check(
+		_mentions(CampaignValidator.validate(two_endings).errors, "ends on one authored encounter"),
+		"and so is a last floor that offers a choice of endings",
+	)
+
+	# And the reason it is asked only of a finished campaign: the same two floors, still being
+	# built, are two floors sharing a pool rather than a campaign whose ending leaks.
+	var unfinished := _campaign([[&"opener_two", shared], [&"ending", ending]], 6)
+	check(
+		not _mentions(CampaignValidator.validate(unfinished).errors, "cannot be fought early"),
+		"a campaign still being built has no last floor to protect",
 	)
 
 

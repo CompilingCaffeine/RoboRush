@@ -98,6 +98,13 @@ func _enter_strike() -> void:
 	_strike_player()
 
 
+## The ground this lane covers, in world space. `ThermalZone`'s reader, spelled the same way and
+## added for the same reason: a hazard's footprint is the one thing about it worth asking, and the
+## suite should not have to reach into `_size` to find out where a lane was painted.
+func get_rect() -> Rect2:
+	return Rect2(global_position, _size)
+
+
 func _strike_player() -> void:
 	if _damage <= 0.0:
 		return

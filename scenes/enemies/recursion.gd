@@ -14,6 +14,12 @@ extends Enemy
 ## and one config means a Recursion and its children cannot drift into being two unrelated
 ## things, and it makes `max_generation` an honest bound rather than a promise about a file
 ## somebody has to remember to keep in step.
+##
+## `ElderRecursion` sits one rung above this and is the only reason `_make_fragment` is a
+## method rather than three lines inside `_split`: the elder's children are full Recursions,
+## which is a different *scene* from the elder but the same split, the same tracking, and the
+## same deferred add. What a split produces is the one thing that varies; everything about how
+## it happens does not, and it is written once here.
 
 ## Set before the fragment enters the tree. Zero is what the floor spawns; anything higher
 ## came out of another Recursion.
@@ -70,14 +76,18 @@ func _become_fragment() -> void:
 
 	var factor := maxf(_tuning.fragment_scale, 0.1)
 	_sprite.scale = Vector2.ONE * factor
-	_shrink_body(factor)
+	_resize_body(factor)
 
 
-## Shrinks the collision circle to match the sprite, so what the player shoots at is the
-## size it looks. The radius is changed on a *duplicate* of the shape: a `[sub_resource]` in
-## a scene is shared by every instance of that scene unless it is marked local, so scaling
-## the original would shrink every Recursion in the room, full-size ones included.
-func _shrink_body(factor: float) -> void:
+## Resizes the collision circle to match the sprite, so what the player shoots at is the
+## size it looks. Used in both directions — a fragment shrinks, an `ElderRecursion` grows —
+## which is why it multiplies rather than assigning a radius: one call site cannot then hold
+## a number the other one has to remember to keep in step with.
+##
+## The radius is changed on a *duplicate* of the shape: a `[sub_resource]` in a scene is
+## shared by every instance of that scene unless it is marked local, so scaling the original
+## would resize every Recursion in the room, full-size ones included.
+func _resize_body(factor: float) -> void:
 	var shape := get_node_or_null("Shape") as CollisionShape2D
 	if shape == null:
 		return
@@ -110,11 +120,9 @@ func _split() -> void:
 	var base_angle := randf() * TAU
 
 	for index: int in maxi(_tuning.fragment_count, 0):
-		var fragment := _instantiate_sibling()
+		var fragment := _make_fragment()
 		if fragment == null:
 			return
-		fragment.config = config
-		fragment.generation = generation + 1
 		# Local rather than global: the fragment is not in the tree yet, so it has no global
 		# transform to set, and it is going into the same container this node already sits
 		# in — where `position` is already the right coordinate space.
@@ -139,12 +147,35 @@ func _split() -> void:
 func _fragment_offset(index: int, base_angle: float) -> Vector2:
 	var count := maxi(_tuning.fragment_count, 1)
 	var angle := base_angle + TAU * float(index) / float(count)
-	return Vector2.RIGHT.rotated(angle) * _tuning.fragment_spread
+	return Vector2.RIGHT.rotated(angle) * _split_spread()
+
+
+## How far out a split throws its children. Scaled by the body doing the splitting rather than
+## fixed, so an `ElderRecursion` — half again as wide as what comes out of it — does not drop two
+## full-size Recursions inside its own silhouette, where they read as one body until they separate.
+func _split_spread() -> float:
+	return _tuning.fragment_spread
 
 
 func _find_room_combat() -> RoomCombat:
 	var room := find_room()
 	return room.get_room_combat() if room != null else null
+
+
+## One child of a split, configured and ready to be placed. Overridden by `ElderRecursion`,
+## which returns a full Recursion instead of a smaller copy of itself.
+##
+## The generation is raised here rather than in `_split` because it is part of *what* a child
+## is: a Recursion's child is the next generation down of the same body, and an elder's child
+## is a fresh generation zero of a different one. A `_split` that raised the number itself
+## would be a `_split` that had an opinion about that.
+func _make_fragment() -> Recursion:
+	var fragment := _instantiate_sibling()
+	if fragment == null:
+		return null
+	fragment.config = config
+	fragment.generation = generation + 1
+	return fragment
 
 
 ## Instantiates another copy of whatever scene this node came from. Reads `scene_file_path`

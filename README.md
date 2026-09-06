@@ -19,7 +19,8 @@ migration pads: two patches of floor that are the same place, and the first thin
 game that moves the player. Executive Systems combines those mechanics with coordinated enemy
 groups and an advanced Runtime Error rematch, Executive Override. The first four floors shuffle
 their four bosses; the fifth has its own fixed, explicitly authored encounter. Core Intelligence
-closes the run with every established room language and a fixed final encounter of its own.
+closes the run with every established room language and a fixed final encounter that fights by
+wearing the five bosses before it.
 
 Items compose: a run that finds Ricochet Driver and Fork Bomb fires shots that bounce
 off a wall and then split, with no code anywhere aware those two items can be held at
@@ -700,17 +701,17 @@ tests/test_case.gd                         Suite base class
 tests/test_player_movement.gd              32 movement and dash checks
 tests/test_combat.gd                       126 data, component, and integration checks
 tests/test_player_input.gd                 38 arrow-key shooting checks
-tests/test_campaign.gd                     86 campaign, lookup, seed, and injected-fault checks
+tests/test_campaign.gd                     91 campaign, lookup, seed, and injected-fault checks
 tests/test_determinism.gd                  183 seed-derivation, stream, manifest, and record checks
 tests/test_economy.gd                      57 reward, boss-choice, stacking, and 10k-run checks
 tests/test_post_boss.gd                    36 checks that a dead boss's hazards still resolve
 tests/test_trophy.gd                    +  62 checks on the finale's prize: what it replaces,
                                             what taking it does, and that it outlives the session
-tests/test_floor.gd                        974 generation, invariant, template, and floor-advance
+tests/test_floor.gd                        975 generation, invariant, template, and floor-advance
                                             checks, including the flood fill that walks every
                                             template in the campaign
 tests/test_items.gd                        548 item, stack, inventory, and synergy checks
-tests/test_enemies.gd                      200 checks that each enemy poses its problem
+tests/test_enemies.gd                      238 checks that each enemy poses its problem
 tests/test_run.gd                          64 statistics, state, and summary checks
 tests/test_shop.gd                         90 price, purchase, and refusal checks
 tests/test_boss.gd                         104 phase, terminal, and defeat checks
@@ -728,7 +729,8 @@ tests/test_gate.gd                        109 checks of the six-floor plan's per
 tests/test_soak.gd                         100 complete six-floor campaigns, checked for
                                             anything left behind
 tests/test_executive.gd                 + 502 checks on Floor 5, carried builds and compact UI
-tests/test_core_intelligence.gd         + 502 checks on the finale, its checkpoint and victory
+tests/test_core_intelligence.gd         + 643 checks on the finale: its five masks, the fight
+                                            driven end to end, its checkpoint and victory
 tests/greybox_campaign.gd                  A campaign of any length, for suites needing more
                                             floors than the game has
 tests/floor_economy.gd                  +   What a floor pays out in scrap, shared by the two
@@ -1405,7 +1407,10 @@ placed where its answer is legible on first contact:
   a real decision — which is a question no other enemy on the floor asks. It is one scene and
   one config for the whole family, with `generation` raised on the fragments, so a Recursion
   and its children cannot drift into being two unrelated things and `max_generation` is an
-  honest bound rather than a promise about a second file.
+  honest bound rather than a promise about a second file. Development is where the sentence is
+  taught, so Development gets it at its smallest: the rung above it —
+  [Elder Recursion](#elder-recursion) — appears only on the finale floor, and this floor is
+  deliberately left alone.
 
 Recursion is also the only enemy that touches room-clear counting. `RoomCombat` decrements on
 `HealthComponent.died`, so a body that split *after* announcing its own death would drop the
@@ -2913,7 +2918,7 @@ The maximum legal inventory, long cause-of-death label, and ending buttons fit 4
 
 ### Executive Systems verification
 
-- Full regression after the finale: **34 suites, 5,545 checks**, passing on Godot 4.7.2.
+- Full regression after the finale: **34 suites, 5,730 checks**, passing on Godot 4.7.2.
 - The 502 new Executive checks also pass on pinned Godot 4.7.1. They cover 400 Floor 5
   layouts, pad landings, the advanced encounter's damage/death contract, maximum inventory UI,
   and JSON checkpoint round trips at all four boundaries. Every resumed path reproduces the
@@ -2975,28 +2980,135 @@ Seven combat templates use a 1 / 2 / 2 / 3 / 3 / 3 / 4 difficulty ladder and pop
 5 / 6 / 6 / 7 / 7 / 7 / 8. They recombine compile lanes, throughput zones, cable ducts, migration
 pads, timing enemies and protection hubs without introducing a new traversal rule. Across 400
 deterministic seeds the floor averages **37.62 enemies**; authored Load Balancer pressure appears
-on 285/400 layouts. The floor's modeled income is 53.93 scrap before purchases.
-
-The fixed final encounter is **Core Intelligence**, a 190-health, fully damageable pattern boss.
-Its three rotations are lane/spread/thermal inference, twin lanes/gapped ring/thermal inference,
-and checkerboard/gapped wall/thermal inference. Each inference paints three non-overlapping driven
-throughput zones: one on the player's position and two orthogonal follow-ups toward open space.
-They use the existing cold-to-violet warning, remain inside the arena, and still resolve if the
-boss dies after committing them.
+on 285/400 layouts. The floor's modeled income is 53.93 scrap before purchases. Its roster is the
+only one with an [Elder Recursion](#elder-recursion) in it, drawn in the same harder templates the
+ordinary Recursion is and at about one per floor.
 
 The floor uses black glass, indigo circuitry and cold-white traces, with two new 64-beat music
 loops (28.2 seconds exploring and 22.3 seconds for the boss). Saturated hazard colours remain
 reserved for gameplay.
 
+### The finale is the campaign, worn as masks
+
+The fixed final encounter is **Core Intelligence**, and it is the thing that wrote the other five.
+It fights by wearing them.
+
+Every boss before it asks the player for one thing: The Scrap King asks them to *notice*, Runtime
+Error to *predict*, Cascade Failure to *keep moving*, the Orchestrator to *be somewhere first*, and
+Executive Override asks for Runtime Error's again in a longer order. This fight is the claim that
+one machine has been saying all of them, so it says them again, in campaign order, out of a single
+300-integrity pool cut into five slices. Each slice is a **mask** — a face, a footprint, a rotation,
+and in two of them a rule about what damage is worth:
+
+| Mask | Pool | What it brings back |
+| --- | --- | --- |
+| The Scrap King | 100–80% | Two bodies sharing one pool, four corner terminals, and three quarters of every hit refunded while any of them stands. Falling conflict markers between spreads |
+| Runtime Error | 80–60% | The whole lane and projectile vocabulary in one six-command rotation — which *is* Executive Override's escalation, since that fight is this vocabulary in a longer order |
+| Cascade Failure | 60–40% | Driven throughput zones: the triad, the aimed-and-lead pincer, and a wall of patches laid between the robot and the boss with one door in it |
+| The Orchestrator | 40–20% | It seals, names ground, discharges every cell of the arena but two, and migrates. Damage counts only in the window after it lands |
+| Core Intelligence | 20–0% | No mask, no seal, no refund, no terminals. One command borrowed from each face it has taken off, at the fight's shortest interval |
+
+The mask is not a costume. It changes the **face** — each mask wears the sprite of the boss it is
+quoting — and it changes the **footprint** with it: the collision circle and the contact radius move
+to that boss's own radius, so The Scrap King's mask is genuinely easier to hit than Runtime Error's
+and the fight asks for a different aim four times before it is over. What the player shoots at stays
+the size it looks.
+
+Nothing in it reimplements a hazard. The lanes are `CompileLane`, the zones are `ThermalZone`, the
+terminals are `BossTerminal`, the bodies are `BossPart`, and a mask's identity numbers are read off
+the boss being quoted wherever one exists — `MergeConflict.RED`, `Orchestrator.SEALED_TINT`,
+`CompileLane.AMBER`. A mask that drifted out of step with the fight it quotes would be a callback
+the player cannot recognise, which is the only way the whole design fails.
+
+Two things are rebuilt, and only because the original could not be lifted whole. The Orchestrator's
+four plates around a ring become two cells of the arena grid this fight already divides itself into
+for its checkerboard — one plate the destination, chosen as the ground furthest from the player, and
+one the nearest cell that is not the one they are standing on, so surviving always costs a step.
+And its floor discharge is *painted as compile lanes* rather than drawn by the boss. That is what
+keeps the campaign's rule intact where it costs the most: the discharge owns its own clock, warns in
+the language the player has read since Floor 2, and still resolves if the boss dies after announcing
+it. **Committed attacks resolve, uncommitted ones never happen** — held in the one arena where
+breaking it would cost the whole campaign, because this is the arena the trophy is standing in.
+
+Standing on the ground it named **denies** the migration: the load has nowhere to go, the boss stays
+where it is, and it is open for 3.6 seconds instead of 2.2. Any plate keeps the player alive; that
+plate is worth running for.
+
+The Scrap King's feigned death is the one signature deliberately left out. It works exactly once per
+player, it worked on Floor 1, and a fight that fakes its own end is the last thing to put in front of
+a player who has to believe the real one — this floor ends on a trophy lying on the ground, and it
+must not read as a trick.
+
+**A mask is worn for one full rotation of its own attacks, and damage is floored at its boundary
+until then.** This is the rule that makes the parade happen at all, and it is The Scrap King's own
+device — that fight floors damage at each boundary "because a build strong enough to skip a phase
+would skip the feigned death that is the point of that fight". The same argument is five times as
+strong here. The worst legal build in this game does about 9.4 times the damage the enemies are
+written for; measured against that, a 300-integrity pool with nothing holding it is a finale that is
+over in **seven seconds**, having shown the player one of the five bosses it exists to bring back.
+Held, the same build is in the room for **35.7 seconds** and meets all five. The Orchestrator's mask
+adds its migration telegraph and landing window to its own hold, because the attack clock does not
+tick through either — without that, a build that emptied the slice during the window that mask opens
+on would be released before the first migration ever resolved.
+
+What that is not: a damage cap, an immunity phase, or a bar that lies. Every point above the boundary
+lands, the bar reports exactly where the pool is, the mask changes the moment its rotation is done —
+so a player who deleted the slice waits out the remainder of one rotation rather than being made to
+fight it again — and the last mask has no floor at all, because a fight that is ending should end.
+
+The pool is therefore a poor guide to the fight's length on its own, which is deliberate: the fight
+slows down where the player is being asked a question (a refund they answer by breaking terminals, a
+seal they answer by reading a window) and speeds up where they are being asked for execution.
+`tests/test_core_intelligence.gd` measures the masks rather than the bar, and one of its checks is
+the fight simply *run* — physics on, damage arriving the way a player's does at 45 points a second,
+all five masks reached in order, the boss dead in 35.7 seconds, and nothing left standing afterwards.
+
+### Elder Recursion
+
+The finale's harder rooms draw **Elder Recursion**: a larger, slower, red body that breaks into two
+ordinary Recursions, each of which goes on to break into two fragments exactly as it always has. One
+elder is seven bodies before the room is clear, and the sprite says so — the same nested squares in
+hostile red, with two smaller bodies drawn inside it instead of one.
+
+The floor that *introduces* Recursion never spawns one. The whole value of that enemy is the sentence
+it teaches — killing this converts one slow problem into two quick ones, so *when* you kill it is a
+decision — and a player meeting that sentence for the first time should meet it at its smallest. The
+elder is what the sentence becomes once they know it: the same trade one level deeper, on a body slow
+enough that the moment has to be chosen in advance rather than noticed afterwards. Floor 2 is
+unchanged, and Floor 6 draws elders and ordinary Recursions side by side, which is what makes an
+elder read as an escalation rather than as a replacement.
+
+It is a subclass and a second scene, but not a second enemy. Its children are the floor's own
+`recursion.tscn`, and its numbers are the elder rung of the one `RecursionConfig` the family shares —
+written as *what changes on the way up*, exactly as the fragment's are written as what changes on the
+way down. Nothing about it can drift out of step with what a Recursion is, because nothing about it
+restates one. A whole dynasty costs 24 integrity to clear against a family's 7.5, and
+`max_generation` still bounds it: an elder's child is a Recursion, never another elder.
+
+### The last boss is only the last
+
+`CampaignValidator` now refuses a finished campaign that could end on somebody else. The terminal
+floor must offer exactly one encounter, and no earlier floor may draw it. Both are checked as policy
+rather than by naming an id, and only of a campaign that declares itself complete — a campaign still
+being built has no last floor to protect, and its floors legitimately share a pool. Before this the
+guarantee was an authored coincidence with a test watching it; the mistake it prevents is quiet,
+because a finale drawn on floor 2 would surface three floors later as an unrelated boss shortage.
+
 Verification on Godot 4.7.2:
 
-- **34 suites, 5,545 checks** pass in the complete regression run.
-- The focused finale runner passes **5 suites, 1,180 checks**, including 400 finale layouts,
-  boss phase/death behavior, a JSON Floor 6 boundary resume, final-victory semantics, the trophy
-  that now carries it, the prior Executive coverage, and 100 complete six-floor campaigns.
+- **34 suites, 5,730 checks** pass in the complete regression run.
+- The focused finale runner passes **5 suites, 1,321 checks**, including 400 finale layouts,
+  every mask of the final encounter and the whole fight driven end to end, a JSON Floor 6 boundary
+  resume, final-victory semantics, the trophy that carries it, the prior Executive coverage, and
+  100 complete six-floor campaigns.
 - Two rendered maximum-build campaigns returned to 31 nodes with zero orphan growth. Frame p95
   was **15.486 ms**, p99 **16.426 ms**, and transition p95 **14.89 ms**. Physics p95 was
-  **12.079 ms**, so the stricter 8 ms performance gate remains open.
+  **12.079 ms**, so the stricter 8 ms performance gate remains open. **Those figures predate the
+  mask rework** and have not been re-measured on a rendered build: the fight now puts a second body
+  and four terminals in the arena for its first mask, and paints ten compile lanes at once for its
+  fourth. The suite's own node-and-orphan checks still pass, and the driven end-to-end fight leaves
+  nothing behind, but the frame timings above should be treated as the last measurement rather than
+  the current one.
 - A release-template Web export completes and its package contains the Core Intelligence floor and
   boss while excluding test assets. Hosted-origin persistence and browser performance remain to be
   qualified on the release build.

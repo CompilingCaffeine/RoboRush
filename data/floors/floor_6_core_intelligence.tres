@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="FloorConfig" load_steps=26 format=3]
+[gd_resource type="Resource" script_class="FloorConfig" load_steps=27 format=3]
 
 [ext_resource type="Script" path="res://scripts/resources/floor_config.gd" id="floor"]
 [ext_resource type="Resource" path="res://data/floors/core_intelligence_theme.tres" id="theme"]
@@ -25,6 +25,7 @@
 [ext_resource type="Resource" path="res://data/spawns/core_intelligence/pop_up_drone.tres" id="drone"]
 [ext_resource type="Resource" path="res://data/spawns/core_intelligence/deadlock.tres" id="deadlock"]
 [ext_resource type="Resource" path="res://data/spawns/core_intelligence/recursion.tres" id="recursion"]
+[ext_resource type="Resource" path="res://data/spawns/core_intelligence/elder_recursion.tres" id="elder_recursion"]
 
 [resource]
 script = ExtResource("floor")
@@ -39,7 +40,7 @@ combat_templates = Array[RoomTemplate]([ExtResource("bootstrap"), ExtResource("p
 treasure_templates = Array[RoomTemplate]([ExtResource("treasure")])
 shop_templates = Array[RoomTemplate]([ExtResource("shop_room")])
 boss_templates = Array[RoomTemplate]([ExtResource("boss_room")])
-enemy_spawns = Array[EnemySpawn]([ExtResource("ticket"), ExtResource("runner"), ExtResource("compiler"), ExtResource("firewall"), ExtResource("leech"), ExtResource("null"), ExtResource("drone"), ExtResource("deadlock"), ExtResource("recursion")])
+enemy_spawns = Array[EnemySpawn]([ExtResource("ticket"), ExtResource("runner"), ExtResource("compiler"), ExtResource("firewall"), ExtResource("leech"), ExtResource("null"), ExtResource("drone"), ExtResource("deadlock"), ExtResource("recursion"), ExtResource("elder_recursion")])
 ; Finale density rises, but its sixth shop should still ask the player to choose.
 clear_scrap_range = Vector2i(1, 2)
 enemy_scrap_range = Vector2i(0, 2)

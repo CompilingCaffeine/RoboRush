@@ -127,6 +127,7 @@ static func validate(campaign: RunDefinition) -> Report:
 
 	_validate_reward_capacity(report, configs)
 	_validate_boss_supply(report, configs)
+	_validate_the_last_boss_is_only_the_last(report, campaign, configs)
 	return report
 
 
@@ -375,6 +376,58 @@ static func _validate_reward_capacity(report: Report, configs: Array[FloorConfig
 
 		for offset: int in mini(needed, uniques_left.size()):
 			spent[uniques_left[offset]] = true
+
+
+## The campaign's ending is one fight, and it is the last one.
+##
+## The final floor names a single encounter — Core Intelligence, the boss that spends the whole
+## fight wearing the other five — and the campaign's whole shape depends on the player meeting it
+## exactly once, at the end. Two things could take that away, and neither would be noisy: a final
+## floor whose pool holds more than one encounter would sometimes end the run on somebody else, and
+## an earlier floor listing the finale's encounter would let the run's last boss be fought on floor
+## two and then be unavailable — which `_validate_boss_supply` above would report as an unrelated
+## shortage three floors from the real mistake.
+##
+## Both are checked as *policy* rather than by naming an id, so this stays true of whatever the last
+## floor's boss is: the terminal floor gets exactly one encounter, and no other floor may draw it.
+##
+## Only asked of a campaign that says it is finished. A campaign still being built has no last
+## floor yet — the greybox campaigns the suite validates are two floors sharing one pool of four
+## bosses, and telling them their ending can be fought early would be telling them their ending is
+## the floor they happen to stop at. `require_complete` is the flag that means "this is the shape
+## the player gets", and it is the flag that turns this rule on.
+static func _validate_the_last_boss_is_only_the_last(
+	report: Report, campaign: RunDefinition, configs: Array[FloorConfig]
+) -> void:
+	if configs.is_empty() or not campaign.require_complete:
+		return
+	var final_config := configs[configs.size() - 1]
+	if final_config == null or final_config.boss_pool.is_empty():
+		return
+
+	if final_config.boss_pool.size() > 1:
+		report.error(
+			("Floor %d is the last floor and offers %d bosses. The campaign ends on one authored "
+			+ "encounter, so its pool must hold exactly that one.")
+			% [configs.size(), final_config.boss_pool.size()]
+		)
+
+	var finale: Dictionary[StringName, bool] = {}
+	for encounter: BossEncounter in final_config.boss_pool:
+		if encounter != null and not encounter.id.is_empty():
+			finale[encounter.id] = true
+
+	for index: int in configs.size() - 1:
+		var config := configs[index]
+		if config == null:
+			continue
+		for encounter: BossEncounter in config.boss_pool:
+			if encounter != null and finale.has(encounter.id):
+				report.error(
+					("Floor %d can draw '%s', which is the last floor's boss. The campaign's "
+					+ "ending cannot be fought early.")
+					% [index + 1, encounter.id]
+				)
 
 
 ## Whether every floor can be given a boss of its own.

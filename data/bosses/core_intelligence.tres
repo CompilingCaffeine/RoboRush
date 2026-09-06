@@ -7,13 +7,30 @@
 script = ExtResource("1_boss")
 id = &"core_intelligence"
 display_name = "Core Intelligence"
-max_health = 190.0
-phase_two_at = 0.66
-phase_three_at = 0.33
+; Five masks out of one pool, sixty integrity each. Nearly twice Executive Override's 156, and the
+; fight is longer than even that says: the first mask refunds three quarters of what it takes until
+; four terminals are down, and the fourth discards everything outside its landing window. The
+; inherited `phase_two_at`/`phase_three_at` ladder is deliberately absent — see the config script.
+max_health = 300.0
 shot = ExtResource("2_shot")
-phase_one_interval = 2.15
-phase_two_interval = 2.05
-phase_three_interval = 1.95
+runtime_mask_at = 0.8
+cascade_mask_at = 0.6
+orchestrator_mask_at = 0.4
+core_mask_at = 0.2
+scrap_interval = 2.2
+runtime_interval = 2.05
+cascade_interval = 1.95
+orchestrator_interval = 1.85
+core_interval = 1.45
+terminal_count = 4
+terminal_health = 8.0
+synchronised_refund = 0.75
+marker_count = 7
+lead_seconds = 0.55
+vent_wall_count = 6
+migrate_telegraph_seconds = 1.9
+open_seconds = 2.2
+denial_open_seconds = 3.6
 telegraph_seconds = 0.55
 spread_count = 7
 spread_degrees = 62.0

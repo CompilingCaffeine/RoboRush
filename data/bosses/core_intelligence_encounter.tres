@@ -9,4 +9,6 @@ id = &"core_intelligence"
 scene = ExtResource("2_scene")
 display_name = "CORE INTELLIGENCE"
 defeat_banner = "ROOT ACCESS GRANTED"
-phase_banners = Array[String](["MODEL ONLINE", "POLICY UNSTABLE", "FINAL INFERENCE"])
+; One line per mask, in the order the campaign taught them. Five rather than three, because this
+; boss's phases are the five fights it is quoting — see `CoreIntelligence`.
+phase_banners = Array[String](["IT WEARS THE SCRAP KING", "IT WEARS RUNTIME ERROR", "IT WEARS CASCADE FAILURE", "IT WEARS THE ORCHESTRATOR", "IT WEARS NOTHING NOW"])

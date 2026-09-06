@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="EnemySpawn" load_steps=3 format=3]
+[ext_resource type="Script" path="res://scripts/resources/enemy_spawn.gd" id="spawn"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/elder_recursion.tscn" id="scene"]
+[resource]
+script = ExtResource("spawn")
+scene = ExtResource("scene")
+; Eligible in the same templates the plain Recursion is — the finale's harder half — and at close to
+; the same weight, which lands about one elder per floor. That is the number this entry is for: a
+; roster line drawn less than once per floor is an enemy most players finish the level without
+; meeting (tests/test_floor.gd holds every roster to that), and one drawn much more often than that
+; would be a floor made of them, since an elder is seven bodies before the room is clear.
+;
+; The roster still draws ordinary Recursions alongside it, and that pairing is the point: an elder
+; reads as an escalation of something the player can see beside it, rather than as a replacement for
+; an enemy that quietly stopped appearing.
+weight = 0.7
+min_difficulty = 3

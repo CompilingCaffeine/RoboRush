@@ -23,6 +23,7 @@ const COMPILER_SCENE := preload("res://scenes/enemies/compiler.tscn")
 const NULL_POINTER_SCENE := preload("res://scenes/enemies/null_pointer.tscn")
 const DEADLOCK_SCENE := preload("res://scenes/enemies/deadlock.tscn")
 const RECURSION_SCENE := preload("res://scenes/enemies/recursion.tscn")
+const ELDER_RECURSION_SCENE := preload("res://scenes/enemies/elder_recursion.tscn")
 const LOAD_BALANCER_SCENE := preload("res://scenes/enemies/load_balancer.tscn")
 const STALE_REPLICA_SCENE := preload("res://scenes/enemies/stale_replica.tscn")
 const WALL_BLOCK_SCENE := preload("res://scenes/rooms/wall_block.tscn")
@@ -75,6 +76,9 @@ func run() -> void:
 	await _test_recursion_splits_into_fragments()
 	await _test_recursion_fragments_do_not_split_again()
 	await _test_a_room_is_not_clear_while_fragments_live()
+	await _test_an_elder_breaks_into_the_enemy_the_floor_spawns()
+	await _test_an_elder_never_produces_another_elder()
+	await _test_an_elder_leaves_the_recursion_it_came_from_alone()
 	await _test_load_balancer_keeps_its_plate_on_the_player()
 	await _test_load_balancer_swallows_what_arrives_through_the_plate()
 	await _test_load_balancer_only_rams_with_its_plate()
@@ -211,6 +215,37 @@ func _test_configs_load_as_their_own_types() -> void:
 			family <= 8.0,
 			"the whole family costs %.1f integrity to clear, which is one tough enemy rather than three"
 				% family,
+		)
+
+		# And the rung above it, which the finale puts in its harder rooms. An elder is a
+		# Recursion the player has to commit to opening, so every number that describes it says
+		# "bigger, slower, and worth more than what comes out".
+		check(
+			recursion.elder_health > recursion.max_health,
+			"an elder costs more to open than the Recursion it becomes",
+		)
+		check(recursion.elder_scale > 1.0, "and is visibly larger than one")
+		check(
+			recursion.elder_speed_scale < 1.0,
+			"and slower, so *when* to open it is still the player's decision to make",
+		)
+		check(
+			recursion.elder_contact_damage > recursion.contact_damage,
+			"and costs more to walk into than the smaller body it holds",
+		)
+		# One elder is itself, two Recursions, and their four fragments. Bounded arithmetic the
+		# player can do while looking at it, which is the whole reason `max_generation` exists —
+		# the elder adds a rung to the family without adding a way for it to go on forever.
+		var dynasty := (
+			recursion.elder_health
+			+ recursion.fragment_count * (
+				recursion.max_health + recursion.fragment_count * recursion.fragment_health
+			)
+		)
+		check(
+			dynasty <= 30.0,
+			"a whole elder dynasty costs %.1f integrity, which is one hard problem rather than a room of them"
+				% dynasty,
 		)
 
 
@@ -915,6 +950,175 @@ func _test_a_room_is_not_clear_while_fragments_live() -> void:
 	await _teardown(arena)
 
 
+# --- Elder Recursion --------------------------------------------------------------
+
+
+## The rung above, and the one thing about it that matters: what comes out of an elder is the
+## enemy the floor already spawns, at full size and with its own split still ahead of it. If the
+## children were smaller or cheaper the elder would just be a Recursion with more health.
+func _test_an_elder_breaks_into_the_enemy_the_floor_spawns() -> void:
+	var arena := _make_arena()
+	var room := _add_room(arena)
+	if room == null:
+		await _teardown(arena)
+		return
+	_add_target(arena, room.get_interior_centre())
+
+	var enemies := room.get_node("%Enemies")
+	var elder: ElderRecursion = ELDER_RECURSION_SCENE.instantiate()
+	elder.position = Vector2(60.0, 60.0)
+	enemies.add_child(elder)
+	await advance_physics(2)
+
+	var tuning := load(RECURSION_CONFIG) as RecursionConfig
+	if not require(tuning, "the family's config loads"):
+		await _teardown(arena)
+		return
+	check_near(
+		elder.get_health_component().max_health,
+		tuning.elder_health,
+		"an elder is sized from elder_health rather than from the Recursion's pool",
+	)
+
+	var combat := room.get_room_combat()
+	combat.begin(enemies)
+	var cleared := [0]
+	combat.cleared.connect(func() -> void: cleared[0] += 1)
+
+	elder.get_health_component().apply_damage(DamageInfo.new(999.0))
+	# Two frames, for the reason the plain split needs them: children are added deferred out of a
+	# damage callback, with the physics server mid-flush.
+	await advance_physics(2)
+
+	var children := _living_recursions(enemies)
+	check(
+		children.size() == tuning.fragment_count,
+		"an elder leaves %d bodies behind (expected %d)" % [children.size(), tuning.fragment_count],
+	)
+	check(cleared[0] == 0, "and the room is not clear the moment it dies")
+	for child: Recursion in children:
+		check(child.get_generation() == 0, "each child starts a family of its own")
+		check(child.can_split(), "and still owes the player a split")
+		check_near(
+			child.get_health_component().max_health,
+			tuning.max_health,
+			"each child is a full Recursion rather than a fragment",
+		)
+
+	for child: Recursion in children:
+		child.get_health_component().apply_damage(DamageInfo.new(999.0))
+	await advance_physics(2)
+
+	var grandchildren := _living_recursions(enemies)
+	var expected := tuning.fragment_count * tuning.fragment_count
+	check(
+		grandchildren.size() == expected,
+		"the children split as they always have (%d fragments, expected %d)"
+			% [grandchildren.size(), expected],
+	)
+	check(cleared[0] == 0, "and the room is still not clear with the fragments alive")
+
+	for fragment: Recursion in grandchildren:
+		check(not fragment.can_split(), "the third rung is the end of the line")
+		fragment.get_health_component().apply_damage(DamageInfo.new(999.0))
+	await advance_physics(4)
+
+	check(
+		_living_recursions(enemies).is_empty(),
+		"seven bodies is the whole of it — %d appeared after the fragments"
+			% _living_recursions(enemies).size(),
+	)
+	check(cleared[0] == 1, "and the room clears exactly once, at the end of the family")
+	await _teardown(arena)
+
+
+## The bound this rung would otherwise break. `Recursion._split` instantiates whatever scene the
+## dying body came from, so an elder that inherited that would breed elders — and a family that
+## grows another root at every rung is the unclearable room `max_generation` exists to prevent.
+func _test_an_elder_never_produces_another_elder() -> void:
+	var arena := _make_arena()
+	var container := Node2D.new()
+	arena.add_child(container)
+	_add_target(arena, Vector2.ZERO)
+
+	var elder: ElderRecursion = ELDER_RECURSION_SCENE.instantiate()
+	elder.position = Vector2(120.0, 0.0)
+	container.add_child(elder)
+	await advance_physics(2)
+
+	elder.get_health_component().apply_damage(DamageInfo.new(999.0))
+	await advance_physics(2)
+
+	var children := _living_recursions(container)
+	check(not children.is_empty(), "there are children to inspect")
+	for child: Recursion in children:
+		check(child is not ElderRecursion, "an elder's child is a Recursion, not another elder")
+
+	for child: Recursion in children:
+		child.get_health_component().apply_damage(DamageInfo.new(999.0))
+	await advance_physics(2)
+	for fragment: Recursion in _living_recursions(container):
+		check(fragment is not ElderRecursion, "and neither is anything further down")
+	await _teardown(arena)
+
+
+## The trap `_become_fragment` was already written around, met a second time on the way up: the
+## family shares one `.tres`, so an elder that wrote its own numbers onto the shared resource would
+## quietly turn every Recursion in the room into an elder — including the ones already fighting,
+## and including the ones it just made.
+func _test_an_elder_leaves_the_recursion_it_came_from_alone() -> void:
+	var arena := _make_arena()
+	var container := Node2D.new()
+	arena.add_child(container)
+	_add_target(arena, Vector2.ZERO)
+
+	var plain: Recursion = RECURSION_SCENE.instantiate()
+	plain.position = Vector2(160.0, 0.0)
+	container.add_child(plain)
+	var elder: ElderRecursion = ELDER_RECURSION_SCENE.instantiate()
+	elder.position = Vector2(120.0, 0.0)
+	container.add_child(elder)
+	await advance_physics(2)
+
+	var shared := load(RECURSION_CONFIG) as RecursionConfig
+	if not require(shared, "the family's config loads"):
+		await _teardown(arena)
+		return
+	check_near(
+		shared.max_health, 4.5, "the shared resource still describes a Recursion, not an elder"
+	)
+	check_near(
+		plain.get_health_component().max_health,
+		shared.max_health,
+		"and the Recursion standing next to it is still a Recursion",
+	)
+	check(
+		elder.config != plain.config,
+		"an elder fights on a duplicate of the family's config rather than on the family's copy",
+	)
+	check(
+		elder.config.move_speed < plain.config.move_speed,
+		"and the duplicate is where its slower body is written down",
+	)
+
+	# Sprite and hitbox grew together, which is the one rule this project has about size: what the
+	# player shoots at is the size it looks. The circle is a duplicate too, for the same reason the
+	# config is — `[sub_resource]` shapes are shared by every instance of a scene.
+	var elder_radius := _body_radius(elder)
+	var plain_radius := _body_radius(plain)
+	check_near(
+		elder_radius,
+		plain_radius * shared.elder_scale,
+		"an elder's hitbox grew by elder_scale (%.1f against %.1f)" % [elder_radius, plain_radius],
+	)
+	check_near(
+		elder.get_node("%Sprite").scale.x,
+		shared.elder_scale,
+		"and its sprite grew by exactly as much",
+	)
+	await _teardown(arena)
+
+
 # --- Load Balancer ----------------------------------------------------------------
 
 
@@ -1414,6 +1618,17 @@ func _quick_null_pointer() -> NullPointerConfig:
 	# enemy drifting to hold its range moves the answer while they are being measured.
 	tuning.move_speed = 0.0
 	return tuning
+
+
+## The radius of a body's collision circle, which is how large the thing actually is as far as a
+## projectile is concerned. Read off the node rather than off the config: the whole question these
+## checks ask is whether the runtime resize reached the shape as well as the sprite.
+func _body_radius(body: Node) -> float:
+	var shape := body.get_node_or_null("Shape") as CollisionShape2D
+	if shape == null:
+		return 0.0
+	var circle := shape.shape as CircleShape2D
+	return circle.radius if circle != null else 0.0
 
 
 ## Every living Recursion under a container, parent and fragments alike. Filters out the
