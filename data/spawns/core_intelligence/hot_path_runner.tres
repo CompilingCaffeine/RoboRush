@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="EnemySpawn" load_steps=3 format=3]
+[ext_resource type="Script" path="res://scripts/resources/enemy_spawn.gd" id="spawn"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/hot_path_runner.tscn" id="scene"]
+[resource]
+script = ExtResource("spawn")
+scene = ExtResource("scene")
+; A difficulty above the Code Runner it extends, and beside it rather than instead of it: the trail
+; only reads as an escalation next to the enemy that does not leave one. Weighted below the plain
+; runner, because two of these in one room is two lines of floor going away at once.
+weight = 1.0
+min_difficulty = 3

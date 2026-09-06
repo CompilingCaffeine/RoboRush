@@ -313,6 +313,112 @@ FIREWALL_NODE = [
     "..oooooooooooo..",
 ]
 
+# --- Hot Path Runner: the Code Runner one rung up, and the only enemy sprite that draws the thing
+# --- it leaves rather than the thing it is. The body is the strafing wedge in Development's violet,
+# --- pointed the way it travels; behind it, separated by a gap, is a dash of the amber a compile
+# --- lane warns in. That gap is the mechanic — the trail is stepping stones with room between them,
+# --- not a fence — and the colour is a promise the floor keeps four times a second.
+HOT_PATH_RUNNER = [
+    "................",
+    "................",
+    "................",
+    "......oooooo....",
+    ".....ovvvvvvo...",
+    "....ovvVVVVvvo..",
+    "...ovvVYYYVvvo..",
+    "aa.ovvVYYYVvvo..",
+    "aa.ovvVYYYVvvo..",
+    "...ovvVYYYVvvo..",
+    "....ovvVVVVvvo..",
+    ".....ovvvvvvo...",
+    "......oooooo....",
+    "................",
+    "................",
+    "................",
+]
+
+
+# --- Redundant Firewall: the Firewall Node's rung above, and the sprite has to say two things at
+# --- once — that it is the same emitter, and that there is a second one in it. So it keeps the
+# --- bolted plate and the rotating core exactly, and grows a standby module out of the top: a
+# --- second lit core, boxed, sticking above the silhouette where nothing else on the floor has
+# --- anything.
+# ---
+# --- The ring is the hostile red rather than the amber accent the base node wears. Amber on this
+# --- floor means "a warning you have time to read"; this thing's escalation happens when something
+# --- else dies, which is not a warning at all.
+REDUNDANT_FIREWALL = [
+    "......oooo......",
+    "......orro......",
+    "....oooYYooo....",
+    "...oddddddddo...",
+    "..oddmmmmmmddo..",
+    "..odmmrrrrmmdo..",
+    ".oddmrrYYrrmmdo.",
+    ".odmrrYYYYrrmdo.",
+    ".odmrrYYYYrrmdo.",
+    ".oddmrrYYrrmmdo.",
+    "..odmmrrrrmmdo..",
+    "..oddmmmmmmddo..",
+    "...oddddddddo...",
+    "..oooooooooooo..",
+    "..ollllllllllo..",
+    "..oooooooooooo..",
+]
+
+
+# --- Lagging Replica: the Stale Replica's rung above, and the sprite has one job the base's does
+# --- not — to say that the afterimage is *armed*. So the ghost keeps its L of chassis mid and gains
+# --- a rivet inside it, in the hostile red every returning shot in this game is painted in. The
+# --- solid body is untouched: what is late here is not the enemy, it is the player's own fire.
+LAGGING_REPLICA = [
+    "................",
+    "................",
+    "...HHHHHHH......",
+    "..HH.....HH.....",
+    "..Hoo.....H.....",
+    "..HrR.ooooooo...",
+    "..HrRoojjjjjoo..",
+    "..HHoojjiiijjo..",
+    "..HH.ojiiiiijo..",
+    "...HHojiiiiijo..",
+    ".....ojjiiijjo..",
+    ".....oojjjjjoo..",
+    "......ooooooo...",
+    "................",
+    "................",
+    "................",
+]
+
+
+# --- Optimizing Compiler: the rung above the Compiler, and the only enemy sprite in the game
+# --- that shows its own attack. A bolted chassis like the emitter the Compiler borrows, with a
+# --- bright cross straight through it: two lanes at right angles, which is exactly what it does
+# --- and exactly the thing a player has to recognise before it happens to them the first time.
+# ---
+# --- The cross is the screen glow the Compiler is already tinted with, so it reads as the same
+# --- family at a glance and as a different enemy on the second one. Corner bolts survive from the
+# --- silhouette it is quoting: this still never moves.
+OPTIMIZING_COMPILER = [
+    "................",
+    "................",
+    "..oooooooooooo..",
+    "..ommmmEEmmmmo..",
+    "..omlddEEddlmo..",
+    "..omdddEEdddmo..",
+    "..omdddEEdddmo..",
+    "..oEEEEEEEEEEo..",
+    "..oEEEEEEEEEEo..",
+    "..omdddEEdddmo..",
+    "..omdddEEdddmo..",
+    "..omlddEEddlmo..",
+    "..ommmmEEmmmmo..",
+    "..oooooooooooo..",
+    "................",
+    "................",
+]
+
+
 # --- Null Pointer: a ring around nothing. The only enemy whose middle is transparent, so
 # --- the floor shows through the body of the thing that dereferences empty addresses.
 # --- Cyan, and deliberately the least substantial silhouette on the floor: it never
@@ -467,6 +573,19 @@ STALE_REPLICA = [
     "................",
     "................",
 ]
+
+# --- The Lagging Replica's echo: the player's own rivet, in hostile red. The silhouette is the
+# --- rivet exactly — six by four, same bolt shape — because the whole point of the projectile is
+# --- that the player recognises it as theirs. The colour is the one thing that is not: this game
+# --- paints everything that can hurt the robot in the hostile screen red, and a shot that read as
+# --- the player's own would be a shot they walk into once per replica.
+ECHO_RIVET = [
+    ".oooo.",
+    "orRRRo",
+    "orRRRo",
+    ".oooo.",
+]
+
 
 # --- Pop Up Drone's spread shot. Smaller and faster-reading than a ticket.
 DRONE_SHOT = [
@@ -2250,10 +2369,14 @@ SPRITES = {
     "art/enemies/firewall_node.png": FIREWALL_NODE,
     "art/enemies/null_pointer.png": NULL_POINTER,
     "art/enemies/deadlock.png": DEADLOCK,
+    "art/enemies/optimizing_compiler.png": OPTIMIZING_COMPILER,
+    "art/enemies/hot_path_runner.png": HOT_PATH_RUNNER,
+    "art/enemies/redundant_firewall.png": REDUNDANT_FIREWALL,
     "art/enemies/recursion.png": RECURSION,
     "art/enemies/elder_recursion.png": ELDER_RECURSION,
     "art/enemies/load_balancer.png": LOAD_BALANCER,
     "art/enemies/stale_replica.png": STALE_REPLICA,
+    "art/enemies/lagging_replica.png": LAGGING_REPLICA,
     "art/effects/projectile_drone.png": DRONE_SHOT,
     "art/environments/shop_stand.png": SHOP_STAND,
     "art/bosses/merge_conflict.png": MERGE_CONFLICT,
@@ -2264,6 +2387,7 @@ SPRITES = {
     "art/effects/projectile_boss_red.png": BOSS_RED,
     "art/effects/projectile_boss_green.png": BOSS_GREEN,
     "art/effects/projectile_rivet.png": RIVET,
+    "art/effects/projectile_echo.png": ECHO_RIVET,
     "art/effects/projectile_ticket.png": TICKET_SHOT,
     "art/effects/muzzle_flash.png": MUZZLE_FLASH,
     "art/effects/spark.png": SPARK,

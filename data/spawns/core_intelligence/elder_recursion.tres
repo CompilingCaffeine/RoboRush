@@ -13,5 +13,5 @@ scene = ExtResource("scene")
 ; The roster still draws ordinary Recursions alongside it, and that pairing is the point: an elder
 ; reads as an escalation of something the player can see beside it, rather than as a replacement for
 ; an enemy that quietly stopped appearing.
-weight = 0.7
+weight = 0.8
 min_difficulty = 3

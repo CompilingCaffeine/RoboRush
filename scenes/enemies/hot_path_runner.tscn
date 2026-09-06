@@ -1,0 +1,56 @@
+[gd_scene load_steps=9 format=3]
+
+; The Code Runner's rung above. Same components, same weapon, same shared `code_runner.tres` — the
+; trail is written in that resource as what changes, the way the Recursion family's elder rung is —
+; and its own sprite, which draws the trail as well as the body, because the patch on the floor is
+; the half of this enemy the player has to see coming.
+;
+; Untinted, unlike the Code Runner it extends. That scene borrows the Memory Leech's silhouette and
+; tints it violet; this one has a wedge of its own, pointed the way it strafes, with the compile
+; lane's amber behind it.
+
+[ext_resource type="Script" path="res://scenes/enemies/hot_path_runner.gd" id="1_runner"]
+[ext_resource type="Resource" path="res://data/enemies/code_runner.tres" id="2_config"]
+[ext_resource type="Texture2D" path="res://art/enemies/hot_path_runner.png" id="3_tex"]
+[ext_resource type="Script" path="res://scripts/components/health_component.gd" id="4_health"]
+[ext_resource type="Script" path="res://scripts/components/weapon_controller.gd" id="5_weapon"]
+[ext_resource type="Resource" path="res://data/weapons/ticket_spitter.tres" id="6_spitter"]
+[ext_resource type="Script" path="res://scripts/components/hurt_flash.gd" id="7_flash"]
+[ext_resource type="Script" path="res://scripts/components/status_effect_controller.gd" id="99_status"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_runner"]
+radius = 6.0
+
+[node name="HotPathRunner" type="CharacterBody2D" groups=["enemy"]]
+collision_layer = 4
+collision_mask = 1
+motion_mode = 1
+script = ExtResource("1_runner")
+config = ExtResource("2_config")
+
+[node name="Shape" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_runner")
+
+[node name="Sprite" type="Sprite2D" parent="."]
+unique_name_in_owner = true
+texture = ExtResource("3_tex")
+
+[node name="Health" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("4_health")
+invulnerability_seconds = 0.0
+
+[node name="Weapon" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("5_weapon")
+config = ExtResource("6_spitter")
+
+[node name="HurtFlash" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("7_flash")
+target_path = NodePath("../Sprite")
+
+[node name="Status" type="Node2D" parent="."]
+unique_name_in_owner = true
+script = ExtResource("99_status")
+indicator_radius = 9.0

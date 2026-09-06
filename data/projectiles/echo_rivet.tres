@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="ProjectileConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/projectile_config.gd" id="1_projectile"]
+[ext_resource type="Texture2D" path="res://art/effects/projectile_echo.png" id="2_echo"]
+
+[resource]
+script = ExtResource("1_projectile")
+; The Lagging Replica's echo of a shot the player fired a beat ago. Deliberately *not* the player's
+; own numbers: what is replayed is where and when they fired, never how hard. A build that hits for
+; nine times what the enemies are written for would otherwise be a build that kills itself, and the
+; enemy would stop being a lesson about movement and start being a tax on damage.
+damage = 1.0
+; Slower than the 420 the rivet leaves at, and for the same reason everything about this enemy is
+; slower: it is behind. A player who has moved on since firing is never caught by their own shot;
+; one who has turned back walks into it.
+speed = 260.0
+lifetime = 2.4
+radius = 2.0
+knockback = 0.0
+pierce_count = 0
+bounce_count = 0
+split_count = 0
+split_damage_scale = 0.6
+homing_strength = 0.0
+explosion_radius = 0.0
+chain_count = 0
+return_enabled = false
+status_effects = Array[StringName]([])
+texture = ExtResource("2_echo")
+trail_color = Color(0.878431, 0.290196, 0.290196, 0.615686)
+trail_length = 8

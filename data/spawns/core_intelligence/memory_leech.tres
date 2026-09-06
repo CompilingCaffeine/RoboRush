@@ -4,5 +4,5 @@
 [resource]
 script = ExtResource("spawn")
 scene = ExtResource("scene")
-weight = 0.7
+weight = 1.0
 min_difficulty = 3

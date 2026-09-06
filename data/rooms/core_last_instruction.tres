@@ -1,10 +1,11 @@
-[gd_resource type="Resource" script_class="RoomTemplate" load_steps=8 format=3]
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="template"]
 [ext_resource type="Script" path="res://scripts/resources/migration_link.gd" id="link"]
 [ext_resource type="PackedScene" path="res://scenes/enemies/load_balancer.tscn" id="enemy_0"]
 [ext_resource type="PackedScene" path="res://scenes/enemies/compiler.tscn" id="enemy_1"]
 [ext_resource type="PackedScene" path="res://scenes/enemies/null_pointer.tscn" id="enemy_2"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/lagging_replica.tscn" id="enemy_3"]
 
 [sub_resource type="Resource" id="link_0"]
 script = ExtResource("link")
@@ -20,10 +21,14 @@ b = Rect2i(21, 2, 2, 2)
 script = ExtResource("template")
 id = &"core_last_instruction"
 type = 1
-; Mastery: coordinated pressure, lanes, remote targeting, heat, ducts, and two escape routes.
+; Mastery: coordinated pressure, lanes, remote targeting, heat, ducts, and two escape routes — and
+; the one room in the campaign that hands the player their own fire back. The Lagging Replica is
+; authored here rather than drawn, because it is the last combat room before Core Intelligence and
+; the question it asks (is your own aggression worth what it costs you) is the question the boss
+; behind this door spends five masks asking.
 obstacles = Array[Rect2i]([])
 enemy_spawns = Array[Vector2i]([Vector2i(6, 5), Vector2i(19, 5), Vector2i(11, 2), Vector2i(5, 9), Vector2i(21, 9), Vector2i(9, 3), Vector2i(17, 8), Vector2i(15, 9)])
-forced_enemies = Array[PackedScene]([ExtResource("enemy_0"), ExtResource("enemy_1"), ExtResource("enemy_2")])
+forced_enemies = Array[PackedScene]([ExtResource("enemy_0"), ExtResource("enemy_1"), ExtResource("enemy_2"), ExtResource("enemy_3")])
 ducts = Array[Rect2i]([Rect2i(12, 0, 2, 5), Rect2i(12, 7, 2, 5)])
 thermal_zones = Array[Rect2i]([Rect2i(8, 5, 4, 2), Rect2i(14, 5, 4, 2)])
 pad_links = Array[MigrationLink]([SubResource("link_0"), SubResource("link_1")])

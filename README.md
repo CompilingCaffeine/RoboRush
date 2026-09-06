@@ -707,11 +707,11 @@ tests/test_economy.gd                      57 reward, boss-choice, stacking, and
 tests/test_post_boss.gd                    36 checks that a dead boss's hazards still resolve
 tests/test_trophy.gd                    +  62 checks on the finale's prize: what it replaces,
                                             what taking it does, and that it outlives the session
-tests/test_floor.gd                        975 generation, invariant, template, and floor-advance
+tests/test_floor.gd                        979 generation, invariant, template, and floor-advance
                                             checks, including the flood fill that walks every
                                             template in the campaign
 tests/test_items.gd                        548 item, stack, inventory, and synergy checks
-tests/test_enemies.gd                      238 checks that each enemy poses its problem
+tests/test_enemies.gd                      287 checks that each enemy poses its problem
 tests/test_run.gd                          64 statistics, state, and summary checks
 tests/test_shop.gd                         90 price, purchase, and refusal checks
 tests/test_boss.gd                         104 phase, terminal, and defeat checks
@@ -1229,7 +1229,10 @@ resulting frames, and by nothing else. The suite was green for all of them.
    Pointer, Deadlock, and Recursion have their own sprites in
    [`tools/generate_art.py`](tools/generate_art.py). Recursion's is the one worth looking at:
    it is squares nested inside squares with a visibly different smaller thing at the centre, so
-   a player who has never seen one split can still see there is something inside it.
+   a player who has never seen one split can still see there is something inside it. Every
+   [late-floor tier](#the-late-floors-escalate-by-tier-rather-than-by-numbers) has one for the
+   same reason, and the rule hardened while they were drawn: a tier that differed from the enemy
+   it extends only in tint would be a difficulty the player cannot see.
 
 
 ## Known limitations
@@ -2916,9 +2919,14 @@ with stack counts and name tooltips. The summary no longer tries to fit a comma-
 inventory into one label. The floor name occupies its own line above scrap/room counts.
 The maximum legal inventory, long cause-of-death label, and ending buttons fit 480×270.
 
+Two of the [late-floor tiers](#the-late-floors-escalate-by-tier-rather-than-by-numbers) join this
+floor's roster as well as the finale's — the Optimizing Compiler and the Hot Path Runner, each
+drawn in the harder half of the floor beside the enemy it extends. Executive Systems is where a
+player meets an escalation of something they learned three floors ago for the first time.
+
 ### Executive Systems verification
 
-- Full regression after the finale: **34 suites, 5,730 checks**, passing on Godot 4.7.2.
+- Full regression after the finale: **34 suites, 5,783 checks**, passing on Godot 4.7.2.
 - The 502 new Executive checks also pass on pinned Godot 4.7.1. They cover 400 Floor 5
   layouts, pad landings, the advanced encounter's damage/death contract, maximum inventory UI,
   and JSON checkpoint round trips at all four boundaries. Every resumed path reproduces the
@@ -3063,6 +3071,67 @@ seal they answer by reading a window) and speeds up where they are being asked f
 the fight simply *run* — physics on, damage arriving the way a player's does at 45 points a second,
 all five masks reached in order, the boss dead in 35.7 seconds, and nothing left standing afterwards.
 
+### The late floors escalate by tier, rather than by numbers
+
+Nothing in this game scales an enemy by floor. `RunManager.enemy_health_scale` is moved by one item
+and never by a descent, and an `EnemySpawn` names a scene whose tuning is baked in, so a Ticket Bot
+on Floor 6 is exactly the Ticket Bot on Floor 1. That is deliberate and it is worth writing down,
+because the alternative is the thing this project has avoided everywhere else: difficulty the player
+cannot see. Floors 5 and 6 get harder by *what is in the room*, and five of the entries in those
+rooms are now **tiers** — a named rung above an enemy the campaign has already taught, with its own
+sprite, its own scene, and its numbers written into the base enemy's own config as what changes.
+
+The [Elder Recursion](#elder-recursion) set the pattern. Four more follow it, and all five obey the
+same four rules: the tier appears **beside** the enemy it extends rather than instead of it, so the
+escalation is legible by comparison; it has a **silhouette of its own**, because a tint is not a
+tell; it teaches **no new language** — every hazard it uses is a `CompileLane`, a `ThermalZone`, or
+a projectile the player already reads; and it is **bounded by arithmetic the player can do while
+looking at it**.
+
+**Optimizing Compiler** (Floors 5–6) does not stop at one pass. It paints its lane, and the moment
+that lane strikes it paints the perpendicular one through wherever the player has just stepped, on a
+shorter telegraph. The habit the Compiler teaches is *leave the stripe*, and a player who has
+learned it leaves and stops, because a Compiler's burst is followed by nothing. This charges for the
+stop. Only one lane is ever live — the second is painted as the first strikes — so it is never a
+pattern to solve, just the same question asked twice in a row; and perpendicular is what guarantees
+the second answer exists, because the way out of a row is along a column, which is the line the pass
+that just struck has left clear.
+
+**Hot Path Runner** (Floors 5–6) leaves its path on the floor: a patch of compile lane every
+`trail_interval`, telegraphing and striking behind it. The Code Runner is the only enemy that fires
+while moving, and the answer players learn is to walk with it and track it — so this makes the
+ground it has just left the ground you are walking onto. The trail is stepping stones rather than a
+fence, and that is arithmetic rather than tuning: it travels 60 pixels between patches 32 pixels
+wide, which `tests/test_enemies.gd` holds as an invariant on the config rather than as a play-test
+note.
+
+**Redundant Firewall** (Floors 5–6) picks up load. Every time something *else* in its room dies, it
+takes over that share: one more beam, a slightly faster sweep, up to a cap of six — which still
+leaves a sixty-degree opening, because an area-denial enemy whose fan closes completely is the one
+thing this floor must never ship. The Firewall Node asks "where are you allowed to stand", and the
+answer players learn is "outside its reach, so kill it last". This is the first thing in the game
+that charges for that ordering: the room now has a kill order and the node is at the front of it,
+which is the Recursion's question — *when* do I kill this — asked by something that never moves. Two
+of them in a room are a genuine pair, each taking the other's share, but the rule is the room's load
+rather than the pair's, so a single one drawn on its own is still the tier and not an ordinary node.
+
+**Lagging Replica** (Floor 6, authored) lags the player's *fire* as well as their route. Every shot
+is repeated `delay_seconds` later, from the spot it was fired, in the direction it was fired. The
+Stale Replica charges for standing still; this charges for the half of that habit good players keep,
+which is walking backwards while shooting — the ground you fired from is now a place your own shot
+comes out of. What is replayed is a **rhythm, not a weapon**: the echo is the enemy's own
+projectile, rate-limited to one per 0.45s, because the worst legal build does about nine times the
+damage the enemies are written for and a replica that returned *that* would be a build killing
+itself. It can also be starved: hold fire and nothing comes back, which is a real decision to hand
+someone in the last room before the finale — and that is exactly where it is authored, in
+`core_last_instruction`, rather than left to a roster draw.
+
+Two roster changes came with them, and both are subtractive. Floor 6 no longer draws the Ticket Bot
+or the Pop Up Drone: eleven entries with four tiers among them cannot all clear
+`tests/test_floor.gd`'s one-appearance-per-floor rule, and the two tutorial enemies are the ones the
+finale is not about. That rule is what forced the decision rather than a preference, which is the
+useful thing about having written it down.
+
 ### Elder Recursion
 
 The finale's harder rooms draw **Elder Recursion**: a larger, slower, red body that breaks into two
@@ -3096,7 +3165,7 @@ because a finale drawn on floor 2 would surface three floors later as an unrelat
 
 Verification on Godot 4.7.2:
 
-- **34 suites, 5,730 checks** pass in the complete regression run.
+- **34 suites, 5,783 checks** pass in the complete regression run.
 - The focused finale runner passes **5 suites, 1,321 checks**, including 400 finale layouts,
   every mask of the final encounter and the whole fight driven end to end, a JSON Floor 6 boundary
   resume, final-victory semantics, the trophy that carries it, the prior Executive coverage, and

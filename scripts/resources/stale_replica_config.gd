@@ -29,3 +29,20 @@ extends EnemyConfig
 @export var trail_color: Color = Color(0.76, 0.85, 0.90, 0.22)
 
 @export var trail_width: float = 1.0
+
+
+## The rung above, for the floors that have already taught this enemy — see `LaggingReplica`. In
+## this resource rather than one of its own, the way the Recursion family's elder rung is: an echo
+## is a replica that also lagged the player's *fire*, not a different enemy.
+
+## What an echo fires. Its own projectile rather than the player's weapon, and that is the whole of
+## the fairness argument: what is replayed is where and when they fired, never how hard. The worst
+## legal build does about nine times the damage the enemies are written for, and a replica that
+## returned that would be a build killing itself rather than an enemy asking a question.
+@export var echo_shot: ProjectileConfig
+
+## The fastest an echo can follow another one. A player holding the trigger fires far quicker than
+## this, and the shots in between are simply not replayed: this enemy repeats a *rhythm*, and a
+## rhythm at fifteen rounds a second is a wall. It also bounds what the replica can have queued —
+## `delay_seconds` divided by this, and no more.
+@export var echo_min_interval: float = 0.45

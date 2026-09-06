@@ -33,3 +33,23 @@ extends EnemyConfig
 
 ## Beam brightness oscillation, so a stationary hazard still reads as live.
 @export var beam_pulse_hz: float = 3.0
+
+
+## The rung above, for the floors that have already taught this enemy — see `RedundantFirewall`.
+## In this resource rather than one of its own, the way the Recursion family's elder rung is: a
+## redundant node is a Firewall Node that picks up load, not a different enemy.
+
+## Beams gained each time the node takes over for something that has died in its room. One, so the
+## escalation is countable while it is happening — the player can see the fan gain a spoke and know
+## what caused it.
+@export var failover_beams: int = 1
+
+## The most beams it may ever have. Six leaves a sixty-degree gap in the fan, which is a real
+## rotating opening at the edge of its reach and no opening at all next to the body. That is the
+## intended shape: a node at its cap does not deny the room, it denies its own circle, and the room
+## is 416 pixels wide against a 132-pixel beam.
+@export var failover_max_beams: int = 6
+
+## How much faster the fan turns per failover. Small and compounding: three steps is a quarter
+## faster, which reads as spinning up rather than as a different enemy.
+@export var failover_rotation_scale: float = 1.08

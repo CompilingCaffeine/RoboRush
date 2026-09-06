@@ -1,6 +1,7 @@
-[gd_resource type="Resource" script_class="StaleReplicaConfig" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="StaleReplicaConfig" load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/resources/stale_replica_config.gd" id="1_config"]
+[ext_resource type="Resource" path="res://data/projectiles/echo_rivet.tres" id="2_echo"]
 
 [resource]
 script = ExtResource("1_config")
@@ -21,3 +22,7 @@ delay_seconds = 1.1
 arrive_radius = 4.0
 trail_color = Color(0.76, 0.85, 0.9, 0.22)
 trail_width = 1.0
+; The rung above, unused by the Stale Replica itself and read by every Lagging Replica built from
+; this same resource — one config for the family, the way the Recursion's is.
+echo_shot = ExtResource("2_echo")
+echo_min_interval = 0.45

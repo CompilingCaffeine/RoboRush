@@ -25,3 +25,21 @@ extends EnemyConfig
 @export var lane_strike_seconds: float = 0.25
 
 @export var lane_damage: float = 1.0
+
+
+## The rung above, for the floors that have already taught this enemy — see `OptimizingCompiler`.
+## Written here as what changes rather than as a second resource, for `RecursionConfig`'s reason:
+## an optimizing pass is a Compiler with one more idea, and two files would be two answers to what
+## a Compiler is.
+
+## How long the second pass telegraphs. Shorter than the first, because it is not asking the player
+## to notice a lane — they are already moving out of one — it is asking them not to stop.
+##
+## Not shorter than they can answer: leaving a lane costs about 13 pixels of travel at 160 px/s, so
+## the floor under this number is under a tenth of a second and the value below is five times that.
+@export var second_pass_telegraph_seconds: float = 0.55
+
+## Seconds after the first lane *strikes* before the second one is painted. Zero chains them
+## directly, which is the version worth shipping: the pause between the two is the moment the
+## player would use to stop moving.
+@export var second_pass_delay: float = 0.0

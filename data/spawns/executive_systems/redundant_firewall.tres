@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="EnemySpawn" load_steps=3 format=3]
+[ext_resource type="Script" path="res://scripts/resources/enemy_spawn.gd" id="spawn"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/redundant_firewall.tscn" id="scene"]
+[resource]
+script = ExtResource("spawn")
+scene = ExtResource("scene")
+; A difficulty above the node it extends, and beside it: what this tier costs the player is a kill
+; order, and an order only exists in a room with other things to kill in it. Weighted below the
+; plain node, because a room with two of these is a room where every death spins both of them up.
+weight = 1.0
+min_difficulty = 3

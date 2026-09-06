@@ -18,14 +18,18 @@ const TICKET_BOT_SCENE := preload("res://scenes/enemies/ticket_bot.tscn")
 const POP_UP_DRONE_SCENE := preload("res://scenes/enemies/pop_up_drone.tscn")
 const MEMORY_LEECH_SCENE := preload("res://scenes/enemies/memory_leech.tscn")
 const FIREWALL_NODE_SCENE := preload("res://scenes/enemies/firewall_node.tscn")
+const REDUNDANT_FIREWALL_SCENE := preload("res://scenes/enemies/redundant_firewall.tscn")
 const CODE_RUNNER_SCENE := preload("res://scenes/enemies/code_runner.tscn")
+const HOT_PATH_RUNNER_SCENE := preload("res://scenes/enemies/hot_path_runner.tscn")
 const COMPILER_SCENE := preload("res://scenes/enemies/compiler.tscn")
+const OPTIMIZING_COMPILER_SCENE := preload("res://scenes/enemies/optimizing_compiler.tscn")
 const NULL_POINTER_SCENE := preload("res://scenes/enemies/null_pointer.tscn")
 const DEADLOCK_SCENE := preload("res://scenes/enemies/deadlock.tscn")
 const RECURSION_SCENE := preload("res://scenes/enemies/recursion.tscn")
 const ELDER_RECURSION_SCENE := preload("res://scenes/enemies/elder_recursion.tscn")
 const LOAD_BALANCER_SCENE := preload("res://scenes/enemies/load_balancer.tscn")
 const STALE_REPLICA_SCENE := preload("res://scenes/enemies/stale_replica.tscn")
+const LAGGING_REPLICA_SCENE := preload("res://scenes/enemies/lagging_replica.tscn")
 const WALL_BLOCK_SCENE := preload("res://scenes/rooms/wall_block.tscn")
 const ROOM_SCENE := preload("res://scenes/rooms/room.tscn")
 
@@ -66,8 +70,12 @@ func run() -> void:
 	await _test_leech_deals_contact_damage()
 	await _test_firewall_node_holds_still_and_sweeps()
 	await _test_firewall_beams_stop_at_walls()
+	await _test_a_redundant_node_picks_up_the_rooms_load()
+	await _test_a_redundant_node_stops_at_its_cap()
 	await _test_code_runner_strafes_while_firing()
 	await _test_compiler_paints_lanes()
+	await _test_the_optimizing_compiler_answers_its_own_lane()
+	await _test_the_hot_path_runner_leaves_its_path_behind()
 	await _test_null_pointer_marks_where_the_player_is()
 	await _test_null_pointer_does_not_follow_the_player()
 	await _test_deadlock_warns_before_it_drains()
@@ -88,6 +96,8 @@ func run() -> void:
 	await _test_replica_only_ever_walks_where_the_player_has_been()
 	await _test_a_moving_player_is_never_caught_by_its_replica()
 	await _test_a_player_who_stops_is()
+	await _test_a_lagging_replica_returns_the_shot_you_took()
+	await _test_a_lagging_replica_returns_a_rhythm_rather_than_a_weapon()
 	await _test_every_hurt_flash_is_actually_wired()
 	await _test_a_tinted_enemy_keeps_its_colour()
 	await _test_knockback_decays_instead_of_growing()
@@ -124,6 +134,21 @@ func _test_configs_load_as_their_own_types() -> void:
 	if require(runner, "code_runner.tres loads as a CodeRunnerConfig"):
 		check(runner.weapon != null, "the runner has a weapon — firing while moving is its whole point")
 		check(runner.direction_hold_seconds > 0.0, "it commits to a strafe direction for a real duration")
+		# The rung above lives in the same resource. Stepping stones rather than a fence, and it is
+		# arithmetic rather than a play-test: a Hot Path Runner has to travel further between
+		# patches than a patch is wide, or its trail closes into a wall that grows across the room
+		# behind a body the player is chasing.
+		var travelled := runner.trail_interval * runner.move_speed
+		var patch := float(runner.trail_tiles * Room.TILE_SIZE)
+		check(
+			travelled > patch,
+			"a Hot Path Runner travels %.0f px between patches %.0f px wide, so its trail has gaps"
+				% [travelled, patch],
+		)
+		check(
+			runner.trail_telegraph_seconds > 0.0,
+			"and every patch it leaves warns before it strikes",
+		)
 
 	var compiler := load(COMPILER_CONFIG) as CompilerConfig
 	if require(compiler, "compiler.tres loads as a CompilerConfig"):
@@ -606,6 +631,120 @@ func _test_code_runner_strafes_while_firing() -> void:
 	await _teardown(arena)
 
 
+# --- Redundant Firewall -----------------------------------------------------------
+
+
+## The rung above, and the decision it adds to a room: every other body that goes down makes the
+## node harder to stand near, so the room now has a kill order and the node is at the front of it.
+## Its twin is one case of that and not the rule, which is what stops the tier from being an
+## ordinary node whenever the generator draws exactly one of it.
+func _test_a_redundant_node_picks_up_the_rooms_load() -> void:
+	var arena := _make_arena()
+	var room := _add_room(arena)
+	if room == null:
+		await _teardown(arena)
+		return
+	_add_target(arena, room.get_interior_centre())
+
+	var enemies := room.get_node("%Enemies")
+	var node: RedundantFirewall = REDUNDANT_FIREWALL_SCENE.instantiate()
+	node.position = Vector2(60.0, 60.0)
+	enemies.add_child(node)
+	var roommate: Recursion = RECURSION_SCENE.instantiate()
+	roommate.position = Vector2(120.0, 60.0)
+	enemies.add_child(roommate)
+	# Somewhere else entirely: a body dying in another room must not spin this node up.
+	var elsewhere := Node2D.new()
+	arena.add_child(elsewhere)
+	var stranger: Recursion = RECURSION_SCENE.instantiate()
+	elsewhere.add_child(stranger)
+	await advance_physics(2)
+
+	var tuning := node.config as FirewallNodeConfig
+	var opening := node.get_beam_count()
+	check(opening == tuning.beam_count, "it opens as an ordinary node, with the fan its config names")
+	check(node.get_failover_count() == 0, "and has taken over nothing yet")
+	var opening_speed := node.rotation_speed()
+
+	stranger.get_health_component().apply_damage(DamageInfo.new(999.0))
+	await advance_physics(2)
+	check(
+		node.get_beam_count() == opening,
+		"a death in another room is another room's problem (%d beams)" % node.get_beam_count(),
+	)
+
+	roommate.get_health_component().apply_damage(DamageInfo.new(999.0))
+	await advance_physics(2)
+	check(
+		node.get_beam_count() == opening + tuning.failover_beams,
+		"a death in its own room hands it the load (%d beams, was %d)"
+			% [node.get_beam_count(), opening],
+	)
+	check(node.get_failover_count() == 1, "and it counts the takeover")
+	check(
+		node.rotation_speed() > opening_speed,
+		"and the fan spins up with it (%.2f against %.2f)"
+			% [node.rotation_speed(), opening_speed],
+	)
+
+	# The config is shared by every node in the run, so the speed-up must live on the instance. A
+	# plain node built from the same resource has to be untouched by all of this — the trap
+	# `Recursion._become_fragment` documents, met on a different field.
+	var plain: FirewallNode = FIREWALL_NODE_SCENE.instantiate()
+	plain.position = Vector2(180.0, 60.0)
+	enemies.add_child(plain)
+	await advance_physics(2)
+	check_near(
+		plain.rotation_speed(),
+		tuning.beam_rotation_speed,
+		"and an ordinary node standing beside it still turns at the speed its config names",
+	)
+	await _teardown(arena)
+
+
+## The bound. A node that gained a beam per corpse in a room of eight would end up with a fan that
+## has no gap in it at all, which is the one thing an area-denial enemy must never become.
+func _test_a_redundant_node_stops_at_its_cap() -> void:
+	var arena := _make_arena()
+	var room := _add_room(arena)
+	if room == null:
+		await _teardown(arena)
+		return
+	_add_target(arena, room.get_interior_centre())
+
+	var enemies := room.get_node("%Enemies")
+	var node: RedundantFirewall = REDUNDANT_FIREWALL_SCENE.instantiate()
+	node.position = Vector2(60.0, 60.0)
+	enemies.add_child(node)
+	var tuning := node.config as FirewallNodeConfig
+	var roommates: Array[Recursion] = []
+	for index: int in tuning.failover_max_beams + 3:
+		var roommate: Recursion = RECURSION_SCENE.instantiate()
+		roommate.position = Vector2(100.0 + float(index) * 12.0, 100.0)
+		enemies.add_child(roommate)
+		roommates.append(roommate)
+	await advance_physics(2)
+
+	for roommate: Recursion in roommates:
+		if is_instance_valid(roommate):
+			roommate.get_health_component().apply_damage(DamageInfo.new(999.0))
+	await advance_physics(4)
+
+	check(
+		node.get_beam_count() == tuning.failover_max_beams,
+		"a whole room's worth of deaths stops at the cap (%d beams, cap %d)"
+			% [node.get_beam_count(), tuning.failover_max_beams],
+	)
+	check(node.is_saturated(), "and it reports itself saturated")
+	# A gap has to survive at the cap, or standing anywhere near it is a hit rather than a choice.
+	check(
+		TAU / float(node.get_beam_count()) > deg_to_rad(45.0),
+		"the fan at its cap still leaves a %.0f-degree opening"
+			% rad_to_deg(TAU / float(node.get_beam_count())),
+	)
+	await _teardown(arena)
+
+
 # --- Compiler ---------------------------------------------------------------------
 
 
@@ -636,6 +775,140 @@ func _test_compiler_paints_lanes() -> void:
 	await advance_physics(30)
 
 	check(lanes[0] > 0, "the Compiler actually paints a lane")
+	await _teardown(arena)
+
+
+# --- Hot Path Runner --------------------------------------------------------------
+
+
+## The Code Runner one rung up: it strafes exactly as it always has, and the floor it crosses goes
+## away behind it. What is checked is that the patches land where the enemy *was* — the whole
+## mechanic is that tracking a moving target now costs the ground you track it across — that they
+## are small, and that they leave gaps.
+func _test_the_hot_path_runner_leaves_its_path_behind() -> void:
+	var arena := _make_arena()
+	var room := _add_room(arena)
+	if room == null:
+		await _teardown(arena)
+		return
+
+	_add_target(arena, room.get_interior_centre())
+	var runner: HotPathRunner = HOT_PATH_RUNNER_SCENE.instantiate()
+	var tuning := (load(CODE_RUNNER_CONFIG) as CodeRunnerConfig).duplicate() as CodeRunnerConfig
+	tuning.trail_interval = 0.25
+	runner.config = tuning
+	runner.position = room.get_interior_centre() + Vector2(90.0, 0.0)
+	room.get_node("%Enemies").add_child(runner)
+	await advance_physics(2)
+
+	var painted: Array[Rect2] = []
+	var container := arena.get_node("Projectiles")
+	container.child_entered_tree.connect(
+		func(node: Node) -> void:
+			if node is CompileLane:
+				painted.append((node as CompileLane).get_rect())
+	)
+
+	var start := runner.global_position
+	await advance_physics(60)
+
+	if not require(painted.size() >= 2, "it leaves patches as it runs (%d)" % painted.size()):
+		await _teardown(arena)
+		return
+	check(runner.global_position.distance_to(start) > 1.0, "and it is genuinely strafing while it does")
+
+	var span := float(maxi(tuning.trail_tiles, 1) * Room.TILE_SIZE)
+	var interior := room.get_interior_rect()
+	for patch: Rect2 in painted:
+		check_near(patch.size.x, span, "a patch is the width of the body that dropped it")
+		check_near(patch.size.y, span, "and as tall")
+		check(interior.encloses(patch), "and is laid inside the room rather than through its wall")
+
+	# Behind it, not under the player: this is the Code Runner's own path being charged for, and a
+	# patch that landed on the robot would be a Null Pointer wearing a runner's sprite.
+	var nearest := INF
+	for patch: Rect2 in painted:
+		nearest = minf(nearest, patch.get_center().distance_to(room.get_interior_centre()))
+	check(nearest > span, "the patches follow the runner rather than the robot (%.0f px away)" % nearest)
+
+	await _teardown(arena)
+
+
+# --- Optimizing Compiler ----------------------------------------------------------
+
+
+## The rung above, and its whole claim: the lane is followed by the perpendicular one through
+## wherever the player went. Measured off the rects the lanes report rather than off the enemy's
+## own fields, because what matters is the geometry that resolves damage.
+##
+## The safety argument is checked here too, and it is simpler than it looks: the second pass is
+## painted as the first one *strikes*, so only one lane is ever live, and answering a live lane is
+## one step across it. Perpendicular is what makes that step exist every time — the step out of a
+## row is along a column, which is the direction the pass that just struck has left clear.
+func _test_the_optimizing_compiler_answers_its_own_lane() -> void:
+	var arena := _make_arena()
+	var room := _add_room(arena)
+	if room == null:
+		await _teardown(arena)
+		return
+
+	var target := _add_target(arena, room.get_interior_centre() + Vector2(60.0, 20.0))
+	var compiler: OptimizingCompiler = OPTIMIZING_COMPILER_SCENE.instantiate()
+	var tuning := _quick_optimizing_compiler()
+	compiler.config = tuning
+	compiler.position = room.get_interior_centre() - Vector2(80.0, 0.0)
+	room.get_node("%Enemies").add_child(compiler)
+	await advance_physics(2)
+
+	var painted: Array[Rect2] = []
+	var container := arena.get_node("Projectiles")
+	container.child_entered_tree.connect(
+		func(node: Node) -> void:
+			if node is CompileLane:
+				painted.append((node as CompileLane).get_rect())
+	)
+
+	# One lane, its telegraph, and the pass that answers it — and stopped before the next lane is
+	# painted, so `painted` holds a pair rather than a stream.
+	await advance_physics(60)
+
+	if not require(
+		painted.size() == 2, "it paints a pass and then answers it (%d lanes)" % painted.size()
+	):
+		await _teardown(arena)
+		return
+
+	var first := painted[0]
+	var second := painted[1]
+	var first_is_row := first.size.x > first.size.y
+	var second_is_row := second.size.x > second.size.y
+	check(
+		first_is_row != second_is_row,
+		"the second pass crosses the first rather than running alongside it",
+	)
+	check(second.intersects(first), "the two cross, so the pair has an intersection")
+
+	# Aimed when it is painted rather than when the first lane was: the whole mechanic is that it
+	# wants the player's answer to the first pass, so it has to ask after they have given it.
+	var along := target.global_position.y if second_is_row else target.global_position.x
+	var low := second.position.y if second_is_row else second.position.x
+	var high := second.end.y if second_is_row else second.end.x
+	check(
+		along >= low and along <= high,
+		"and lands on the slot the robot is standing in (%.0f in %.0f..%.0f)" % [along, low, high],
+	)
+
+	# The way out, from where the robot actually is: one tile across the live lane. The first pass
+	# has already struck by the time this one is painted — the two are never live together, which is
+	# what keeps a crossing to one answer rather than two.
+	var escape := target.global_position + (
+		Vector2(0.0, float(Room.TILE_SIZE)) if second_is_row else Vector2(float(Room.TILE_SIZE), 0.0)
+	)
+	check(not second.has_point(escape), "and one tile across it is out of the live lane")
+	check(
+		tuning.second_pass_telegraph_seconds * PLAYER_TOP_SPEED > float(Room.TILE_SIZE),
+		"which the robot has time to walk before the pass strikes",
+	)
 	await _teardown(arena)
 
 
@@ -1600,6 +1873,17 @@ func _fast_firewall() -> FirewallNodeConfig:
 
 ## The shipped Compiler waits 3.2 seconds between lanes, which is right in the game and far
 ## too slow to watch in a test.
+## The Optimizing Compiler, quick enough that one pass and its answer fit in a second of test time
+## and slow enough that the *next* pass does not. The shipped enemy waits 3.2 seconds between
+## crossings, which is right in the game and useless here.
+func _quick_optimizing_compiler() -> CompilerConfig:
+	var tuning := (load(COMPILER_CONFIG) as CompilerConfig).duplicate() as CompilerConfig
+	tuning.lane_interval = 0.6
+	tuning.lane_telegraph_seconds = 0.3
+	tuning.second_pass_telegraph_seconds = 0.2
+	return tuning
+
+
 func _quick_compiler() -> CompilerConfig:
 	var tuning := (load(COMPILER_CONFIG) as CompilerConfig).duplicate() as CompilerConfig
 	tuning.lane_interval = 0.05
@@ -1629,6 +1913,133 @@ func _body_radius(body: Node) -> float:
 		return 0.0
 	var circle := shape.shape as CircleShape2D
 	return circle.radius if circle != null else 0.0
+
+
+# --- Lagging Replica --------------------------------------------------------------
+
+
+## The rung above, and its whole claim: the shot comes back from where it was fired, pointed the way
+## it was pointed, `delay_seconds` late. Measured off the projectile that actually appears rather
+## than off the enemy's queue, because what matters is where the thing that can hurt the player came
+## out of the floor.
+func _test_a_lagging_replica_returns_the_shot_you_took() -> void:
+	var arena := _make_arena()
+	var room := _add_room(arena)
+	if room == null:
+		await _teardown(arena)
+		return
+	_add_target(arena, room.get_interior_centre())
+
+	var replica: LaggingReplica = LAGGING_REPLICA_SCENE.instantiate()
+	replica.position = room.get_interior_centre() + Vector2(140.0, 0.0)
+	room.get_node("%Enemies").add_child(replica)
+	await advance_physics(2)
+
+	var tuning := replica.config as StaleReplicaConfig
+	if not require(tuning != null and tuning.echo_shot != null, "the family's config carries an echo"):
+		await _teardown(arena)
+		return
+
+	var fired_from := room.get_interior_centre() + Vector2(-40.0, 30.0)
+	var aim := Vector2.RIGHT
+	EventBus.shot_fired.emit(Teams.Id.PLAYER, fired_from, aim)
+	await advance_physics(2)
+	check(replica.get_queued_echo_count() == 1, "a shot the player takes is remembered")
+
+	var container := arena.get_node("Projectiles")
+	var echoes: Array[Node2D] = []
+	container.child_entered_tree.connect(
+		func(node: Node) -> void:
+			if node is Projectile:
+				echoes.append(node as Node2D)
+	)
+
+	# Not yet: the whole enemy is the lag, so an echo that arrived early would be an enemy that
+	# simply shoots at the player.
+	await advance_physics(int(tuning.delay_seconds * 60.0) - 12)
+	check(echoes.is_empty(), "and is not handed back before its lag is up")
+
+	await advance_physics(24)
+	if not require(echoes.size() == 1, "and comes back exactly once (%d)" % echoes.size()):
+		await _teardown(arena)
+		return
+	# Measured as a line rather than as a point: the echo has been flying for a frame or two by the
+	# time this looks at it, so what is checked is that it came out of that spot going that way —
+	# it sits on the ray the player's shot left along, and it is ahead of the muzzle rather than
+	# behind it.
+	var travelled := echoes[0].global_position - fired_from
+	check(
+		absf(travelled.cross(aim)) < 6.0,
+		"out of the ground the player fired it from, along the line they fired (%.1f px off)"
+			% absf(travelled.cross(aim)),
+	)
+	check(travelled.dot(aim) >= 0.0, "and pointed the way they were pointing")
+	check(replica.get_queued_echo_count() == 0, "and the queue empties as it fires")
+
+	# Its own echoes are not echoed, or a room with one in it would fill with them.
+	await advance_physics(6)
+	check(replica.get_queued_echo_count() == 0, "an echo is not itself echoed")
+	await _teardown(arena)
+
+
+## What is replayed is a rhythm, not a weapon: the echo is the enemy's own projectile, held down to
+## an interval no build can outrun. A replica that returned the player's damage would be a build
+## killing itself, and one that returned every shot of a fifteen-a-second weapon would be a wall.
+func _test_a_lagging_replica_returns_a_rhythm_rather_than_a_weapon() -> void:
+	var arena := _make_arena()
+	var room := _add_room(arena)
+	if room == null:
+		await _teardown(arena)
+		return
+	_add_target(arena, room.get_interior_centre())
+
+	var replica: LaggingReplica = LAGGING_REPLICA_SCENE.instantiate()
+	replica.position = room.get_interior_centre() + Vector2(140.0, 0.0)
+	room.get_node("%Enemies").add_child(replica)
+	await advance_physics(2)
+	var tuning := replica.config as StaleReplicaConfig
+
+	# A trigger held down: twenty shots inside a single interval, all from the same place.
+	for _index: int in 20:
+		EventBus.shot_fired.emit(Teams.Id.PLAYER, room.get_interior_centre(), Vector2.RIGHT)
+	await advance_physics(2)
+	check(
+		replica.get_queued_echo_count() == 1,
+		"a trigger held down is one echo, not twenty (%d queued)"
+			% replica.get_queued_echo_count(),
+	)
+
+	var ceiling := int(ceil(tuning.delay_seconds / maxf(tuning.echo_min_interval, 0.01))) + 1
+	check(
+		ceiling <= 4,
+		"so what it can ever have waiting is bounded by arithmetic (%d at most)" % ceiling,
+	)
+	check(
+		tuning.echo_shot.damage <= 2.0,
+		"and an echo hits for what an enemy hits for, never for what the player's build does",
+	)
+
+	# Enemy fire is not recorded either, including another replica's.
+	EventBus.shot_fired.emit(Teams.Id.ENEMY, room.get_interior_centre(), Vector2.LEFT)
+	await advance_physics(2)
+	check(replica.get_queued_echo_count() == 1, "and enemy fire is not remembered at all")
+
+	# Nor is anything fired while the room is closed. `shot_fired` reaches every replica on the
+	# floor, and a replica two rooms away that recorded through the door would meet the player with
+	# an echo out of floor they have never stood on.
+	room.set_active(false)
+	await advance_physics(2)
+	var queued := replica.get_queued_echo_count()
+	for _index: int in 5:
+		EventBus.shot_fired.emit(Teams.Id.PLAYER, room.get_interior_centre() + Vector2(90.0, 0.0), Vector2.UP)
+	await advance_physics(2)
+	check(
+		replica.get_queued_echo_count() == queued,
+		"a replica in a room the player has not opened records nothing (%d queued, was %d)"
+			% [replica.get_queued_echo_count(), queued],
+	)
+	room.set_active(true)
+	await _teardown(arena)
 
 
 ## Every living Recursion under a container, parent and fragments alike. Filters out the

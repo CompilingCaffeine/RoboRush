@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="FloorConfig" load_steps=23 format=3]
+[gd_resource type="Resource" script_class="FloorConfig" load_steps=26 format=3]
 
 [ext_resource type="Script" path="res://scripts/resources/floor_config.gd" id="floor"]
 [ext_resource type="Resource" path="res://data/floors/executive_theme.tres" id="theme"]
@@ -18,8 +18,11 @@
 [ext_resource type="Resource" path="res://data/bosses/executive_override_encounter.tres" id="boss"]
 [ext_resource type="Resource" path="res://data/spawns/executive_systems/ticket_bot.tres" id="ticket_bot"]
 [ext_resource type="Resource" path="res://data/spawns/executive_systems/code_runner.tres" id="code_runner"]
+[ext_resource type="Resource" path="res://data/spawns/executive_systems/hot_path_runner.tres" id="hot_runner"]
 [ext_resource type="Resource" path="res://data/spawns/executive_systems/compiler.tres" id="compiler"]
+[ext_resource type="Resource" path="res://data/spawns/executive_systems/optimizing_compiler.tres" id="opt_compiler"]
 [ext_resource type="Resource" path="res://data/spawns/executive_systems/firewall_node.tres" id="firewall_node"]
+[ext_resource type="Resource" path="res://data/spawns/executive_systems/redundant_firewall.tres" id="redundant_firewall"]
 [ext_resource type="Resource" path="res://data/spawns/executive_systems/memory_leech.tres" id="memory_leech"]
 [ext_resource type="Resource" path="res://data/spawns/executive_systems/null_pointer.tres" id="null_pointer"]
 
@@ -38,7 +41,7 @@ combat_templates = Array[RoomTemplate]([ExtResource("exec_briefing"), ExtResourc
 treasure_templates = Array[RoomTemplate]([ExtResource("treasure")])
 shop_templates = Array[RoomTemplate]([ExtResource("shop_room")])
 boss_templates = Array[RoomTemplate]([ExtResource("boss_room")])
-enemy_spawns = Array[EnemySpawn]([ExtResource("ticket_bot"), ExtResource("code_runner"), ExtResource("compiler"), ExtResource("firewall_node"), ExtResource("memory_leech"), ExtResource("null_pointer")])
+enemy_spawns = Array[EnemySpawn]([ExtResource("ticket_bot"), ExtResource("code_runner"), ExtResource("hot_runner"), ExtResource("compiler"), ExtResource("opt_compiler"), ExtResource("firewall_node"), ExtResource("redundant_firewall"), ExtResource("memory_leech"), ExtResource("null_pointer")])
 ; Denser encounters do not require proportionally more money. Keep the fifth shop a choice.
 clear_scrap_range = Vector2i(1, 2)
 enemy_scrap_range = Vector2i(0, 2)

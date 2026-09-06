@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="EnemySpawn" load_steps=3 format=3]
+[ext_resource type="Script" path="res://scripts/resources/enemy_spawn.gd" id="spawn"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/optimizing_compiler.tscn" id="scene"]
+[resource]
+script = ExtResource("spawn")
+scene = ExtResource("scene")
+; Gated a difficulty above the Compiler it extends, so this floor's easier rooms still teach the
+; single lane and its harder ones answer it. Both are in the roster at once deliberately: the second
+; pass only means anything to a player who can see the enemy that does not have one standing beside
+; it.
+weight = 0.9
+min_difficulty = 3

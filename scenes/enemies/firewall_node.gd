@@ -36,7 +36,7 @@ func _on_ready() -> void:
 
 
 func _act(delta: float) -> Vector2:
-	_angle = fmod(_angle + _tuning.beam_rotation_speed * delta, TAU)
+	_angle = fmod(_angle + rotation_speed() * delta, TAU)
 	_pulse_time += delta
 	_hit_cooldown = maxf(_hit_cooldown - delta, 0.0)
 
@@ -49,6 +49,13 @@ func _act(delta: float) -> Vector2:
 
 func get_beam_count() -> int:
 	return _beams.size()
+
+
+## How fast the fan turns, read through a method rather than off the config directly so that a node
+## which has taken on more load can turn faster without a second `_act` — see `RedundantFirewall`.
+## The config itself must never be written to: it is one resource shared by every node in the run.
+func rotation_speed() -> float:
+	return _tuning.beam_rotation_speed
 
 
 func get_beam_angle() -> float:
@@ -112,13 +119,20 @@ func _damage_player_in_beams(ends: Array[Vector2]) -> void:
 
 func _build_beams() -> void:
 	for _index: int in maxi(_tuning.beam_count, 1):
-		var beam := Line2D.new()
-		beam.width = _tuning.beam_half_width * 2.0
-		beam.default_color = _tuning.beam_color
-		beam.begin_cap_mode = Line2D.LINE_CAP_ROUND
-		beam.end_cap_mode = Line2D.LINE_CAP_ROUND
-		beam.antialiased = false
-		# Behind the node's own sprite, so the core stays readable as the thing to shoot.
-		beam.z_index = -1
-		add_child(beam)
-		_beams.append(beam)
+		add_beam()
+
+
+## Adds one beam to the fan. `_update_beams` spaces every beam evenly from `_beams.size()`, so a
+## beam added mid-fight re-spaces the whole fan rather than crowding in beside another one — which
+## is what lets `RedundantFirewall` pick up load without rebuilding anything.
+func add_beam() -> void:
+	var beam := Line2D.new()
+	beam.width = _tuning.beam_half_width * 2.0
+	beam.default_color = _tuning.beam_color
+	beam.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	beam.end_cap_mode = Line2D.LINE_CAP_ROUND
+	beam.antialiased = false
+	# Behind the node's own sprite, so the core stays readable as the thing to shoot.
+	beam.z_index = -1
+	add_child(beam)
+	_beams.append(beam)
