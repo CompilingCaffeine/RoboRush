@@ -28,6 +28,7 @@ func run() -> void:
 	await _test_a_vent_costs_integrity_and_then_relents()
 	await _test_a_zone_cools_when_left_alone()
 	await _test_a_template_builds_its_zones_inside_the_room()
+	await _test_ground_a_zone_already_covers_is_not_covered_twice()
 	await _test_zones_stop_with_the_room_they_are_in()
 	await _test_a_driven_zone_fills_on_its_own_clock()
 	await _test_a_driven_zone_is_never_floored()
@@ -391,6 +392,53 @@ func _test_a_template_builds_its_zones_inside_the_room() -> void:
 	await advance_physics(1)
 
 
+## A room can be handed zones after it is built — a boss brings its own, see
+## `BossEncounter.arena_thermal_zones` — and ground that already has a grille on it does not get a
+## second one.
+##
+## The rule exists because exactly one room in the game asks for it: Cascade Failure carries the
+## four corner grilles it was tuned around onto every floor it can guard, and on floor 3 the arena
+## already draws them. Two zones on one patch look like one grille and charge twice for it, which
+## is a fight the player would report as unfair without being able to point at anything.
+##
+## Overlap and not equality, so a corner offset by a tile — the same trap wearing a different
+## number — is caught too. New ground is still new: the third rectangle below shares nothing with
+## the first two and is built.
+func _test_ground_a_zone_already_covers_is_not_covered_twice() -> void:
+	var template := RoomTemplate.new()
+	template.id = &"__test_thermal_added"
+	template.thermal_zones = [Rect2i(0, 0, 6, 4)]
+
+	var plan := RoomPlan.new(0, Vector2i(1, 2), RoomTemplate.Type.BOSS)
+	var room: Room = ROOM_SCENE.instantiate()
+	add_child(room)
+	room.global_position = Vector2(plan.cell * Room.OUTER_SIZE)
+	room.build(plan)
+	room.plan.template = template
+	room._build_thermal_zones()
+	await advance_physics(1)
+
+	check(_zones_in(room).size() == 1, "the template's one zone is built")
+
+	# The same corner, that corner shifted by a tile, and a corner nothing has claimed.
+	room.add_thermal_zones([Rect2i(0, 0, 6, 4), Rect2i(1, 0, 6, 4), Rect2i(20, 8, 6, 4)])
+	await advance_physics(1)
+
+	var zones := _zones_in(room)
+	check(
+		zones.size() == 2,
+		"adding two overlapping zones and one fresh one leaves two (%d)" % zones.size(),
+	)
+	var far := 0
+	for zone: ThermalZone in zones:
+		if zone.global_position.x > room.global_position.x + 100.0:
+			far += 1
+	check(far == 1, "and the fresh one is the one that was built")
+
+	room.queue_free()
+	await advance_physics(1)
+
+
 ## A zone in a room the player is not in must not tick. Ten rooms of zones is the same wasted work
 ## ten rooms of AI would be, and a vent announced into an empty room is worse than wasted.
 func _test_zones_stop_with_the_room_they_are_in() -> void:
@@ -717,6 +765,16 @@ func _widest_authored_zone_width() -> float:
 ## Somewhere the zone is certainly not, including the player-radius margin it grows.
 func _off_zone(zone: ThermalZone) -> Vector2:
 	return _zone_centre(zone) + Vector2(_size_of(zone).x * 2.0, 0.0)
+
+
+## Every zone a room holds as furniture, which is where both a template's and a boss's land.
+func _zones_in(room: Room) -> Array[ThermalZone]:
+	var zones: Array[ThermalZone] = []
+	for child: Node in room.get_node("%Thermals").get_children():
+		var zone := child as ThermalZone
+		if zone != null:
+			zones.append(zone)
+	return zones
 
 
 func _zone_centre(zone: ThermalZone) -> Vector2:

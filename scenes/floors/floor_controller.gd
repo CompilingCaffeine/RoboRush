@@ -706,6 +706,15 @@ func _add_boss(room: Room, generation: int) -> void:
 		_boss.queue_free()
 		_boss = null
 		return
+	# Before the boss, so the ground is already drawn on the frame the fight starts rather than
+	# appearing under a player who has begun moving. See `BossEncounter.arena_thermal_zones` for
+	# why a hazard can belong to the fight rather than to the room, and `Room.add_thermal_zones`
+	# for what happens when the arena had already authored the same ground itself.
+	# Null only if the session was released between the spawn and this deferred call, which the
+	# generation check above has already caught every way it can happen; the guard is here because
+	# an unlucky ordering should cost the arena its grilles rather than the frame.
+	if _boss_encounter != null:
+		room.add_thermal_zones(_boss_encounter.arena_thermal_zones)
 	room.add_child(_boss)
 	_boss.begin(room.get_interior_rect())
 

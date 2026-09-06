@@ -16,3 +16,20 @@ defeat_banner = "THE RACK IS COLD"
 ; bodies and the rate of the vents already say, and a banner repeating it would be the game
 ; narrating a number the player can see.
 phase_banners = Array[String](["", "LOAD REROUTED  //  THE SURVIVORS TAKE THE SLACK", "ONE NODE  //  FULL LOAD"])
+; The four corner grilles the fight was tuned around, which used to belong to `data_core_arena`
+; and belong here now. The rack breathes on an ellipse of 150x62 in a 416x192 arena, so the four
+; corners are the ground it can never reach — and a fight whose whole sentence is *keep moving*
+; handed the player four cold rooms to stand still in the moment it was allowed to guard a floor
+; whose arena had no grilles on it. Bringing them along is not a new hazard; it is the fight
+; arriving intact on the other three floors.
+;
+; Six by four tiles at each corner, and the numbers are the ones this arena was played with rather
+; than a fresh guess: 96x64 pixels, which the robot crosses in four tenths of a second against a
+; 1.5-second ramp, so a corner is somewhere to pass through and never somewhere to wait. The
+; centre stays cold, which inverts every combat room on floor 3 and puts the safe ground exactly
+; where the boss is.
+;
+; `data_core_arena` keeps its own copy, so the Data Center's last room still reads as the Data
+; Center's whether or not the run drew this boss. `Room.add_thermal_zones` is what stops the two
+; stacking into eight.
+arena_thermal_zones = Array[Rect2i]([Rect2i(0, 0, 6, 4), Rect2i(20, 0, 6, 4), Rect2i(0, 8, 6, 4), Rect2i(20, 8, 6, 4)])

@@ -34,5 +34,28 @@ extends Resource
 @export var phase_banners: Array[String] = []
 
 
+## Throughput zones this boss brings into whatever arena it is fought in, in tile coordinates.
+## Same shape and same meaning as `RoomTemplate.thermal_zones` — see `ThermalZone` — and built
+## into the room by `FloorController._add_boss` at the moment the boss is stood up.
+##
+## **A hazard belongs to whichever of the two authored the fight it is part of.** A floor's
+## signature mechanic lives on that floor's templates, which is what keeps the Data Center's
+## grilles out of the Help Desk and out of the generator. But Cascade Failure's four corner zones
+## were never the Data Center's idea about its rooms; they were the fight's own arithmetic, and
+## they only ever lived on `data_core_arena` because that was the one arena the fight could
+## happen in. The moment either boss could guard either floor, that stopped being true and the
+## fight quietly lost a quarter of its difficulty on three floors out of four — the corners of a
+## plain `boss_arena` are cold ground the ring cannot reach, and cold ground the ring cannot reach
+## is where a player stands to win a fight about not standing still.
+##
+## Declared here rather than on the boss's own scene for the reason the room owns its zones at
+## all: a zone is furniture, laid out in the room's tile grid, built and freed with the room. A
+## boss that spawned its own would have to know the arena's coordinates, and would take its floor
+## back with it when it died.
+##
+## Empty for every boss that does not want any, which is three of the five.
+@export var arena_thermal_zones: Array[Rect2i] = []
+
+
 func is_valid() -> bool:
 	return scene != null

@@ -64,7 +64,9 @@ const FLOOR_SCENE := preload("res://scenes/floors/floor.tscn")
 
 const BOSS_CONFIG_PATH := "res://data/bosses/cascade_failure.tres"
 const ENCOUNTER_PATH := "res://data/bosses/cascade_failure_encounter.tres"
+const FLOOR_1_CONFIG_PATH := "res://data/floors/floor_1_help_desk.tres"
 const FLOOR_3_CONFIG_PATH := "res://data/floors/floor_3_data_center.tres"
+const CORE_ARENA_PATH := "res://data/rooms/data_core_arena.tres"
 const RIVET_PATH := "res://data/projectiles/rivet.tres"
 
 ## The room interior a boss arena actually is: 26x12 tiles. The ring is sized against this, so
@@ -162,6 +164,7 @@ func run() -> void:
 	_test_config_is_a_fight()
 	_test_the_hud_calls_it_by_its_name()
 	_test_every_floor_can_draw_it()
+	_test_the_corners_belong_to_the_fight()
 
 	await _test_it_starts_as_a_whole_rack()
 	await _test_nodes_fail_at_even_fractions_of_the_pool()
@@ -186,6 +189,8 @@ func run() -> void:
 	await _test_the_last_node_cuts_the_corner()
 	await _test_real_projectiles_drive_the_whole_fight()
 	await _test_the_floor_spawns_it_in_a_real_boss_room()
+	await _test_it_carries_its_corners_onto_a_floor_that_has_none()
+	await _test_the_corners_are_not_doubled_where_the_arena_draws_them_too()
 
 
 # --- Configuration ------------------------------------------------------------
@@ -310,6 +315,51 @@ func _test_every_floor_can_draw_it() -> void:
 			draws,
 			"floor %d ('%s') may draw Cascade Failure" % [index + 1, config.id],
 		)
+
+
+## The four corner grilles are the fight's, not the room's.
+##
+## They spent their first life on `data_core_arena` because that was the only arena this boss could
+## be fought in, and when the boss pools opened up they stayed behind — so three floors out of four
+## got a Cascade Failure with four cold corners in it. The ring rides an ellipse of 150x62 in a
+## 416x192 room and cannot reach any of them, which makes a corner exactly the thing this fight
+## exists to deny: ground a player can stand still on.
+##
+## Checked against the arena that authored them rather than against four typed rectangles, because
+## the claim worth pinning is that the two are the same ground. `data_core_arena` keeps its copy on
+## its own account, and a player on floor 3 should not be able to tell which of the two put the
+## grille there.
+func _test_the_corners_belong_to_the_fight() -> void:
+	var encounter := load(ENCOUNTER_PATH) as BossEncounter
+	var arena := load(CORE_ARENA_PATH) as RoomTemplate
+	if not require(encounter and arena, "the encounter and the Data Center's arena both load"):
+		return
+
+	check(
+		encounter.arena_thermal_zones.size() == 4,
+		"the fight brings four zones with it (%d)" % encounter.arena_thermal_zones.size(),
+	)
+	check(
+		encounter.arena_thermal_zones == arena.thermal_zones,
+		"and they are the same ground the arena it was tuned in already draws",
+	)
+
+	# One per corner, and nothing in the middle: the safe ground in this fight is where the boss is,
+	# which is the inversion the whole arena is for. Measured as "touches a corner tile" rather than
+	# by matching coordinates, so moving a grille a tile inward is still allowed and moving one into
+	# the centre is not.
+	var corners := {Vector2i(0, 0): 0, Vector2i(25, 0): 0, Vector2i(0, 11): 0, Vector2i(25, 11): 0}
+	for zone: Rect2i in encounter.arena_thermal_zones:
+		check(
+			zone.position.x >= 0 and zone.position.y >= 0
+				and zone.end.x <= _TILES.x and zone.end.y <= _TILES.y,
+			"zone %s describes ground inside the room" % zone,
+		)
+		for corner: Vector2i in corners:
+			if zone.has_point(corner):
+				corners[corner] += 1
+	for corner: Vector2i in corners:
+		check(corners[corner] == 1, "exactly one zone covers the corner at %v" % corner)
 
 
 # --- The rack -----------------------------------------------------------------
@@ -1073,6 +1123,55 @@ func _test_the_floor_spawns_it_in_a_real_boss_room() -> void:
 	await advance_physics(2)
 
 
+## The other half of the claim above, in the only terms that settle it: a real floor, a real
+## generator, and a player who walks into the arena. Floor 1's `boss_arena` has no zones of its own
+## — it is the plain room the first two floors share — so every grille found in it after the boss
+## is stood up came from the encounter.
+##
+## This is the check that would have caught the loss in the first place. Cascade Failure was let out
+## of the Data Center and the corners stayed behind, and nothing anywhere said so: the fight still
+## had its four vent sources, still passed every check in this suite, and was simply a quarter
+## easier on three floors out of four.
+func _test_it_carries_its_corners_onto_a_floor_that_has_none() -> void:
+	var opened := await _open_boss_arena(FLOOR_1_CONFIG_PATH, 20250901)
+	var room: Room = opened.get("room")
+	if room != null:
+		var template: RoomTemplate = room.plan.template
+		check(
+			template != null and template.thermal_zones.is_empty(),
+			"floor 1's arena authors no zones of its own",
+		)
+		var zones := _zones_in(room)
+		check(zones.size() == 4, "and the fight brings four with it anyway (%d)" % zones.size())
+		_check_zones_are_the_corners(room, zones)
+	await _close_boss_arena(opened)
+
+
+## And the floor that already draws them draws them once. `data_core_arena` keeps its corners on its
+## own account — the Data Center's last room should read as the Data Center's whichever boss the run
+## dealt it — so on this one floor the room and the fight ask for the same four patches of ground.
+##
+## Two zones stacked on one patch would look like one grille and charge twice for it: a player would
+## report the corners hurting more on floor 3 than anywhere else, and there would be nothing on
+## screen to explain it. See `Room.add_thermal_zones`.
+func _test_the_corners_are_not_doubled_where_the_arena_draws_them_too() -> void:
+	var opened := await _open_boss_arena(FLOOR_3_CONFIG_PATH, 20250901)
+	var room: Room = opened.get("room")
+	if room != null:
+		var template: RoomTemplate = room.plan.template
+		check(
+			template != null and template.thermal_zones.size() == 4,
+			"the Data Center's arena authors its own four corners",
+		)
+		var zones := _zones_in(room)
+		check(
+			zones.size() == 4,
+			"and the fight asking for the same four leaves four, not eight (%d)" % zones.size(),
+		)
+		_check_zones_are_the_corners(room, zones)
+	await _close_boss_arena(opened)
+
+
 # --- Harness ------------------------------------------------------------------
 
 
@@ -1157,6 +1256,113 @@ func _drive_to_nodes(alive: int) -> void:
 	if _boss.get_health() > wanted:
 		_hurt_any(_boss.get_health() - wanted)
 	await advance_physics(2)
+
+
+## Builds a real floor from `config_path`, forces Cascade Failure into the draw, and walks the
+## player into the arena — the whole road a room's ground travels, since the encounter's zones are
+## laid by `FloorController._add_boss` and nothing shorter would prove they arrive.
+##
+## The boss is forced by striking the rest of the floor's pool off as already fought, which is the
+## run's own mechanism rather than a seed hunted for. A seed would pin these checks to a generator
+## that is allowed to change.
+##
+## Returns the holder and the arena, or an empty dictionary with a failure already logged.
+func _open_boss_arena(config_path: String, seed_value: int) -> Dictionary:
+	var config := load(config_path) as FloorConfig
+	if not require(config, "%s loads as a FloorConfig" % config_path):
+		return {}
+
+	var holder := Node2D.new()
+	add_child(holder)
+	var floor_node: FloorController = FLOOR_SCENE.instantiate()
+	floor_node.config = config
+	holder.add_child(floor_node)
+	var player: Player = PLAYER_SCENE.instantiate()
+	holder.add_child(player)
+	await advance_physics(1)
+
+	GameManager.start_run()
+	RunManager.begin_run(seed_value)
+	for encounter: BossEncounter in config.boss_pool:
+		if encounter != null and encounter.id != _config.id:
+			RunManager.fought_boss_ids.append(encounter.id)
+
+	var opened := {"holder": holder}
+	if not floor_node.build(player, seed_value):
+		fail("%s generates from seed %d" % [config.id, seed_value])
+		return opened
+	if not require(
+		floor_node.get_boss_encounter() != null
+			and floor_node.get_boss_encounter().id == _config.id,
+		"%s draws Cascade Failure once the rest of its pool is spent" % config.id,
+	):
+		return opened
+
+	var arenas := floor_node.layout.find_by_type(RoomTemplate.Type.BOSS)
+	if not require(not arenas.is_empty(), "%s has a boss arena" % config.id):
+		return opened
+	var room := floor_node.get_room((arenas[0] as RoomPlan).id)
+	if not require(room, "and the arena is built"):
+		return opened
+
+	# Teleporting in is not entering: the room's trigger reports the overlap on a later physics
+	# flush, and how much later is not fixed. Same wait `tests/test_post_boss.gd` makes, for the
+	# same reason — and the boss (and so its ground) is added a further frame late on top of that,
+	# because `_add_boss` is deferred.
+	player.global_position = room.get_interior_rect().get_center()
+	var waited := 0
+	while floor_node.current_room_id != room.plan.id and waited < 120:
+		await advance_physics(1)
+		waited += 1
+	if not require(floor_node.current_room_id == room.plan.id, "the player is in the arena"):
+		return opened
+	await advance_physics(2)
+
+	opened["room"] = room
+	return opened
+
+
+func _close_boss_arena(opened: Dictionary) -> void:
+	var holder: Node2D = opened.get("holder")
+	if holder != null:
+		holder.queue_free()
+	await advance_physics(2)
+
+
+## Every zone a room is holding as its own furniture, which is where both a template's zones and an
+## encounter's land. Distinct from `_new_zones`, which watches the session container the boss's
+## *driven* vents are parented into — the two lifetimes the class doc separates.
+func _zones_in(room: Room) -> Array[ThermalZone]:
+	var zones: Array[ThermalZone] = []
+	for child: Node in room.get_node("%Thermals").get_children():
+		var zone := child as ThermalZone
+		if zone != null:
+			zones.append(zone)
+	return zones
+
+
+## One zone touching each corner of the interior, none of them driven, and none in the middle.
+##
+## Not driven is the half worth saying out loud: a corner grille is a room's furniture and heats
+## only under a player standing on it, so it denies nowhere and is always crossable. That is what
+## keeps it a tax on stopping rather than a fifth vent source, and it is why the arena's reachable
+## ground is the same with the corners as without them.
+func _check_zones_are_the_corners(room: Room, zones: Array[ThermalZone]) -> void:
+	var interior := room.get_interior_rect()
+	var unclaimed: Array[Vector2] = [
+		interior.position,
+		Vector2(interior.end.x - 1.0, interior.position.y),
+		Vector2(interior.position.x, interior.end.y - 1.0),
+		interior.end - Vector2.ONE,
+	]
+	for zone: ThermalZone in zones:
+		check(not zone.is_driven(), "a corner grille heats under the player, not on a clock")
+		check(interior.encloses(zone.get_rect()), "and lands inside the arena")
+		for index: int in unclaimed.size():
+			if zone.get_rect().has_point(unclaimed[index]):
+				unclaimed.remove_at(index)
+				break
+	check(unclaimed.is_empty(), "all four corners are covered (%d left cold)" % unclaimed.size())
 
 
 ## Zones that have appeared in the session's container since the last time this was asked. Driven

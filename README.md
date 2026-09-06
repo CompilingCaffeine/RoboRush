@@ -716,8 +716,8 @@ tests/test_run.gd                          64 statistics, state, and summary che
 tests/test_shop.gd                         90 price, purchase, and refusal checks
 tests/test_boss.gd                         104 phase, terminal, and defeat checks
 tests/test_runtime_error.gd                97 checks on Development's boss
-tests/test_cascade_failure.gd              119 checks on the Data Center's boss
-tests/test_thermal.gd                      198 checks on what may and may not heat a zone
+tests/test_cascade_failure.gd              162 checks on the Data Center's boss
+tests/test_thermal.gd                      201 checks on what may and may not heat a zone
 tests/test_migration.gd                 + 334 checks on what a pad moves, and what rearms it
 tests/test_orchestrator.gd              + 224 checks on Cloud Operations' boss, including a
                                             brute-force proof that every migration is answerable
@@ -2110,6 +2110,55 @@ re-plumbing of the first three.
 The change moves what a seed produces, so `RunDefinition.content_version` went to 2 with it and
 in-flight checkpoints from version 1 are refused rather than resumed.
 
+#### The corners come with the fight
+
+Opening the pools cost this fight something nobody noticed, and it was a quarter of its difficulty
+on three floors out of four.
+
+The rack rides an ellipse of 150x62 in a 416x192 room, so the four corners of a boss arena are
+ground it can never reach. `data_core_arena` answers that by putting a 6x4 throughput zone in each
+of them — the inversion this floor's last room is built on, safe ground in the middle where the boss
+is, and a tax on the only four squares a player could otherwise have stood still on. That arena was
+the only place Cascade Failure could be fought, so nobody had to decide whether the grilles belonged
+to the room or to the fight. When the boss pools opened, the grilles stayed with the room. Cascade
+Failure went to the Help Desk, to Development and to Cloud Operations with four cold corners in it,
+and the fight whose entire sentence is *keep moving* handed the player four places to stand.
+
+So a boss can now carry its own ground: `BossEncounter.arena_thermal_zones` is a list of tile rects
+in exactly `RoomTemplate.thermal_zones`' shape, and `FloorController._add_boss` builds them into
+whatever arena the boss is being stood up in. Cascade Failure names the same four corners it was
+tuned against; the other four encounters name none.
+
+**The distinction that decides where a hazard is declared is who authored the fight it is part of.**
+A floor's signature mechanic is the floor's, and lives on the floor's templates — that is what keeps
+the Data Center's grilles off the Help Desk and out of the generator, and it stays exactly as it was.
+The four corners were never the Data Center's idea about its rooms; they were arithmetic about an
+ellipse, and they were only ever written down on a template because there was one template they
+could be written down on.
+
+`data_core_arena` **keeps its own copy**, so the Data Center's last room reads as the Data Center's
+whichever of the four bosses the run deals it — the King's terminals still stand in ground that
+charges for standing on it. On that one floor the room and the fight therefore ask for the same four
+patches, and `Room.add_thermal_zones` skips ground an existing zone already covers. Two zones stacked
+on one patch would draw as one grille and charge twice for it: a player would report the corners
+hurting more on floor 3 than anywhere else with nothing on screen to explain why. The check is
+overlap rather than equality, because a corner offset by a tile is the same trap wearing a different
+number.
+
+The corners are **furniture, not a fifth vent source**, and the difference is the whole reason this
+is a fair thing to add. A room's zone heats only while the robot is standing on it and cools the
+moment it leaves; it denies nowhere, and crossing one costs four tenths of a second against a
+1.5-second ramp. So the arena's reachable ground is the same with the corners as without them, and
+the 30% floor `_test_the_floor_stays_walkable_at_every_load` holds is untouched. What changed is
+that waiting out a wall in a corner is no longer free.
+
+`tests/test_cascade_failure.gd` checks it the only way that settles it: it builds floor 1 from its
+real config, spends the rest of the boss pool so the draw has to land on Cascade Failure, walks the
+player into an arena that authors no zones of its own, and counts four. Then the same thing on floor
+3, where the answer must still be four and not eight. Nothing shorter would have caught the original
+loss, which is exactly why it went unnoticed — the fight still had its four vent sources and still
+passed every check in the suite.
+
 #### What survives its death
 
 The rule every fight in this game draws: **committed hazards resolve, uncommitted ones never
@@ -2850,6 +2899,18 @@ rest, oldest first:
   landed, and the suite's answer is that the robot can still reach 42% of the room at the worst
   moment — which is a survivability floor, not a comfort one. If the fight reads as busy rather
   than as dangerous, `line_vent_interval` is the knob, not `vent_seconds`.
+- **Do Cascade Failure's corner grilles read as the fight or as the room?** They travel with the
+  encounter now, so a player who fought it on the Help Desk and again on the Data Center should
+  recognise the same four patches of ground rather than two floors that happened to look alike.
+  If it reads as the arena instead, the fix is a look of its own for a boss's ground, not fewer
+  grilles.
+- **Two of the three boss reward stands land inside a corner grille.** The stands sit 128 pixels
+  either side of the reward point at tile (13, 9), which puts the outer two in the bottom corners
+  — so reading three item labels and choosing between them is done on ground that vents. That has
+  always been true on floor 3 and is the version of the fight this change deliberately reproduced
+  everywhere, rather than a new decision. If claiming the prize turns out to be the part players
+  resent, the answer is to free the encounter's zones when the boss dies — the room's own copy on
+  floor 3 would stay, which is the same split the grilles already have.
 - Does the CRT filter look like an arcade cabinet or like a dirty screen?
 
 Then move the numbers in `data/`, which is one `.tres` edit each and the whole payoff for

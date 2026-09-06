@@ -340,8 +340,40 @@ func _build_ducts() -> void:
 func _build_thermal_zones() -> void:
 	if plan.template == null:
 		return
-	for tile_rect: Rect2i in plan.template.thermal_zones:
-		ThermalZone.spawn(_thermals, get_tile_block_rect(tile_rect.position, tile_rect.size))
+	add_thermal_zones(plan.template.thermal_zones)
+
+
+## Lays out further throughput zones in tile coordinates, on top of whatever the template already
+## built. Public because a template is not the only thing that can author ground: a boss brings its
+## own — see `BossEncounter.arena_thermal_zones` — and `FloorController` builds those into the
+## arena as it stands the boss up.
+##
+## **A zone is skipped if it lands on ground another zone already covers**, and that is the one
+## piece of judgement here. It is what lets Cascade Failure carry the four corner grilles it was
+## tuned around onto every floor without doubling them up on the one floor whose arena already
+## draws them: `data_core_arena` keeps its corners on its own account, the boss asks for the same
+## four, and the player gets four. Two zones stacked on one patch of floor would look like one
+## grille and charge twice for it, which is the version of this a player would report as the
+## corners hurting more on floor 3 than anywhere else for no reason they could see.
+##
+## Overlap rather than an exact match, because the failure being avoided is about the *ground*, not
+## about two authors having typed the same rectangle. A corner zone offset by a tile is the same
+## trap wearing a different number.
+func add_thermal_zones(tile_rects: Array[Rect2i]) -> void:
+	for tile_rect: Rect2i in tile_rects:
+		var rect := get_tile_block_rect(tile_rect.position, tile_rect.size)
+		if _zone_covers(rect):
+			continue
+		ThermalZone.spawn(_thermals, rect)
+
+
+## Whether any zone already in this room overlaps `rect`, in global coordinates.
+func _zone_covers(rect: Rect2) -> bool:
+	for child: Node in _thermals.get_children():
+		var zone := child as ThermalZone
+		if zone != null and zone.get_rect().intersects(rect):
+			return true
+	return false
 
 
 ## Lays out this template's migration pads, if it has any. See `MigrationPad` for what they do and
