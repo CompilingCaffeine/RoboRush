@@ -14,8 +14,10 @@ extends TestCase
 ## have passed happily while the HUD ignored it.
 
 const HUD_SCENE := preload("res://scenes/ui/combat_hud.tscn")
+const PLAYER_SCENE := preload("res://scenes/player/player.tscn")
 const KING_ENCOUNTER_PATH := "res://data/bosses/scrap_king_encounter.tres"
 const ERROR_ENCOUNTER_PATH := "res://data/bosses/runtime_error_encounter.tres"
+const FAILOVER_ITEM_PATH := "res://data/items/failover.tres"
 
 var _hud: CombatHUD
 var _banner: Label
@@ -27,6 +29,7 @@ func run() -> void:
 	await _test_no_boss_borrows_another_bosss_lines()
 	await _test_each_level_announces_itself()
 	await _test_a_new_floor_starts_without_a_boss_bar()
+	await _test_a_spent_failover_shrinks_the_integrity_row()
 
 
 ## The half of the fix that is easy to break by fixing the other half: moving these lines out of
@@ -154,6 +157,59 @@ func _test_a_new_floor_starts_without_a_boss_bar() -> void:
 	check(bar.visible, "while the new floor's own boss still raises it")
 
 	await _teardown()
+
+
+## The pip row is the player's answer to "how much can I take", and a dim pip in it means "a point
+## you have lost and can repair". A spent failover collapses the ceiling to one point, and the row
+## went on drawing the five the build used to have — dim, and so read as five points of damage
+## waiting for a repair cell. They never filled, because the pool was already full at one, and the
+## shop's repair charged for nothing. The row has to shrink with the ceiling.
+##
+## Driven through the real item and a real lethal hit rather than by writing the maximum down,
+## because the moment the HUD was missing is precisely the one inside the damage path: nothing is
+## picked up when a death save fires, and pickup was the only thing that used to rebuild the row.
+func _test_a_spent_failover_shrinks_the_integrity_row() -> void:
+	var failover := load(FAILOVER_ITEM_PATH) as ItemConfig
+	if not require(failover, "the Failover item loads"):
+		return
+
+	# A fresh run, so the save is armed rather than already spent by an earlier suite, and so the
+	# ceiling starts free of another check's integrity debt.
+	GameManager.start_run()
+	RunManager.begin_run(90210)
+
+	await _make_hud()
+	var player: Player = PLAYER_SCENE.instantiate()
+	add_child(player)
+	await advance_physics(2)
+	_hud.bind_player(player)
+
+	var pips := _hud.get_node("%IntegrityPips") as HBoxContainer
+	var health := player.get_health_component()
+	var full := ceili(health.max_health)
+	check(full > 1, "the robot starts on more than one point of integrity (%d)" % full)
+	check(
+		pips.get_child_count() == full,
+		"and the row shows one pip per point (%d)" % pips.get_child_count(),
+	)
+
+	player.get_item_inventory().add(failover)
+	health.apply_damage(DamageInfo.new(99.0, null, Vector2.RIGHT))
+	check(health.is_alive(), "a lethal hit is survived by the failover")
+	check_near(health.max_health, 1.0, "and collapses the pool to a single point")
+
+	await advance_physics(4)
+	check(
+		pips.get_child_count() == 1,
+		"the row collapses with it, leaving no dimmed pips to repair (%d)"
+			% pips.get_child_count(),
+	)
+
+	player.queue_free()
+	await _teardown()
+	# The run this check started belongs to this check. Handed back clean, as the item suite does.
+	GameManager.start_run()
+	RunManager.begin_run(1)
 
 
 # --- Fixtures -----------------------------------------------------------------

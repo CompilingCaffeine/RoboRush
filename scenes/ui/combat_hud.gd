@@ -207,6 +207,14 @@ func bind_player(player: Player) -> void:
 ## changes a maximum. Rebuilt from the components rather than tracked, so Reinforced
 ## Chassis and Unsafe Overclock need no HUD code of their own — and neither will the next
 ## item that moves either ceiling.
+##
+## Asked every frame rather than only on pickup, because an item being collected is not the only
+## moment a ceiling moves. A spent failover collapses maximum integrity to one point from inside
+## the damage path (see `Player._survive_lethal_hit`), and the row went on showing the pips the
+## build used to have, dimmed — which reads as integrity waiting to be repaired. It is not: the
+## pool is full at one, so every heal and every shop repair after the save appeared to do nothing.
+## `_build_pips` returns immediately when the count already matches, so this costs two integer
+## comparisons on the frames nothing moved, which is all of them.
 func _rebuild_capacity_pips() -> void:
 	if _player == null:
 		return
@@ -219,6 +227,7 @@ func _process(delta: float) -> void:
 	_update_banner(delta)
 	if _player == null:
 		return
+	_rebuild_capacity_pips()
 	_update_integrity()
 	_update_dash()
 
@@ -278,6 +287,13 @@ func _show_banner(text: String, color: Color) -> void:
 
 
 func _build_pips(container: HBoxContainer, count: int) -> void:
+	var wanted := maxi(count, 0)
+	# Nothing to do is the common case — this runs every frame — and it has to be nothing rather
+	# than a rebuild that happens to produce the same row: tearing the children down and putting
+	# them back each frame would restart every pip as `INTEGRITY_EMPTY` and hand the row to the
+	# layout again, for a result identical to the one already on screen.
+	if container.get_child_count() == wanted:
+		return
 	for existing: Node in container.get_children():
 		# Removed as well as freed. queue_free alone leaves the node in the container until
 		# the end of the frame, so rebuilding a 6-pip row as an 8-pip row would draw all
@@ -285,7 +301,7 @@ func _build_pips(container: HBoxContainer, count: int) -> void:
 		container.remove_child(existing)
 		existing.queue_free()
 	container.add_theme_constant_override("separation", PIP_SEPARATION)
-	for _index: int in maxi(count, 0):
+	for _index: int in wanted:
 		var pip := ColorRect.new()
 		pip.custom_minimum_size = PIP_SIZE
 		pip.color = INTEGRITY_EMPTY
@@ -358,7 +374,9 @@ func _on_boss_defeated(_boss: Node) -> void:
 ## `ItemConfig.description` is still authored for every item; it is a design note now, not copy.
 func _on_item_collected(item: ItemConfig) -> void:
 	_show_banner(item.display_name.to_upper(), BANNER_ITEM)
-	_rebuild_capacity_pips()
+	# The pip rows are not rebuilt here. They are asked for every frame now (see
+	# `_rebuild_capacity_pips`), and a pickup is no longer the only thing that moves a ceiling —
+	# leaving the call would make this look like the place that keeps them honest, which it is not.
 	_rebuild_item_bar()
 
 

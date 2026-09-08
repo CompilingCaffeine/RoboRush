@@ -586,6 +586,20 @@ ECHO_RIVET = [
     ".oooo.",
 ]
 
+# --- Debug Drone's escort shot, and the same trick as the echo above used for the opposite end:
+# --- the silhouette is the player's rivet because the drone fires the player's shot, and the
+# --- colour is the drone's own screen green because it is not the player firing it. Two identical
+# --- yellow rivets leaving the robot on one trigger pull read as a doubled fire rate rather than
+# --- as an escort, which is the item's whole silhouette on screen.
+# ---
+# --- Not to be confused with DRONE_SHOT below, which belongs to the *enemy* Pop Up Drone.
+DRONE_RIVET = [
+    ".oooo.",
+    "oeEEEo",
+    "oeEEEo",
+    ".oooo.",
+]
+
 
 # --- Pop Up Drone's spread shot. Smaller and faster-reading than a ticket.
 DRONE_SHOT = [
@@ -2388,6 +2402,7 @@ SPRITES = {
     "art/effects/projectile_boss_green.png": BOSS_GREEN,
     "art/effects/projectile_rivet.png": RIVET,
     "art/effects/projectile_echo.png": ECHO_RIVET,
+    "art/effects/projectile_drone_rivet.png": DRONE_RIVET,
     "art/effects/projectile_ticket.png": TICKET_SHOT,
     "art/effects/muzzle_flash.png": MUZZLE_FLASH,
     "art/effects/spark.png": SPARK,

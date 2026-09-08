@@ -80,6 +80,7 @@ func run() -> void:
 	await _test_scrap_scatter_avoids_geometry()
 	await _test_drop_point_inside_geometry_relocates()
 	await _test_debug_drone_fires_with_the_player()
+	await _test_the_drone_keeps_step_under_held_fire()
 	await _test_drone_shots_advance_the_chain_trigger()
 
 	await _test_memory_spike_pierces_one_extra_enemy()
@@ -1246,6 +1247,75 @@ func _test_debug_drone_fires_with_the_player() -> void:
 	check(
 		weapon.get_shots_fired() == 3,
 		"and both advance one shared counter (got %d)" % weapon.get_shots_fired(),
+	)
+
+	# The two shots must not look like one weapon firing twice. Both were drawn with the player's
+	# own yellow rivet, so a pull with a drone up read as the fire rate doubling rather than as an
+	# escort — the one thing on screen that says which item the player picked up. The escort's
+	# shot wears the drone's own colour, exactly as the Lagging Replica's echo wears the hostile
+	# red: same silhouette, because it is the player's shot; different colour, because it is not
+	# the player firing it.
+	var in_flight := _live_projectiles(arena)
+	if require(in_flight.size() == 2, "both shots are still in the air to be looked at"):
+		var mine := weapon.config.projectile
+		var escort: ProjectileConfig = null
+		for shot: Projectile in in_flight:
+			if shot.config != mine:
+				escort = shot.config
+		if require(escort, "one of the two is not the player's own rivet"):
+			check(
+				escort.texture != mine.texture,
+				"the escort's shot is not drawn with the player's sprite",
+			)
+			check(
+				escort.trail_color.is_equal_approx(
+					Color(
+						drone_item.accent_color.r,
+						drone_item.accent_color.g,
+						drone_item.accent_color.b,
+						escort.trail_color.a,
+					)
+				),
+				"and trails in the drone's own colour rather than the player's (%s)"
+					% escort.trail_color,
+			)
+	await _teardown(arena)
+
+
+## The check above is one trigger pull. This is the sequence, because "fires when the player fires"
+## is a claim about a *stream* of shots and the drone keeps a cooldown of its own: it is told to
+## fire, and answers only if its own weapon is ready. A drone a frame out of step with the player
+## drops shots under held fire, and a drone that could answer twice in a frame would double them.
+## Either way what the player sees is their own weapon behaving unpredictably, so the count is
+## checked against the trigger rather than against a number written here.
+func _test_the_drone_keeps_step_under_held_fire() -> void:
+	var arena := _make_arena()
+	var player := _add_player(arena)
+	var drone_item := _require_item(&"debug_drone")
+	if drone_item == null:
+		await _teardown(arena)
+		return
+	player.get_item_inventory().add(drone_item)
+	await advance_physics(2)
+
+	var spawned := _count_spawns(arena)
+	var pulls := [0]
+	var weapon := player.get_weapon_controller()
+	weapon.shot_fired.connect(func(_muzzle: Vector2, _aim: Vector2) -> void: pulls[0] += 1)
+
+	# The real trigger, held: the arrow key *is* the fire button (see `PlayerInput`), so this is
+	# the player firing rather than a test calling `try_fire` on their behalf — and the drone is
+	# stepped by its own `_physics_process` across these frames, which is the thing under test.
+	Input.action_press("shoot_right")
+	await advance_physics(90)
+	Input.action_release("shoot_right")
+	await advance_physics(2)
+
+	check(pulls[0] >= 4, "a second and a half of held fire gets a burst away (%d shots)" % pulls[0])
+	check(
+		spawned[0] == pulls[0] * 2,
+		"and every shot carried exactly one drone shot with it (%d projectiles for %d shots)"
+			% [spawned[0], pulls[0]],
 	)
 	await _teardown(arena)
 

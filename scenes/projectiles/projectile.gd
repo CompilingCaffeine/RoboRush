@@ -33,6 +33,22 @@ var shooter: Node
 
 var _direction := Vector2.RIGHT
 var _spawn_position := Vector2.ZERO
+
+## The room this shot was fired in, as a global rect, or an empty rect for a shot fired outside
+## every room — a test arena, or something standing in the corridor between two rooms.
+##
+## A shot belongs to the room it was fired in and dies at its edge. Doors already said this for a
+## room being fought in — they sit on the world layer while locked, so a sealed room cannot be
+## shot out of — but a *cleared* room has its doors open, and through that opening the player
+## could stand outside a room they had never entered and kill its enemies one by one while nothing
+## in it was awake to shoot back. Shots crossing the other way were worse still: a rivet fired at
+## a doorway would find a wall two rooms over and come back out of a room the player was not in.
+##
+## Fixed here rather than by closing the doorway, because the doorway is not the only way out and
+## a room is not the only thing on the other side of it. What is wrong is the shot outliving the
+## room it was fired in, and that is a fact about the shot.
+var _room_bounds := Rect2()
+
 var _lifetime_left := 0.0
 var _pierce_left := 0
 var _bounce_left := 0
@@ -83,6 +99,13 @@ func _ready() -> void:
 	_pierce_left = config.pierce_count
 	_bounce_left = config.bounce_count
 
+	# Asked for here rather than passed in, so every way a projectile comes into the world gets it
+	# for nothing: a weapon's shot, a split child fanning off an impact, a boss's ring. All any of
+	# them has to be right about is where the shot starts, which they already are.
+	var room := Room.containing(self, _spawn_position)
+	if room != null:
+		_room_bounds = Rect2(room.get_outer_rect())
+
 	_sprite.texture = config.texture
 
 	var circle := CircleShape2D.new()
@@ -116,6 +139,13 @@ func _physics_process(delta: float) -> void:
 	else:
 		_handle_wall(wall)
 
+	if not _is_spent and _has_left_its_room():
+		# Not `_expire`: that offers Return Protocol another lap, and a shot that has left the room
+		# is not a shot the player is owed anything more from. The boundary is the end of it.
+		EventBus.projectile_expired.emit(self)
+		_despawn()
+		return
+
 	_update_trail()
 
 
@@ -143,6 +173,18 @@ func _apply_homing(delta: float) -> void:
 	)
 	_direction = _direction.rotated(turn).normalized()
 	rotation = _direction.angle()
+
+
+## Whether the shot has crossed out of the room it was fired in. Always false for a shot with no
+## room to be fired in, which is every shot in a test arena. Asked only of a shot still in flight:
+## a wall handled a moment ago may already have spent it, and a spent projectile that announced
+## its own expiry a second time would be counted twice by anything listening.
+##
+## The whole footprint, walls included, rather than the interior: a shot that has bounced off the
+## inside face of a wall is momentarily a hair inside that wall, and a room a shot could be killed
+## by touching would make Ricochet Driver a liability at exactly the moment it fired.
+func _has_left_its_room() -> bool:
+	return _room_bounds.has_area() and not _room_bounds.has_point(global_position)
 
 
 ## Casts one radius further than the step so impacts land on the wall's face rather

@@ -2548,9 +2548,11 @@ had been sitting in plain sight behind a rule that reads as correct.
 
 **This section is behind the playing.** Everything in it came out of the early passes. The game
 has been played through end to end several times since, across all four floors, and none of those
-runs has added an entry here — not because they found nothing, but because nothing was written
-down. Anything below is what playing has taught *and been recorded*; it is not the whole of what
-playing has taught.
+runs added an entry here — not because they found nothing, but because nothing was written down.
+The exception is [three reports from one session](#three-reports-from-one-session) at the end,
+which is what a write-up is worth: three sentences from a player, two of them faults in what the
+screen said and one of them a rule the game had never had. Anything below is what playing has
+taught *and been recorded*; it is not the whole of what playing has taught.
 
 ### Diminishing returns, because the player was the only curve
 
@@ -2821,6 +2823,47 @@ ducts:
 
 Neither was reachable by the existing doorway check, which only ran against floor 1's templates. The
 new one walks every template in the campaign.
+
+### Three reports from one session
+
+Three sentences from one session, and the shape of them is the argument for writing sessions up at
+all: not one was visible in a test, two were about the game saying something untrue rather than
+doing something wrong, and the third was a rule nobody had ever written down.
+
+**A spent Failover left integrity on screen that no longer existed.** Surviving a lethal hit
+collapses the pool to a single point for the rest of the run, and the pip row went on drawing the
+five points the build used to have, dimmed. A dim pip means *a point you have lost and can repair*,
+so the row was promising a repair that could not happen: the pool was already full at one, every
+heal did nothing, and the shop charged for it. `CombatHUD` rebuilt the row on pickup, because until
+the failover an item was the only thing that moved a ceiling — and a death save moves it from
+inside the damage path, where nothing is picked up. The row is now asked for every frame and built
+from the component, so it is the ceiling's shape and not a record of the last pickup;
+`_build_pips` returns immediately when the count already matches, which is what makes asking every
+frame cost nothing.
+
+**The Debug Drone read as a fire-rate upgrade.** Two rivets left the robot on every trigger pull
+and both were drawn with the player's own yellow rivet, so the item the player picked up looked
+like the weapon firing twice as fast. The suspicion in the report was a timing bug, and it is not:
+`tests/test_items.gd` now holds the trigger down for a second and a half and counts exactly two
+projectiles per shot, so the drone is in step and always was. What was wrong is that nothing on
+screen said which of the two shots was the drone's. The escort's rivet now wears the drone's own
+screen green — the same trick the Lagging Replica's echo uses in the other direction: identical
+silhouette, because it is the player's shot; different colour, because it is not the player firing
+it.
+
+**Shots outlived the room they were fired in.** A player standing outside a room could fire through
+its open doorway and kill what was inside, and shots that missed found a wall two rooms over and
+came back out of a room the player had never entered. Doors were the existing answer and are half
+of one: a locked door sits on the world collision layer precisely so a sealed room cannot be shot
+out of, but a *cleared* room's doors stand open, and the room beyond is only dormant until the
+player crosses that same doorway — so a shot fired from outside is in the air, owned by nobody, at
+the moment its target becomes hittable. [Area effects reaching into dormant
+rooms](#three-bugs-found-by-review-after-milestone-4) was the same mistake found from the other
+end, and the fix there was about the target. This one is about the shot: a projectile asks which
+room it was born in and dies at that room's edge, walls included so a ricochet is not killed by the
+wall it bounces off. `Room.containing` is the whole of the coupling, and it is asked once, at
+spawn — which is why splits, boss rings and enemy fire are all sandboxed too without any of them
+mentioning a room.
 
 ---
 

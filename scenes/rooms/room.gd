@@ -43,6 +43,12 @@ const ENTRY_INSET := 20
 const WALL_BLOCK := preload("res://scenes/rooms/wall_block.tscn")
 const CABLE_DUCT := preload("res://scenes/rooms/cable_duct.tscn")
 
+## Every room currently built, so anything standing on the floor can find out which room it is
+## standing in without the floor having to hand the answer down to it. `Projectile` is the caller
+## that matters: a shot has to know the room it was fired in, and it is spawned by a factory that
+## deliberately knows nothing about floors, rooms or doors.
+const GROUP := &"room"
+
 @onready var _floor: Sprite2D = %Floor
 @onready var _walls: Node2D = %Walls
 @onready var _thermals: Node2D = %Thermals
@@ -59,6 +65,26 @@ var plan: RoomPlan
 ## are built lazily during `build` and again nowhere else — but a room that later grows a
 ## destructible block would want it too.
 var theme: FloorTheme
+
+
+func _ready() -> void:
+	add_to_group(GROUP)
+
+
+## The room whose footprint contains `point`, or null when no room does — a shot fired in a test
+## arena that has no rooms in it, or by something standing in the corridor between two.
+##
+## Footprints tile the floor's grid exactly (see `FloorController._instantiate_rooms`), and
+## `Rect2.has_point` takes its top-left edge and not its bottom-right, so a point on the seam
+## between two rooms belongs to exactly one of them.
+static func containing(from: Node, point: Vector2) -> Room:
+	if not from.is_inside_tree():
+		return null
+	for node: Node in from.get_tree().get_nodes_in_group(GROUP):
+		var room := node as Room
+		if room != null and Rect2(room.get_outer_rect()).has_point(point):
+			return room
+	return null
 
 
 ## Builds the room's geometry. Must be called after the room is in the tree.

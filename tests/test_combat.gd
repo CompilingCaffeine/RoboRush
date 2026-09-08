@@ -43,6 +43,7 @@ func run() -> void:
 	await _test_one_shot_damages_one_enemy()
 	await _test_dash_invulnerability_refuses_damage()
 	await _test_dormant_rooms_cannot_be_shot_into()
+	await _test_a_shot_dies_at_the_edge_of_the_room_it_was_fired_in()
 	await _test_room_combat_reports_cleared_once()
 	await _test_damage_shoves_the_player()
 	await _test_the_player_shove_decays_and_does_not_compound()
@@ -513,6 +514,104 @@ func _test_dormant_rooms_cannot_be_shot_into() -> void:
 	)
 
 	await _teardown(arena)
+
+
+## Reported: standing outside a room and firing through its doorway killed what was inside it, and
+## shots that missed came back out of a room the player had never entered.
+##
+## The check above is why this one is needed rather than why it is not. Dormancy is not a wall: a
+## disabled enemy is out of the physics space, but the room next door is only dormant *until the
+## player walks in*, and they walk in through the same doorway they were shooting through. The
+## shot is in the air, belonging to no room, at the moment its target becomes hittable — timed
+## right, it lands. Nothing about that is a fair fight: the room got no chance to shoot back, and
+## the player got a room half-cleared from a doorway they never crossed.
+##
+## So the rule checked here is about the shot rather than about the target: a shot belongs to the
+## room it was fired in and dies at that room's edge, whether or not anything on the other side
+## happens to be awake. The target here is deliberately awake, because a dormant one would pass
+## this check with the sandbox removed.
+func _test_a_shot_dies_at_the_edge_of_the_room_it_was_fired_in() -> void:
+	var arena := _make_arena()
+	var template := load(COMBAT_TEMPLATE_PATH) as RoomTemplate
+	if not require(template, "combat_open.tres loads as a RoomTemplate"):
+		await _teardown(arena)
+		return
+
+	# Two rooms side by side, placed on the grid exactly as `FloorController` places them, with
+	# their doorways facing each other across the two wall rings between them. No `Door` node,
+	# which is the state a cleared room's doorway is actually in: an unlocked door leaves the
+	# world collision layer, so there is nothing in the gap either way.
+	var here := _add_grid_room(arena, template, 0, Vector2i.ZERO, Vector2i.RIGHT)
+	var next := _add_grid_room(arena, template, 1, Vector2i.RIGHT, Vector2i.LEFT)
+	if here == null or next == null:
+		await _teardown(arena)
+		return
+
+	# On the line the doorways are centred on, so the shot has a clear run at the target and the
+	# only thing that can stop it is the rule under test.
+	var origin := here.get_interior_centre()
+	var target: TicketBot = TICKET_BOT_SCENE.instantiate()
+	next.get_node("%Enemies").add_child(target)
+	target.global_position = Vector2(next.get_interior_rect().position.x + 24.0, origin.y)
+	await advance_physics(2)
+
+	var health := target.get_health_component()
+	var full := health.current
+	check(full > 0.0, "the enemy next door is standing and hittable (%.1f)" % full)
+
+	# The guard that keeps this check honest. If anything at all were standing in the gap, the
+	# shot would die on it and every assertion below would pass with the sandbox deleted.
+	var line := PhysicsRayQueryParameters2D.create(origin, target.global_position, Teams.LAYER_WORLD)
+	check(
+		arena.get_world_2d().direct_space_state.intersect_ray(line).is_empty(),
+		"the doorway stands open all the way through — this is the shot that used to get there",
+	)
+
+	var shot := _fire_at(arena, origin, Vector2.RIGHT, _rivet_variant())
+	if not require(shot, "the rivet leaves the muzzle"):
+		await _teardown(arena)
+		return
+
+	# Watched every frame rather than sampled at the end: a shot that crossed and came back would
+	# be inside the right room again by the time anything asked.
+	var bounds := Rect2(here.get_outer_rect())
+	var strayed := false
+	for _frame: int in 60:
+		await advance_physics(1)
+		if not is_instance_valid(shot):
+			break
+		if not bounds.has_point(shot.global_position):
+			strayed = true
+
+	check(not strayed, "the rivet is never anywhere but the room it was fired in")
+	check(not is_instance_valid(shot), "and is gone rather than still travelling")
+	check_near(health.current, full, "the enemy in the next room is untouched")
+
+	# The same shot, fired at the same enemy from inside its own room, still lands. Without this
+	# the check above is satisfied by a projectile that does nothing at all.
+	var inside := target.global_position - Vector2(40.0, 0.0)
+	_fire_at(arena, inside, Vector2.RIGHT, _rivet_variant())
+	await advance_physics(20)
+	check(health.current < full, "while a shot fired in the room it is standing in still lands")
+
+	await _teardown(arena)
+
+
+## One room on the floor's grid, positioned by cell exactly as `FloorController._instantiate_rooms`
+## does, with a single door facing `door`. The neighbour id is not read by anything the room builds
+## — `Room` asks the plan only which sides are open — so it is set to a number that is not this
+## room's own and left at that.
+func _add_grid_room(
+	arena: Node2D, template: RoomTemplate, id: int, cell: Vector2i, door: Vector2i
+) -> Room:
+	var plan := RoomPlan.new(id, cell, RoomTemplate.Type.COMBAT)
+	plan.template = template
+	plan.doors[door] = 1 - id
+	var room: Room = ROOM_SCENE.instantiate()
+	room.position = Vector2(cell * Room.OUTER_SIZE + Vector2i.ONE * Room.WALL_THICKNESS)
+	arena.add_child(room)
+	room.build(plan)
+	return room
 
 
 func _test_room_combat_reports_cleared_once() -> void:
