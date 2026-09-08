@@ -182,9 +182,6 @@ enum Phase {
 
 @export var config: CascadeFailureConfig
 
-var _health := 0.0
-var _is_dead := false
-
 ## One entry per slot, null where a node has already blown out. Indexed by slot rather than packed,
 ## because a slot's *position on the ring* is what the player is choosing between when they decide
 ## which node to push, and compacting the array would lose it.
@@ -209,8 +206,6 @@ var _phase := Phase.NOMINAL
 ## The room interior. Vents are clamped to this; nodes are clamped to `_body_bounds`.
 var _arena: Rect2
 var _body_bounds: Rect2
-
-var _player: Node2D
 var _spin := 0.0
 var _breath := START_BREATH_PHASE
 var _packet_cooldown := 0.0
@@ -303,15 +298,11 @@ func get_phase() -> Phase:
 	return _phase
 
 
-func get_health() -> float:
-	return _health
-
-
 ## The real pool, and what the bar is given. Honest, like `RuntimeError`'s and unlike The Scrap
 ## King's: it falls once, monotonically, and reaching zero means the fight is over. There is no
-## trick in this fight for a lying bar to protect.
-func get_health_ratio() -> float:
-	return _health / maxf(config.max_health, 0.001)
+## trick in this fight for a lying bar to protect, so `Boss.get_health_ratio` stands unaltered.
+func get_max_health() -> float:
+	return config.max_health
 
 
 ## How many nodes are still standing, derived from the pool rather than counted from the array.
@@ -892,16 +883,6 @@ func _load_tint() -> Color:
 	# Alpha pinned rather than scaled with the rest: multiplying it too would push the sprite past
 	# opaque, which is not brighter, only unpredictable.
 	return Color(base.r * TINT_GAIN, base.g * TINT_GAIN, base.b * TINT_GAIN, 1.0)
-
-
-func _announce_health() -> void:
-	EventBus.boss_health_changed.emit(get_health_ratio())
-
-
-func _find_player() -> Node2D:
-	if _player != null and is_instance_valid(_player):
-		return _player
-	return get_tree().get_first_node_in_group(Teams.GROUP_PLAYER) as Node2D
 
 
 ## The lines and the packets on them. Drawn from this controller rather than as nodes because both

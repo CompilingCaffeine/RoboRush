@@ -80,19 +80,9 @@ func _on_enemy_killed(_enemy: Node, position: Vector2) -> void:
 
 	# Garbage Collector. The same shape as the dash pulse and deliberately so — a status applied to
 	# whatever is standing near a point — but triggered by a kill, which makes it a reward for
-	# fighting into a pack rather than for leaving one. Enemies are found by group for the reason
-	# the dash pulse finds them that way: this runs inside a death callback, where a shape query is
-	# refused.
+	# fighting into a pack rather than for leaving one.
 	for item: ItemConfig in _inventory.get_kill_pulses():
-		for node: Node in get_tree().get_nodes_in_group(Teams.GROUP_ENEMY):
-			var enemy := node as Node2D
-			if enemy == null or position.distance_to(enemy.global_position) > item.kill_pulse_radius:
-				continue
-			var status := StatusEffectController.find_on(enemy)
-			if status == null:
-				continue
-			for id: StringName in item.kill_pulse_effects:
-				status.apply(id)
+		_pulse_statuses(position, item.kill_pulse_radius, item.kill_pulse_effects)
 
 
 ## Breakpoint. A dash leaves a status pulse behind it, which turns the dodge the player
@@ -102,10 +92,6 @@ func _on_enemy_killed(_enemy: Node, position: Vector2) -> void:
 ## it lands. Dashing away from a pack and slowing it is the intended play; dashing into a
 ## pack, slowing it and then being inside it is not a reward, and centring on the departure
 ## point is what makes the first one the natural read.
-##
-## Enemies are found by group rather than by shape query, which is the convention `Teams`
-## already documents: this can be reached from inside a physics callback, and a room holds a
-## handful of enemies.
 ##
 ## Nothing is emitted for the pulse itself. `explosion_triggered` was the obvious candidate
 ## and is wrong: it means "a blast went off", and the feedback director answers it with a
@@ -121,15 +107,39 @@ func _on_player_dash_started(_direction: Vector2) -> void:
 
 	var origin := _owner_body.global_position
 	for item: ItemConfig in pulses:
-		for node: Node in get_tree().get_nodes_in_group(Teams.GROUP_ENEMY):
-			var enemy := node as Node2D
-			if enemy == null or origin.distance_to(enemy.global_position) > item.dash_pulse_radius:
-				continue
-			var status := StatusEffectController.find_on(enemy)
-			if status == null:
-				continue
-			for id: StringName in item.dash_pulse_effects:
-				status.apply(id)
+		_pulse_statuses(origin, item.dash_pulse_radius, item.dash_pulse_effects)
+
+
+## Applies `effects` to every awake hostile within `radius` of `centre`. The shared body of
+## Garbage Collector's kill pulse and Breakpoint's dash pulse, which differ only in what sets them
+## off and which numbers they read.
+##
+## `Targeting` rather than a walk of `Teams.GROUP_ENEMY`, which is what both of these used to do.
+## The reason the group walk gave for itself — a shape query is refused inside a death callback —
+## was true and was never an argument for the group: `HostileRegistry` is a static array, which is
+## exactly why `Explosion` and `ChainLightning` already read their hostiles through it from those
+## same callbacks. These two were the only area effects in the game still walking the group.
+##
+## What that cost was correctness, not just the walk. The group holds every enemy on the floor,
+## including the ones asleep in rooms the player has not reached, and two rooms' interiors are only
+## `Room.WALL_THICKNESS * 2` apart — 32px. A 62px Breakpoint pulse thrown at the bottom wall of a
+## room reaches an enemy standing at the top of the room below it, through two walls. That room is
+## disabled, so its `StatusEffectController` never ticks the effect down, and the player walked in
+## some minutes later to meet a pack that was already chilled by a dash they had long forgotten.
+## The registry holds only awake bodies, so a wall is now where a pulse stops.
+##
+## A boss playing dead is skipped too, for the same reason it is already unshootable: `set_inert`
+## takes the part off its collision layer and `HostileRegistry.Entry.is_shootable` reads that.
+## Burning a body the player cannot see or hit was never the intent.
+func _pulse_statuses(centre: Vector2, radius: float, effects: Array[StringName]) -> void:
+	if radius <= 0.0 or effects.is_empty():
+		return
+	for body: Node2D in Targeting.hostiles_near(self, centre, radius, Teams.Id.PLAYER):
+		var status := StatusEffectController.find_on(body)
+		if status == null:
+			continue
+		for id: StringName in effects:
+			status.apply(id)
 
 
 ## Tech Debt. Clearing a room makes every enemy the player meets afterwards tougher, for the

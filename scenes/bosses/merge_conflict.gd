@@ -53,9 +53,6 @@ enum Phase {
 @export var config: BossConfig
 
 var _phase := Phase.ALTERNATING
-var _health := 0.0
-var _is_dead := false
-
 var _primary: BossPart
 var _clone: BossPart
 var _terminals: Array[BossTerminal] = []
@@ -73,7 +70,6 @@ var _feign_left := 0.0
 var _next_phase := Phase.DUPLICATED
 
 var _arena: Rect2
-var _player: Node2D
 var _attack_left := 0.0
 var _telegraph_left := 0.0
 var _attack_index := 0
@@ -121,12 +117,8 @@ func get_phase() -> Phase:
 	return _phase
 
 
-func get_health() -> float:
-	return _health
-
-
-func get_health_ratio() -> float:
-	return _health / maxf(config.max_health, 0.001)
+func get_max_health() -> float:
+	return config.max_health
 
 
 ## What the boss bar shows, and it is not `get_health_ratio`: how much of *this phase* is left.
@@ -598,11 +590,9 @@ func _gap_index(count: int) -> int:
 	return clampi(int(progress * float(count)) - config.wall_gap / 2, 0, count - config.wall_gap)
 
 
+## The one boss that announces something other than its real pool. `Boss._announce_health` sends
+## `get_health_ratio`; this fight's bar is per-phase and drains three times, so it sends the lie
+## its own `get_phase_health_ratio` tells. Overriding here rather than bending the base class is
+## what keeps the other four honest by default.
 func _announce_health() -> void:
 	EventBus.boss_health_changed.emit(get_phase_health_ratio())
-
-
-func _find_player() -> Node2D:
-	if _player != null and is_instance_valid(_player):
-		return _player
-	return get_tree().get_first_node_in_group(Teams.GROUP_PLAYER) as Node2D

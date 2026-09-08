@@ -87,6 +87,7 @@ func run() -> void:
 	await _test_cold_cache_chills_what_it_hits()
 	await _test_hot_reload_burns_on_the_fifth_shot()
 	await _test_breakpoint_chills_on_a_dash()
+	await _test_a_status_pulse_stops_at_a_sleeping_room()
 
 	await _test_failover_survives_one_hit_and_shrinks_the_pool_for_good()
 	await _test_tractor_beam_drags_what_it_hits()
@@ -1668,6 +1669,64 @@ func _test_breakpoint_chills_on_a_dash() -> void:
 	check(
 		not far.get_status_controller().has_effect(StatusEffectController.CHILL),
 		"and leaves one outside it alone",
+	)
+	await _teardown(arena)
+
+
+## A status pulse must not reach through a wall into a room the player has never entered.
+##
+## The two pulse items used to find their targets by walking `Teams.GROUP_ENEMY`, which holds every
+## enemy on the floor rather than the ones in the room being fought. That is close enough to
+## harmless to have gone unnoticed and is not: rooms sit on a grid of `Room.OUTER_SIZE`, so two
+## interiors stacked vertically are `Room.WALL_THICKNESS * 2` apart — 32 px — and Breakpoint's pulse
+## is 62. A dash against the bottom wall reached an enemy standing at the top of the room below.
+##
+## What made it worth a test rather than a shrug is where it *ends*. The room below is disabled, so
+## its `StatusEffectController` never ticks, and the chill sat at full duration until the player
+## walked in — some minutes later, into a pack already slowed by a dash they had no way to connect
+## it to. The fix is `Targeting`, which reads `HostileRegistry` and therefore only ever sees awake
+## bodies; this checks the consequence rather than the call, so it still holds if the mechanism
+## changes again.
+##
+## Sleep is induced the way a room induces it — `PROCESS_MODE_DISABLED` on the parent that holds the
+## enemies, which is exactly what `Room.set_active(false)` sets and what delivers the notification
+## `HostileRegistry` listens for. The awake bot is the control: same item, same distance, so a pass
+## cannot come from the pulse having quietly stopped working altogether.
+func _test_a_status_pulse_stops_at_a_sleeping_room() -> void:
+	var arena := _make_arena()
+	var effects := ItemEffects.new()
+	arena.add_child(effects)
+
+	var player := _add_player(arena)
+	player.global_position = Vector2.ZERO
+	var inventory := ItemInventory.find_on(player)
+	var item := _require_item(&"breakpoint")
+	if item == null or inventory == null:
+		await _teardown(arena)
+		return
+	inventory.add(item)
+	effects.bind_player(player)
+
+	# Both well inside the pulse, so distance is never what separates the two answers.
+	var awake := _add_bot(arena, Vector2(40.0, 0.0))
+	var sleeping_room := Node2D.new()
+	arena.add_child(sleeping_room)
+	var sleeping := _add_bot(sleeping_room, Vector2(-40.0, 0.0))
+	await advance_physics(2)
+
+	sleeping_room.process_mode = Node.PROCESS_MODE_DISABLED
+	await advance_physics(2)
+
+	EventBus.player_dash_started.emit(Vector2.RIGHT)
+	await advance_physics(2)
+
+	check(
+		awake.get_status_controller().has_effect(StatusEffectController.CHILL),
+		"a dash chills an enemy in the room being fought",
+	)
+	check(
+		not sleeping.get_status_controller().has_effect(StatusEffectController.CHILL),
+		"and does not reach one asleep in a room the player has not entered",
 	)
 	await _teardown(arena)
 

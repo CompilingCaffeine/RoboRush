@@ -171,8 +171,6 @@ enum Phase { NOMINAL = 1, DEGRADED = 2, LAST_INSTANCE = 3 }
 ## The live body. One, always. Freed only on death.
 var _part: BossPart
 
-var _health := 0.0
-var _is_dead := false
 var _phase := Phase.NOMINAL
 
 ## Whether `begin` has run. The cycle must not turn before it has.
@@ -216,7 +214,6 @@ var _volley_left := 0.0
 var _arena: Rect2
 var _body_bounds: Rect2
 var _plates: Array[Vector2] = []
-var _player: Node2D
 
 
 func _ready() -> void:
@@ -284,21 +281,18 @@ func get_phase() -> Phase:
 	return _phase
 
 
-func get_health() -> float:
-	return _health
-
-
-## Honest, like `RuntimeError`'s and `CascadeFailure`'s: it falls once, monotonically, and reaching
-## zero means the fight is over.
+## Honest, like `RuntimeError`'s and `CascadeFailure`'s: `Boss.get_health_ratio` divides by this
+## and this fight does not override it, so the bar falls once, monotonically, and reaching zero
+## means the fight is over.
 ##
-## The version of this fight that shipped first reported *generations left* here, because damage
+## The version of this fight that shipped first reported *generations left* there, because damage
 ## could not kill it — and before that it folded a damage pool into the segment between generations,
 ## which drained a third of the bar under fire and put it straight back on a missed failover. A bar
 ## that refills under damage is the universal sign for a heal, and it was reported in exactly those
 ## words. There is nothing left for a bar to lie about: this is the pool, it only goes down, and the
 ## only thing gating it is a window the body's own colour announces.
-func get_health_ratio() -> float:
-	return _health / maxf(config.max_health, 0.001)
+func get_max_health() -> float:
+	return config.max_health
 
 
 ## Whether damage lands right now. The whole of the fight's damage protocol is this one flag.
@@ -640,14 +634,6 @@ func _plate_positions() -> Array[Vector2]:
 func _refresh_tint() -> void:
 	if is_instance_valid(_part):
 		_part.set_tint(OPEN_TINT if is_open() else SEALED_TINT)
-
-
-func _announce_health() -> void:
-	EventBus.boss_health_changed.emit(get_health_ratio())
-
-
-func _find_player() -> Node2D:
-	return get_tree().get_first_node_in_group(Teams.GROUP_PLAYER) as Node2D
 
 
 func _draw() -> void:

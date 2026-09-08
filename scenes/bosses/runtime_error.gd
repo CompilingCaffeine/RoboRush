@@ -80,8 +80,6 @@ enum Attack { LANE, SPREAD, TWIN_LANES, RING, CHECKERBOARD, WALL }
 @export var config: RuntimeErrorConfig
 
 var _phase := Phase.SINGLE_LANE
-var _health := 0.0
-var _is_dead := false
 var _part: BossPart
 
 ## The room interior, used for every lane, checkerboard, and wall. Not inset: a hazard that
@@ -92,8 +90,6 @@ var _arena: Rect2
 ## Where the body is allowed to drift, which *is* inset — a boss standing in the wall is a
 ## boss half of whose sprite the player cannot see.
 var _body_bounds: Rect2
-
-var _player: Node2D
 var _attack_left := 0.0
 var _telegraph_left := 0.0
 var _flash_left := 0.0
@@ -158,14 +154,11 @@ func get_phase() -> Phase:
 	return _phase
 
 
-func get_health() -> float:
-	return _health
-
-
 ## The real pool, and what the bar is given. Unlike The Scrap King, this boss's bar does not
-## lie: it falls once, monotonically, and reaching zero means the fight is over.
-func get_health_ratio() -> float:
-	return _health / maxf(config.max_health, 0.001)
+## lie: it falls once, monotonically, and reaching zero means the fight is over — `Boss` divides
+## by this and nothing here overrides `get_health_ratio`.
+func get_max_health() -> float:
+	return config.max_health
 
 
 ## The one body, or null once it is gone. Singular by design — nothing in this fight
@@ -612,13 +605,3 @@ func _aim_from(origin: Vector2) -> Vector2:
 		return Vector2.DOWN
 	var offset := _player.global_position - origin
 	return offset.normalized() if not offset.is_zero_approx() else Vector2.DOWN
-
-
-func _announce_health() -> void:
-	EventBus.boss_health_changed.emit(get_health_ratio())
-
-
-func _find_player() -> Node2D:
-	if _player != null and is_instance_valid(_player):
-		return _player
-	return get_tree().get_first_node_in_group(Teams.GROUP_PLAYER) as Node2D
