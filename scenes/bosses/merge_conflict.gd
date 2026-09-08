@@ -7,7 +7,7 @@ extends Boss
 ## The class, the scene, and the config id are all still spelled `merge_conflict`, which was the
 ## boss's name until it was renamed. Left alone deliberately: `BossConfig.id` is what a save file
 ## records as "beaten", and file paths are what half the project's `preload`s point at. The name the
-## player reads lives in `BossConfig.display_name` and in `FloorConfig.boss_display_name`,
+## player reads lives in `BossConfig.display_name` and in `BossEncounter.display_name`,
 ## which is what the HUD is actually bound to (see `FloorController.boss_encountered`).
 ##
 ## The controller owns the fight; the bodies the player shoots at are `BossPart`s that

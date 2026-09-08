@@ -62,11 +62,6 @@ func is_run_over() -> bool:
 	return state == State.GAME_OVER or state == State.VICTORY
 
 
-## True while a run exists at all, won, lost, paused, or in progress. What tells the pause
-## menu whether "abandon run" is a thing the player can do.
-func has_run() -> bool:
-	return state != State.MAIN_MENU
-
 
 ## Puts the game into play. Called when a run begins, including after a restart — the
 ## scene reload rebuilds the world but this node survives it, so without this a second run

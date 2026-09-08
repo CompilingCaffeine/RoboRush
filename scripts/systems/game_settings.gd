@@ -25,7 +25,6 @@ const VOLUME_MAX := 1.0
 
 ## Intensity sliders share the range `FeedbackConfig` exports, so "1.0" means the same thing
 ## on the settings screen as it does in the editor.
-const INTENSITY_MIN := 0.0
 const INTENSITY_MAX := 2.0
 
 ## Below this a volume slider is treated as off and the bus is muted outright. A linear 1%

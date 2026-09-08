@@ -84,9 +84,6 @@ func plate_covers(bearing: Vector2) -> bool:
 	return absf(angle_difference(_facing, bearing.angle())) <= half
 
 
-func get_facing() -> float:
-	return _facing
-
 
 ## Contact damage only through the plate. The base class owns the cooldown, the radius, the
 ## knockback and finding the player's integrity; this is the one sentence that makes this enemy

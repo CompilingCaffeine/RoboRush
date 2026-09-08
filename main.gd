@@ -1,5 +1,5 @@
 extends Node2D
-## Milestone 4 entry point.
+## The game's entry point.
 ##
 ## Composition only: it starts a run, builds the floor, and hands the HUDs and the feedback
 ## director the references they need. Nothing here knows how movement, shooting, damage, or

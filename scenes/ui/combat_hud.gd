@@ -20,7 +20,7 @@ extends Control
 
 ## The floor boss's name and defeat banner, as the player reads them. Bound at runtime via
 ## `bind_boss()` rather than fixed here, since a second floor has a different boss — see
-## `FloorController.boss_encountered` and `FloorConfig.boss_display_name`. Defaults are
+## `FloorController.boss_encountered` and `BossEncounter.display_name`. Defaults are
 ## generic placeholders that should never actually reach the screen: `bind_boss()` runs
 ## before the boss room is enterable.
 var _boss_name := "THE BOSS"
@@ -34,7 +34,7 @@ var _boss_is_final := false
 
 ## What this floor's boss announces as each phase begins, indexed from phase one. Empty until
 ## `bind_boss` runs, and legitimately empty for a boss with nothing to say — see
-## `FloorConfig.boss_phase_banners` for why this is data and not the constants it used to be.
+## `BossEncounter.phase_banners` for why this is data and not the constants it used to be.
 var _boss_phase_banners: Array[String] = []
 
 ## Merge Conflict's own feigned-death epitaph — distinct from the bound `_boss_defeat_banner`

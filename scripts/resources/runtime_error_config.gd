@@ -2,8 +2,8 @@ class_name RuntimeErrorConfig
 extends Resource
 ## Tuning for Runtime Error, README's Floor 2 boss.
 ##
-## Its own resource, following the rule `SimpleBossConfig` wrote down rather than breaking it:
-## a boss's config is shaped for that boss's gimmick. `BossConfig` is shaped for The Scrap
+## Its own resource, following the rule the greybox it replaced wrote down rather than breaking
+## it: a boss's config is shaped for that boss's gimmick. `BossConfig` is shaped for The Scrap
 ## King's terminals, damage refunds, and feigned deaths, none of which exist in this fight —
 ## and what this fight needs that no existing config carries is *lane geometry*: how thick a
 ## compile lane is, how far apart two of them are staggered, and how the checkerboard divides
@@ -20,7 +20,7 @@ extends Resource
 ## should keep it. See `BossConfig.id` for the general rule.
 @export var id: StringName = &"runtime_error"
 
-## The name the player reads. `FloorConfig.boss_display_name` is the same name in the HUD's own
+## The name the player reads. `BossEncounter.display_name` is the same name in the HUD's own
 ## casing, and tests/test_runtime_error.gd asserts the two agree — the same guard test_boss.gd
 ## puts on the Scrap King, for the same reason: two copies of a name is the arrangement that
 ## ends with a boss bar labelled with the name the boss used to have.

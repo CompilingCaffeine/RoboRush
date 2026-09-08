@@ -271,9 +271,6 @@ func get_heat() -> float:
 	return _heat
 
 
-func is_venting() -> bool:
-	return _vent_flash_left > 0.0
-
 
 ## What the zone is drawn as, which is not quite what it is: the real heat, floored at
 ## `IGNITION_HEAT` while the zone is under load. The player reads this; `_vent` reads `get_heat`.

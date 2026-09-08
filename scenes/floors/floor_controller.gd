@@ -33,7 +33,7 @@ signal floor_theme_changed(theme: FloorTheme)
 
 ## Emitted once the boss is in its arena, carrying this floor's boss identity — plain signal
 ## for the same reason `floor_advanced` is: only main.gd needs it, to hand the HUD a name it
-## has no other way to learn (see `FloorConfig.boss_display_name`).
+## has no other way to learn (see `BossEncounter.display_name`).
 ##
 ## `is_final` is the one thing here that is not the boss's own: it says what the fight leaves behind
 ## rather than who is in it, because the last floor's boss stands over a trophy and every other

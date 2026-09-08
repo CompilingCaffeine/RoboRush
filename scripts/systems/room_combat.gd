@@ -11,8 +11,12 @@ extends Node
 ## ready every enemy and every HealthComponent underneath it is fully initialised —
 ## no frame of waiting and no inspector-assigned node path to resolve.
 ##
-## Milestone 3 extends this with locked doors, spawn points, and wave scheduling.
-## Today it counts.
+## Counting is the whole of it, and that is now the finished shape rather than a first pass. Two
+## of the three things this file once said it would grow arrived somewhere better: doors are locked
+## and unlocked by `FloorController`, which listens to the `cleared` signal below rather than being
+## reached into from here, and spawn points are `RoomTemplate.enemy_spawns`, laid out per room and
+## read by `Room`. The third, wave scheduling, was never built and nothing in the game asks for it —
+## a room's enemies are all present when it is entered.
 
 signal cleared()
 
@@ -34,8 +38,9 @@ func begin(enemies_container: Node) -> void:
 		track(enemy)
 
 
-## Registers an enemy that appeared after the room started. Milestone 3's spawner
-## calls this.
+## Registers an enemy that appeared after the room started. `Recursion` is the only caller: it
+## splits into fragments on death, and counting each one at the moment of the split is what stops
+## the room reading as clear in the frames before those bodies enter the tree.
 func track(enemy: Node) -> void:
 	var health := HealthComponent.find_on(enemy)
 	if health == null:

@@ -17,8 +17,8 @@ class_name UIPalette
 ## The screen behind everything. Matches the project's clear colour.
 const VOID := Color("0b0d12")
 
-## Window and panel fill, and the line around them.
-const PANEL := Color("0e1118")
+## The line around a window or panel. The fill inside it is `VOID` — see `Minimap._draw`, which
+## is the only thing in the interface that draws a panel at all.
 const PANEL_BORDER := Color("2a3446")
 
 ## Body text, and the dimmer label text beside it.
