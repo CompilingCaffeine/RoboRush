@@ -40,12 +40,18 @@ static func reset_instrumentation() -> void:
 	query_usec = 0
 
 ## The hostile bodies within `radius` of `centre`, in no particular order.
+##
+## `within` is the room the asking effect belongs to, as a global rect: bodies outside it are not
+## reachable however close they are. Empty by default, which means "no room to be outside of" and
+## is the right answer for a test arena and for anything asking on behalf of nothing in particular.
+## See `nearest_hostile` for why a rect rather than a room.
 static func hostiles_near(
 	source: Node,
 	centre: Vector2,
 	radius: float,
 	team: Teams.Id,
 	excluded: Array[Node] = [],
+	within := Rect2(),
 ) -> Array[Node2D]:
 	var found: Array[Node2D] = []
 	if source == null or not source.is_inside_tree() or radius <= 0.0:
@@ -53,10 +59,13 @@ static func hostiles_near(
 
 	var started := Time.get_ticks_usec() if instrumented else 0
 	var radius_squared := radius * radius
+	var confined := within.has_area()
 	for entry: HostileRegistry.Entry in HostileRegistry.awake(Teams.opposing(team)):
 		if not entry.is_shootable() or entry.body in excluded:
 			continue
 		if entry.body.global_position.distance_squared_to(centre) > radius_squared:
+			continue
+		if confined and not within.has_point(entry.body.global_position):
 			continue
 		found.append(entry.body)
 
@@ -71,12 +80,19 @@ static func hostiles_near(
 ## A single pass keeping the best so far, rather than collecting everything in range and sorting it.
 ## For the case that matters — one homing projectile wanting one target — the sort was the dominant
 ## cost and every comparison in it was thrown away.
+##
+## `within` is the room the asking effect belongs to, exactly as in `hostiles_near`. A *rect*
+## rather than a `Room` because of what this function costs: it is asked once per homing projectile
+## per physics frame, and resolving which room a point is in is a tree query, while testing a point
+## against a rect is four comparisons. The caller already knows its room — a projectile is handed
+## one when it is born — so it passes the answer rather than the question.
 static func nearest_hostile(
 	source: Node,
 	centre: Vector2,
 	radius: float,
 	team: Teams.Id,
 	excluded: Array[Node] = [],
+	within := Rect2(),
 ) -> Node2D:
 	if source == null or not source.is_inside_tree() or radius <= 0.0:
 		return null
@@ -84,11 +100,14 @@ static func nearest_hostile(
 	var started := Time.get_ticks_usec() if instrumented else 0
 	var nearest: Node2D = null
 	var nearest_distance := radius * radius
+	var confined := within.has_area()
 	for entry: HostileRegistry.Entry in HostileRegistry.awake(Teams.opposing(team)):
 		if not entry.is_shootable() or entry.body in excluded:
 			continue
 		var distance := entry.body.global_position.distance_squared_to(centre)
 		if distance > nearest_distance:
+			continue
+		if confined and not within.has_point(entry.body.global_position):
 			continue
 		nearest_distance = distance
 		nearest = entry.body

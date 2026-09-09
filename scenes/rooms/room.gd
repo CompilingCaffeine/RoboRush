@@ -87,6 +87,14 @@ static func containing(from: Node, point: Vector2) -> Room:
 	return null
 
 
+## The footprint of the room containing `point`, or an empty rect when no room does. The form
+## `Targeting`, `Explosion` and `ChainLightning` want: they are handed a rect rather than a room
+## because the test they run is "is this body inside it", several hundred times a frame.
+static func bounds_containing(from: Node, point: Vector2) -> Rect2:
+	var room := containing(from, point)
+	return Rect2(room.get_outer_rect()) if room != null else Rect2()
+
+
 ## Builds the room's geometry. Must be called after the room is in the tree.
 ##
 ## `room_theme` is optional and defaults to null, which keeps the textures authored into

@@ -2865,6 +2865,25 @@ wall it bounces off. `Room.containing` is the whole of the coupling, and it is a
 spawn — which is why splits, boss rings and enemy fire are all sandboxed too without any of them
 mentioning a room.
 
+**And what a shot sets off is bounded the same way**, which the boundary on the shot does not give
+for free: the rivet dies at the wall, but a blast or a chain resolved *at* that wall does not have
+to. Being asleep was the whole of the existing defence there — `Targeting` reads `HostileRegistry`,
+which holds only awake bodies, so nothing can reach a room the player has not woken. That covers
+the room they have never entered and not the room they are *entering*. `FloorController` wakes the
+new room as the player crosses the threshold, and at that moment two live interiors are 32px apart,
+which a 90px blast or a 76px chain spans without noticing. So `Targeting.hostiles_near` and
+`nearest_hostile` take the room the effect belongs to and skip anything outside it, and `Explosion`,
+`ChainLightning`, Volatile Kernel's kill blast, Garbage Collector's kill pulse, Breakpoint's dash
+pulse and Swap Space's retaliation all pass it. They are handed a **rect** rather than a room
+because of what that path costs: it is asked once per homing projectile per physics frame, and a
+point-in-rect test is four comparisons where resolving a room is a tree query. A projectile already
+knows its room from the moment it is born, so it passes the answer; the item effects fire a handful
+of times a second and can afford to ask the question.
+
+Homing falls out of the same change and is the one place it is a tuning improvement rather than a
+fix: a magnetic rivet no longer bends toward an enemy through a doorway it cannot follow the shot
+through.
+
 ---
 
 ## Next recommended task

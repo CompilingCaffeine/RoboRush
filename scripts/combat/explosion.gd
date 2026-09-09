@@ -23,6 +23,11 @@ const KNOCKBACK := 130.0
 ## Applies the blast and returns how many bodies it hit. `attributed_to` is credited with
 ## the damage; `excluded` skips bodies already damaged by whatever caused the blast, so a
 ## direct hit is not also caught by its own explosion.
+##
+## `within` is the room the blast went off in, as a global rect, and nothing outside it is caught
+## however close it is. Two rooms' interiors are 32px apart and a blast is routinely wider than
+## that, so without it the radius is the only thing deciding whether a wall stops a detonation —
+## which it is not qualified to do. Empty means "no room", which is a test arena and nothing else.
 static func detonate(
 	source: Node,
 	centre: Vector2,
@@ -31,6 +36,7 @@ static func detonate(
 	team: Teams.Id,
 	attributed_to: Node = null,
 	excluded: Array[Node] = [],
+	within := Rect2(),
 ) -> int:
 	if radius <= 0.0:
 		return 0
@@ -40,7 +46,7 @@ static func detonate(
 		return 0
 
 	var hits := 0
-	for body: Node2D in Targeting.hostiles_near(source, centre, radius, team, excluded):
+	for body: Node2D in Targeting.hostiles_near(source, centre, radius, team, excluded, within):
 		var health := HealthComponent.find_on(body)
 		if health == null:
 			continue

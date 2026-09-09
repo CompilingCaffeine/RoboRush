@@ -158,8 +158,11 @@ func _apply_homing(delta: float) -> void:
 	if config.homing_strength <= 0.0:
 		return
 
+	# Bounded by the room for the same reason the shot itself is: an enemy through a doorway is
+	# not a target this shot can ever reach, and a magnetic rivet bending toward one would spend
+	# its flight curving into the wall between them.
 	var target := Targeting.nearest_hostile(
-		self, global_position, config.homing_radius, team, _hit_bodies
+		self, global_position, config.homing_radius, team, _hit_bodies, _room_bounds
 	)
 	if target == null:
 		return
@@ -298,6 +301,9 @@ func get_shooter() -> Node:
 func _impact(body: Node, point: Vector2, normal: Vector2) -> void:
 	EventBus.projectile_hit.emit(self, body, point, normal)
 
+	# Everything below that reaches past the point of impact is handed the shot's room, so a blast
+	# or a chain set off against the wall beside a doorway stops where the shot itself would have.
+
 	# Whatever was struck directly, as a typed list the area effects can exclude. A shot
 	# that hits an enemy must not also catch that same enemy in its own blast.
 	var struck: Array[Node] = []
@@ -313,6 +319,7 @@ func _impact(body: Node, point: Vector2, normal: Vector2) -> void:
 			team,
 			get_shooter(),
 			struck,
+			_room_bounds,
 		)
 
 	if body != null and config.chain_count > 0:
@@ -325,6 +332,7 @@ func _impact(body: Node, point: Vector2, normal: Vector2) -> void:
 			team,
 			get_shooter(),
 			struck,
+			_room_bounds,
 		)
 
 	if body != null and _pierce_left > 0:

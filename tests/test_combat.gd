@@ -44,6 +44,7 @@ func run() -> void:
 	await _test_dash_invulnerability_refuses_damage()
 	await _test_dormant_rooms_cannot_be_shot_into()
 	await _test_a_shot_dies_at_the_edge_of_the_room_it_was_fired_in()
+	await _test_a_blast_and_a_chain_stop_at_the_room_they_went_off_in()
 	await _test_room_combat_reports_cleared_once()
 	await _test_damage_shoves_the_player()
 	await _test_the_player_shove_decays_and_does_not_compound()
@@ -595,6 +596,115 @@ func _test_a_shot_dies_at_the_edge_of_the_room_it_was_fired_in() -> void:
 	check(health.current < full, "while a shot fired in the room it is standing in still lands")
 
 	await _teardown(arena)
+
+
+## The other way into the room next door, and the one a room boundary on the projectile does not
+## close by itself: the shot dies at the wall, but what it sets off does not have to.
+##
+## Being asleep was the whole of the existing defence — `Targeting` reads `HostileRegistry`, which
+## holds only awake bodies, so a blast cannot reach a room the player has not woken. That covers
+## the room they have never entered and not the room they are *entering*: `FloorController` wakes
+## the new room as the player crosses the threshold, and at that moment the two interiors are 32px
+## apart with a live one on each side. A 90px blast or a 76px chain spans that comfortably, so the
+## last thing fired in the old room reaches into the new one through two walls.
+##
+## Both are checked with the room next door awake, because a dormant one passes either way.
+func _test_a_blast_and_a_chain_stop_at_the_room_they_went_off_in() -> void:
+	var arena := _make_arena()
+	var template := load(COMBAT_TEMPLATE_PATH) as RoomTemplate
+	if not require(template, "combat_open.tres loads as a RoomTemplate"):
+		await _teardown(arena)
+		return
+
+	var here := _add_grid_room(arena, template, 0, Vector2i.ZERO, Vector2i.RIGHT)
+	var next := _add_grid_room(arena, template, 1, Vector2i.RIGHT, Vector2i.LEFT)
+	if here == null or next == null:
+		await _teardown(arena)
+		return
+
+	# Two rows well clear of the doorway, so every shot below ends on a wall or on a body rather
+	# than flying out through the opening.
+	var blast_row := here.get_interior_rect().position.y + 24.0
+	var chain_row := here.get_interior_rect().end.y - 16.0
+	var next_edge := next.get_interior_rect().position.x
+	var muzzle_x := here.get_interior_rect().position.x + 40.0
+
+	# Standing just inside the room next door, a few pixels past the wall the blast goes off
+	# against — which is where an enemy waiting by a doorway actually stands.
+	var blast_target := _add_enemy_in(next, Vector2(next_edge + 8.0, blast_row))
+	var chain_target := _add_enemy_in(next, Vector2(next_edge + 8.0, chain_row))
+	# The one the chaining shot actually hits, on this side of the wall.
+	var struck := _add_enemy_in(here, Vector2(here.get_interior_rect().end.x - 8.0, chain_row))
+	# And one in the far room for the chain's own control, within a jump of `chain_target`.
+	var neighbour := _add_enemy_in(next, Vector2(next_edge + 76.0, chain_row))
+	await advance_physics(2)
+
+	for enemy: Enemy in [blast_target, chain_target, struck, neighbour]:
+		if enemy == null:
+			await _teardown(arena)
+			return
+	check(
+		HostileRegistry.awake(Teams.Id.ENEMY).size() == 4,
+		"all four enemies are awake and shootable — a sleeping room proves nothing here",
+	)
+
+	var blast_health := blast_target.get_health_component()
+	var chain_health := chain_target.get_health_component()
+	var full := blast_health.current
+
+	# A blast fired into the wall beside the doorway, from this side of it.
+	var bomb := _rivet_variant()
+	bomb.explosion_radius = 90.0
+	bomb.explosion_damage_scale = 1.0
+	_fire_at(arena, Vector2(muzzle_x, blast_row), Vector2.RIGHT, bomb)
+	await advance_physics(60)
+	check_near(
+		blast_health.current, full,
+		"a blast against the wall does not reach the enemy on the other side of it",
+	)
+
+	# A chain that lands on an enemy standing by the doorway, with the next link through the wall.
+	var chained := _rivet_variant()
+	chained.chain_count = 3
+	chained.chain_radius = 76.0
+	chained.chain_damage_scale = 1.0
+	_fire_at(arena, Vector2(muzzle_x, chain_row), Vector2.RIGHT, chained)
+	await advance_physics(60)
+	check(
+		struck.get_health_component().current < full,
+		"the chaining shot lands on the enemy in this room",
+	)
+	check_near(
+		chain_health.current, full,
+		"and the discharge does not jump through the wall to the one next door",
+	)
+
+	# Both controls, so neither check above can be satisfied by an effect that does nothing. The
+	# same blast and the same chain, set off on the other side of the seam.
+	_fire_at(arena, Vector2(next_edge + 60.0, blast_row + 20.0), Vector2.LEFT, bomb)
+	await advance_physics(40)
+	check(
+		blast_health.current < full,
+		"while the same blast set off inside that room does reach it",
+	)
+
+	_fire_at(arena, Vector2(next_edge + 200.0, chain_row), Vector2.LEFT, chained)
+	await advance_physics(60)
+	check(
+		chain_health.current < full,
+		"and the same chain, discharged in that room, still finds it",
+	)
+
+	await _teardown(arena)
+
+
+## An enemy standing at a global point inside `room`, parented into the room's own enemy node so it
+## sleeps and wakes with it.
+func _add_enemy_in(room: Room, at: Vector2) -> Enemy:
+	var enemy: Enemy = TICKET_BOT_SCENE.instantiate()
+	room.get_node("%Enemies").add_child(enemy)
+	enemy.global_position = at
+	return enemy
 
 
 ## One room on the floor's grid, positioned by cell exactly as `FloorController._instantiate_rooms`

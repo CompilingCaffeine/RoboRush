@@ -68,15 +68,23 @@ func bind_player(player: Player) -> void:
 func _on_enemy_killed(_enemy: Node, position: Vector2) -> void:
 	if _inventory == null:
 		return
-	for item: ItemConfig in _inventory.get_kill_explosions():
-		Explosion.detonate(
-			self,
-			position,
-			item.kill_explosion_radius,
-			item.kill_explosion_damage,
-			Teams.Id.PLAYER,
-			_owner_body,
-		)
+	var explosions := _inventory.get_kill_explosions()
+	if not explosions.is_empty():
+		# Asked once, here, rather than per item or per body inside the blast: a kill happens a few
+		# times a second and answering it is a tree query, which is exactly the trade `Targeting`
+		# cannot make. A build holding no on-kill item never asks at all.
+		var room := Room.bounds_containing(self, position)
+		for item: ItemConfig in explosions:
+			Explosion.detonate(
+				self,
+				position,
+				item.kill_explosion_radius,
+				item.kill_explosion_damage,
+				Teams.Id.PLAYER,
+				_owner_body,
+				[],
+				room,
+			)
 
 	# Garbage Collector. The same shape as the dash pulse and deliberately so — a status applied to
 	# whatever is standing near a point — but triggered by a kill, which makes it a reward for
@@ -131,10 +139,16 @@ func _on_player_dash_started(_direction: Vector2) -> void:
 ## A boss playing dead is skipped too, for the same reason it is already unshootable: `set_inert`
 ## takes the part off its collision layer and `HostileRegistry.Entry.is_shootable` reads that.
 ## Burning a body the player cannot see or hit was never the intent.
+##
+## Awake was the whole of the rule and is now half of it. The registry stops a pulse in a room the
+## player has not reached; the room it goes off in stops it reaching the room they have *just*
+## reached, which is awake and one wall away — the moment a doorway is crossed is exactly when the
+## two rooms are closest and one of them is live.
 func _pulse_statuses(centre: Vector2, radius: float, effects: Array[StringName]) -> void:
 	if radius <= 0.0 or effects.is_empty():
 		return
-	for body: Node2D in Targeting.hostiles_near(self, centre, radius, Teams.Id.PLAYER):
+	var room := Room.bounds_containing(self, centre)
+	for body: Node2D in Targeting.hostiles_near(self, centre, radius, Teams.Id.PLAYER, [], room):
 		var status := StatusEffectController.find_on(body)
 		if status == null:
 			continue
@@ -162,7 +176,14 @@ func _on_player_damaged(info: DamageInfo, _remaining: float) -> void:
 
 	_damage_this_room += info.amount
 
-	for item: ItemConfig in _inventory.get_retaliations():
+	var retaliations := _inventory.get_retaliations()
+	if retaliations.is_empty():
+		return
+
+	# The robot's own room, since that is where the blast is centred. Asked once rather than per
+	# item, and only once there is something to ask on behalf of.
+	var room := Room.bounds_containing(self, _owner_body.global_position)
+	for item: ItemConfig in retaliations:
 		Explosion.detonate(
 			self,
 			_owner_body.global_position,
@@ -170,6 +191,8 @@ func _on_player_damaged(info: DamageInfo, _remaining: float) -> void:
 			item.retaliation_damage,
 			Teams.Id.PLAYER,
 			_owner_body,
+			[],
+			room,
 		)
 
 

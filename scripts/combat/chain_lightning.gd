@@ -16,6 +16,11 @@ const TAG := &"electric"
 ## Runs the chain and returns how many bodies were hit. `already_hit` seeds the exclusion
 ## list — the enemy the projectile struck directly is normally passed in, so the chain
 ## spreads outward instead of hitting the same target again.
+##
+## `within` is the room the discharge belongs to, and it bounds every jump rather than only the
+## first: a chain that could step out through a doorway and back would be a slower way of doing
+## the thing the room boundary exists to stop. The 76px reach is more than the 32px between two
+## rooms' interiors, which is what made this the widest way into a room nobody had entered.
 static func strike(
 	source: Node,
 	origin: Vector2,
@@ -25,6 +30,7 @@ static func strike(
 	team: Teams.Id,
 	attributed_to: Node = null,
 	already_hit: Array[Node] = [],
+	within := Rect2(),
 ) -> int:
 	if jumps <= 0 or radius <= 0.0 or damage <= 0.0:
 		return 0
@@ -34,7 +40,7 @@ static func strike(
 	var hits := 0
 
 	for _jump: int in jumps:
-		var target := Targeting.nearest_hostile(source, point, radius, team, struck)
+		var target := Targeting.nearest_hostile(source, point, radius, team, struck, within)
 		if target == null:
 			break
 
