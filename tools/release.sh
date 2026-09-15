@@ -58,7 +58,7 @@ TEMPLATES=(
 ## upgraded on purpose, so that an upgrade is a reviewable diff rather than a silent change in
 ## what the next release is built with.
 relock() {
-  local version templates_version sdk_version sdk_commit cli_version template_dir
+  local version templates_version sdk_version sdk_commit cli_version pinned_cli_version template_dir
   template_dir="$(template_root)"
   version="$(engine_version)"
   templates_version="$(cat "$template_dir"/*/version.txt 2>/dev/null | head -1)"
@@ -66,11 +66,38 @@ relock() {
 
   sdk_version="$(wavedash_sdk_version)"
   [ -n "$sdk_version" ] || die "no version= in $WAVEDASH_ADDON_DIR/plugin.cfg"
+
+  # Carried across when the CLI is not installed here, the way the SDK commit is. This line is the
+  # approval the upload workflow gates on before it exposes WAVEDASH_TOKEN, and the machine that
+  # relocks is usually not the machine that uploads — a relock from a dev box without the CLI used
+  # to drop the line entirely, silently retiring an approval nobody meant to withdraw. The gate
+  # then compared its installed CLI against an empty string, so it failed closed but said something
+  # confusing about it.
+  #
+  # Deliberately no environment override to go with it: approving a version reviewed elsewhere —
+  # the Linux binary CI installs, reviewed from a macOS dev box, which is the usual case — stays a
+  # hand edit, so what was reviewed gets written down in the commit rather than typed into a
+  # variable that leaves no trace of anyone having looked.
+  # The `|| true` is load-bearing: finding nothing is a normal outcome here (a lock written before
+  # the pin existed, or no lock at all on a first relock), but grep says so with exit 1 and
+  # `set -o pipefail` would turn that into a silent abort of the whole relock.
   cli_version="$(wavedash_cli_version)"
+  pinned_cli_version="$(grep '^wavedash_cli_version=' "$LOCK_FILE" 2>/dev/null | cut -d= -f2- || true)"
+  if [ -z "$cli_version" ]; then
+    cli_version="$pinned_cli_version"
+    if [ -n "$cli_version" ]; then
+      note "Wavedash CLI not installed here; kept the recorded '$cli_version'"
+    else
+      warn "no Wavedash CLI installed and none recorded: the upload workflow's version gate has nothing to compare against"
+    fi
+  fi
 
   # Upstream publishes no tags, so the commit the vendored tree came from exists nowhere in the
   # files themselves. It has to be carried across a relock, or supplied when the SDK is upgraded.
-  sdk_commit="${WAVEDASH_SDK_COMMIT:-$(grep '^wavedash_sdk_commit=' "$LOCK_FILE" 2>/dev/null | cut -d= -f2-)}"
+  # Same `|| true`, for the same reason: without it a lock with no commit in it aborts the relock
+  # silently on grep's exit status, and the message below — the one written to explain exactly that
+  # situation and how to get out of it — never prints.
+  sdk_commit="${WAVEDASH_SDK_COMMIT:-$(grep '^wavedash_sdk_commit=' "$LOCK_FILE" 2>/dev/null | cut -d= -f2- || true)}"
   [ -n "$sdk_commit" ] || die \
     "no wavedash_sdk_commit in $LOCK_FILE. Re-run with: WAVEDASH_SDK_COMMIT=<sha> tools/release.sh --relock"
 
