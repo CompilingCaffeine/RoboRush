@@ -441,6 +441,10 @@ func end_run(won: bool, abandoned := false) -> void:
 	# than at each ending's own call site. The fourth is `begin_run`.
 	SaveManager.clear_checkpoint()
 	records_beaten = SaveManager.record_run_finished(stats, won)
+	# Offered to the global board, which decides for itself whether this counts — only victories do.
+	# It returns immediately and posts in the background: the player is about to be shown a summary
+	# screen, and a network round trip must not be between them and it.
+	Leaderboard.submit_run(stats, won)
 
 
 ## Puts the run down without ending it. What SAVE AND EXIT does, once the checkpoint is written.

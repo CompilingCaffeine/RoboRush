@@ -1,8 +1,9 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scenes/ui/main_menu.gd" id="1_menu"]
 [ext_resource type="PackedScene" path="res://scenes/ui/settings_menu.tscn" id="2_settings"]
 [ext_resource type="PackedScene" path="res://scenes/ui/controls_card.tscn" id="3_controls"]
+[ext_resource type="PackedScene" path="res://scenes/ui/leaderboard_panel.tscn" id="5_leaderboard"]
 [ext_resource type="Texture2D" path="res://art/ui/trophy.png" id="4_trophy"]
 
 [node name="MainMenu" type="Control"]
@@ -132,4 +133,7 @@ theme_override_colors/font_color = Color(0.290196, 0.337255, 0.4, 1)
 unique_name_in_owner = true
 
 [node name="ControlsCard" parent="." instance=ExtResource("3_controls")]
+unique_name_in_owner = true
+
+[node name="LeaderboardPanel" parent="." instance=ExtResource("5_leaderboard")]
 unique_name_in_owner = true

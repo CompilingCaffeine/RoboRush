@@ -10,14 +10,24 @@ extends Control
 ## Owns the two panels that are reachable from both here and the pause menu — settings and the
 ## controls card — by instancing the same scenes the pause menu instances. Neither knows where
 ## it was opened from, which is what lets them be opened from anywhere.
+##
+## The leaderboard is the exception: it is instanced here and only here. A global board of finished
+## runs is something a player looks at between runs, not one they pause mid-fight to consult, and a
+## panel that fetches over the network while a run is paused underneath it is a screen that can
+## still be waiting when the player un-pauses into a room full of enemies.
 
 ## Named so that the browser build can take the entry back out again by label rather than by
 ## index — an index would silently remove CONTROLS the first time this list is reordered.
 const QUIT_LABEL := "QUIT"
 
+## Removed by label on any build with no board to show, exactly as QUIT is — see
+## `Leaderboard.is_offered`.
+const LEADERBOARD_LABEL := "LEADERBOARD"
+
 const BUTTONS: Array = [
 	["START RUN", "_on_start_pressed"],
 	["CONTROLS", "_on_controls_pressed"],
+	[LEADERBOARD_LABEL, "_on_leaderboard_pressed"],
 	["SETTINGS", "_on_settings_pressed"],
 	[QUIT_LABEL, "_on_quit_pressed"],
 ]
@@ -46,6 +56,7 @@ const FOCUS_PADDING := "  "
 @onready var _tagline: Label = %Tagline
 @onready var _settings: SettingsMenu = %SettingsMenu
 @onready var _controls: ControlsCard = %ControlsCard
+@onready var _leaderboard: LeaderboardPanel = %LeaderboardPanel
 @onready var _cloud_status: Label = %CloudStatus
 @onready var _build_id: Label = %BuildId
 
@@ -77,6 +88,7 @@ func _ready() -> void:
 
 	_settings.closed.connect(_on_panel_closed)
 	_controls.closed.connect(_on_panel_closed)
+	_leaderboard.closed.connect(_on_panel_closed)
 
 	# A first-time player is shown the controls before anything else, because the firing
 	# scheme is the one thing they cannot discover by pressing keys. Everyone else gets the
@@ -93,6 +105,8 @@ func _build_buttons() -> void:
 	# QUIT would advertise a door that is not there; see `SceneRouter.can_quit`.
 	if not SceneRouter.can_quit():
 		entries = entries.filter(func(entry: Array) -> bool: return entry[0] != QUIT_LABEL)
+	if not Leaderboard.is_offered():
+		entries = entries.filter(func(entry: Array) -> bool: return entry[0] != LEADERBOARD_LABEL)
 	# The label carries the floor and the elapsed time, because "CONTINUE" alone does not say
 	# *what*: a player coming back the next day needs to recognise the run before they commit to
 	# it, and the alternative is loading it to find out.
@@ -239,6 +253,11 @@ func _on_start_pressed() -> void:
 func _on_controls_pressed() -> void:
 	AudioManager.play_sfx(&"ui_confirm")
 	_controls.open()
+
+
+func _on_leaderboard_pressed() -> void:
+	AudioManager.play_sfx(&"ui_confirm")
+	_leaderboard.open()
 
 
 func _on_settings_pressed() -> void:

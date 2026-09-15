@@ -11,6 +11,10 @@ extends Control
 ## rather than the line of keypresses this screen used to print. What is left here is the two
 ## endings and the mid-run peek.
 ##
+## One line differs by more than its wording: the global rank under the statistics, which only a
+## victory has and only a browser build can show. See `_refresh_rank` — it is also the only thing
+## on this screen that is not known the moment the screen appears.
+##
 ## Runs with PROCESS_MODE_ALWAYS: both endings pause the tree, and a summary screen that
 ## stopped updating the moment it appeared would be a black rectangle.
 ##
@@ -48,6 +52,7 @@ const FOCUS_PADDING := " "
 @onready var _grid: GridContainer = %Grid
 @onready var _hint: Label = %Hint
 @onready var _buttons: HBoxContainer = %Buttons
+@onready var _rank: Label = %Rank
 @onready var _build_title: Label = %BuildTitle
 @onready var _build_grid: GridContainer = %BuildGrid
 
@@ -58,6 +63,12 @@ var _peeking := false
 ## Guards the ending sound and the focus grab, both of which must happen once when the run
 ## ends rather than on every refresh.
 var _announced := false
+
+## Bumped whenever the rank line stops being about the run it was fetched for — the screen is
+## dismissed, or a second run ends. The board is read over the network and the player can press
+## RETRY while that is in flight; without this, the answer would arrive and be written onto the
+## next run's summary.
+var _rank_generation := 0
 
 
 func _ready() -> void:
@@ -117,6 +128,12 @@ func _refresh() -> void:
 	# still happening and there is nothing to choose.
 	_buttons.visible = over
 
+	# Taken down for the peek as well as for the dismissal. A line about where a finished run left
+	# the player on the global board has no meaning halfway through the next one, and leaving the
+	# previous ending's rank on screen during a mid-run glance would be stating it about this run.
+	if not over:
+		_hide_rank()
+
 	if not should_show:
 		_announced = false
 		get_viewport().gui_release_focus()
@@ -143,6 +160,67 @@ func _refresh() -> void:
 		)
 		if _buttons.get_child_count() > 0:
 			(_buttons.get_child(0) as Button).grab_focus()
+		_refresh_rank()
+
+
+## Where this run leaves the player on the global board, under the statistics.
+##
+## Only on a victory, and only where there is a board. The board ranks finishes (see
+## `Leaderboard`), so a line about it on a death is a line about a competition the run never
+## entered — and off the web there is no board at all, which is what `Leaderboard.is_offered`
+## answers.
+##
+## Fetched rather than taken from `Leaderboard.score_posted`, which carries a rank of its own. That
+## signal only fires when a time was actually written, so a player winning a second time slightly
+## slower than their first would see nothing — and "you are still seventh" is the true answer to
+## the question they are looking at this line to ask. Reading the board covers both endings with
+## one path.
+##
+## The line starts as the honest intermediate rather than blank. A rank that appears two seconds
+## into a screen the player is already reading is a rank they have looked past.
+func _refresh_rank() -> void:
+	# Cancels any fetch still in flight for a previous ending before starting this one.
+	_rank_generation += 1
+	var generation := _rank_generation
+
+	var on_the_board := (
+		GameManager.state == GameManager.State.VICTORY and Leaderboard.is_offered()
+	)
+	_rank.visible = on_the_board
+	if not on_the_board:
+		return
+
+	_set_rank("POSTING YOUR TIME...", UIPalette.TEXT_FAINT)
+
+	var standing: Dictionary = await Leaderboard.fetch_standing()
+	if generation != _rank_generation:
+		return
+
+	if not standing.get("success", false):
+		# Whatever went wrong, `Leaderboard` has already put it in the player's language, and none
+		# of it costs them anything: the record is saved, and the board gets it by the next launch.
+		_set_rank(str(standing.get("message", "")), UIPalette.TEXT_DIM)
+		return
+
+	var rank := int(standing.get("rank", 0))
+	if rank <= 0:
+		# On the board, but the platform did not say where on it. Saying that is better than
+		# inventing a position or pretending the time never went up.
+		_set_rank("TIME POSTED", UIPalette.ACCENT)
+		return
+
+	_set_rank("GLOBAL RANK  #%d" % rank, UIPalette.ACCENT)
+
+
+func _set_rank(text: String, color: Color) -> void:
+	_rank.text = text
+	_rank.visible = not text.is_empty()
+	UIPalette.style(_rank, color)
+
+
+func _hide_rank() -> void:
+	_rank_generation += 1
+	_rank.visible = false
 
 
 ## Puts the keyboard back on this screen's first button. Called when something that was covering
