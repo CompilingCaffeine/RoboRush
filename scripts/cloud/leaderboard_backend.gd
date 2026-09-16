@@ -26,6 +26,20 @@ extends RefCounted
 ## a way no error ever reports.
 
 
+## Emitted when the answer to `is_available()` may have changed — the platform connected, dropped,
+## or started reconnecting.
+##
+## `Leaderboard` gives up on a board it could not reach and has nothing of its own to wake it: it
+## syncs once, when the save finishes loading, and a connection that arrives a second later would
+## otherwise leave a saved record waiting for a relaunch. This is what makes the re-offer happen in
+## the session the player is actually in.
+##
+## Carries nothing on purpose. The listener's next move is to ask `is_available()` again, which is
+## the only answer it could act on anyway, and a payload describing *why* the platform moved would
+## be a second source of truth for the same question.
+signal availability_changed()
+
+
 ## Whether there is a board to talk to at all. False on desktop, false in a browser before the
 ## backend connects, false when nobody is signed in — a leaderboard entry belongs to an account,
 ## and an anonymous visitor has nowhere to put one.

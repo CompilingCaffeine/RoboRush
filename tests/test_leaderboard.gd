@@ -50,6 +50,8 @@ func run() -> void:
 	await _test_an_unreadable_board_is_not_an_empty_one()
 	await _test_a_player_outside_the_page_is_still_shown_their_rank()
 	await _test_a_late_connection_can_still_post()
+	await _test_a_late_connection_re_offers_an_earlier_record()
+	await _test_signing_in_after_the_boot_screen_re_offers_an_earlier_record()
 
 	await _test_the_panel_draws_the_board()
 	await _test_the_panel_marks_the_player_own_row()
@@ -377,6 +379,60 @@ func _test_a_late_connection_can_still_post() -> void:
 	)
 
 
+## The other half of a late connection, and the half that was missing. `_post_pending` resolves a
+## board on its own, so a victory won *after* the platform arrives has always been fine — but a
+## record set in an earlier offline session is only ever re-offered by `sync`, which ran once, at
+## boot, and gave up. The record was safe and the board never heard about it until the next launch.
+##
+## Nothing wins here on purpose: the only thing that has happened is that the platform turned up.
+func _test_a_late_connection_re_offers_an_earlier_record() -> void:
+	_setup()
+	_fake.available = false
+
+	# An earlier session's victory, which is all that survives of it.
+	SaveManager.best.absorb(_victory(480.0), true)
+	await Leaderboard.sync()
+	check(Leaderboard.status() == Leaderboard.Status.OFFLINE, "startup gave up on the platform")
+	check(_fake.posts == 0, "and offered nothing while there was nowhere to offer it")
+
+	_fake.available = true
+	await _wait_for_idle()
+
+	check(
+		_fake.scores.get(_fake.user_id, 0) == 480000,
+		"the connection arriving re-offers the record, with no second victory to carry it",
+	)
+
+
+## The same gap reached the other way, and the reason the connection signal alone does not close it:
+## signing in is not a transition the platform announces. `is_available` is connected *and* signed
+## in, so a player who lands on the page signed out and signs in afterwards has a board the game has
+## never synced against — with no signal to tell it that changed.
+##
+## So the board screen is the second door. It is where the question is asked, which makes it the
+## right place to notice the answer has changed.
+func _test_signing_in_after_the_boot_screen_re_offers_an_earlier_record() -> void:
+	_setup()
+	Leaderboard.offered = true
+	_fake.user_id = ""
+
+	SaveManager.best.absorb(_victory(390.0), true)
+	await Leaderboard.sync()
+	check(_fake.finds == 0, "a signed-out boot asks the platform nothing")
+
+	# Signed in, silently, exactly as the SDK does it.
+	_fake.user_id = "player-one"
+
+	var panel := await _open_panel()
+	await _wait_for_idle()
+	_close_panel(panel)
+
+	check(
+		_fake.scores.get("player-one", 0) == 390000,
+		"opening the board after signing in re-offers the record without a relaunch",
+	)
+
+
 # --- Reading ------------------------------------------------------------------
 
 
@@ -612,6 +668,7 @@ func _reset_coordinator() -> void:
 	Leaderboard._posted_ms = 0
 	Leaderboard._posting = false
 	Leaderboard._syncing = false
+	Leaderboard._synced = false
 	Leaderboard._attempt = 0
 	Leaderboard._run_metadata = {}
 	Leaderboard._status = Leaderboard.Status.OFFLINE

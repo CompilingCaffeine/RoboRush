@@ -34,9 +34,26 @@ var connected := false
 
 
 func _init() -> void:
-	WavedashSDK.backend_connected.connect(func(_payload: Variant) -> void: connected = true)
-	WavedashSDK.backend_disconnected.connect(func(_payload: Variant) -> void: connected = false)
-	WavedashSDK.backend_reconnecting.connect(func(_payload: Variant) -> void: connected = false)
+	WavedashSDK.backend_connected.connect(func(_payload: Variant) -> void: _set_connected(true))
+	WavedashSDK.backend_disconnected.connect(func(_payload: Variant) -> void: _set_connected(false))
+	WavedashSDK.backend_reconnecting.connect(func(_payload: Variant) -> void: _set_connected(false))
+
+
+## Records the transition and announces it, in that order.
+##
+## Announced rather than merely recorded, because nothing else will. Startup gives up on the
+## platform after eight seconds (see `Bootstrap.CONNECT_TIMEOUT_SECONDS`) and `Leaderboard` syncs
+## exactly once, when the save finishes loading — so a connection that lands at second nine used to
+## leave a victory from a previous session sitting in the records until the next relaunch.
+##
+## Guarded on the value actually changing: the SDK can report the same state twice, and a listener
+## that re-syncs on every announcement would turn a flapping connection into a stream of round
+## trips.
+func _set_connected(value: bool) -> void:
+	if connected == value:
+		return
+	connected = value
+	availability_changed.emit()
 
 
 func is_available() -> bool:

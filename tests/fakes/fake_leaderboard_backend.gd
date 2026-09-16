@@ -14,7 +14,19 @@ extends LeaderboardBackend
 
 const BOARD_ID := "board-fastest-victory"
 
-var available := true
+## Whether the platform is there. Announced on a change, exactly as the real backend announces a
+## connection: the coordinator re-syncs on that signal, and a fake that flipped this silently could
+## not reach the path.
+var available := true:
+	set(value):
+		if available == value:
+			return
+		available = value
+		availability_changed.emit()
+
+## Who is signed in; empty is a signed-out browser. Deliberately *not* announced, because signing in
+## is not announced in the real thing either — `WavedashSDK.get_user_id` simply starts answering.
+## A fake that emitted here would let a test pass against a path the game does not have.
 var user_id := "player-one"
 
 ## The board's contents: user id to milliseconds, and user id to display name.

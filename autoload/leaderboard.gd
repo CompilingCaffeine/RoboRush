@@ -16,9 +16,9 @@ extends Node
 ##
 ## That is also what makes the queue free. A victory that could not be posted is not written to a
 ## pending-submissions file and retried from it: it is already saved, in the records, as the
-## player's fastest victory, and `sync()` re-offers it at the start of every session until the
-## board accepts it. The record *is* the queue, so there is no second copy of it to fall out of
-## step with the first.
+## player's fastest victory, and `sync()` re-offers it until the board accepts it — at the start of
+## every session, and again the moment a board that was not there arrives. The record *is* the
+## queue, so there is no second copy of it to fall out of step with the first.
 ##
 ## The platform is behind `LeaderboardBackend` — never `WavedashSDK` directly — because every case
 ## worth testing here is a failure, and failures cannot be ordered from a live service. See
@@ -60,7 +60,21 @@ signal status_changed(status: Status)
 signal score_posted(rank: int, improved: bool)
 
 ## Swapped for a fake by the suite. Everything platform-shaped lives behind it.
-var backend: LeaderboardBackend = null
+##
+## Assigned through a setter so that the availability listener follows the backend rather than
+## staying bolted to whichever instance `_ready` happened to build. The suite replaces this *after*
+## `_ready` has run, and a listener left on the object that was replaced is a listener that never
+## fires again — which would make the one behaviour below untestable in exactly the suite written
+## to test it.
+var backend: LeaderboardBackend = null:
+	set(value):
+		if backend == value:
+			return
+		if backend != null and backend.availability_changed.is_connected(_on_availability_changed):
+			backend.availability_changed.disconnect(_on_availability_changed)
+		backend = value
+		if backend != null:
+			backend.availability_changed.connect(_on_availability_changed)
 
 ## How long to wait before retrying a failed post, and how many attempts there are. Bounded for the
 ## same reason the save coordinator's is: past the end of this list the time is simply pending, and
@@ -98,6 +112,13 @@ var _posting := false
 
 ## Set while `sync` is in flight, so a victory finished during startup cannot race it.
 var _syncing := false
+
+## Whether a sync has ever got as far as a resolved board this session.
+##
+## Not the same question as `_board_resolved`, and the difference is the point: resolving is what
+## `_post_pending` does on its own, while syncing is the only thing that re-offers a record set in
+## an *earlier* session. A session that booted signed out has done the first and not the second.
+var _synced := false
 
 ## How many consecutive attempts have failed, reset by a success and by a new personal best — a
 ## record set after the retries ran out deserves its own budget rather than inheriting an
@@ -226,7 +247,12 @@ func _sync_inner() -> void:
 	if mine.get("success", false):
 		var rows: Array = mine.get("entries", [])
 		if not rows.is_empty():
-			_posted_ms = int((rows[0] as Dictionary).get("score_ms", 0))
+			# Only ever downwards, for the reason the post loop takes the same minimum: a sync can
+			# now run at any point in a session, so this read can be a stale one taken before a post
+			# that has since landed. Believing it would put `_posted_ms` back up at the board's old
+			# entry and send the same time again.
+			var held := int((rows[0] as Dictionary).get("score_ms", 0))
+			_posted_ms = held if _posted_ms == 0 else mini(_posted_ms, held)
 	else:
 		# The question could not be answered, which is not the same as "the board has nothing".
 		# Leaving `_posted_ms` alone and posting anyway is the safe half of that: `keep_best` means
@@ -235,6 +261,7 @@ func _sync_inner() -> void:
 		# which is worse, because it is silent.
 		_log("could not read this player's entry (%s)" % mine.get("message", ""))
 
+	_synced = true
 	_set_status(Status.READY)
 	await _post_pending()
 
@@ -297,6 +324,12 @@ func _post_pending() -> void:
 func fetch_top(limit := TOP_ENTRIES) -> Dictionary:
 	if not _online():
 		return {"success": false, "message": "offline", "entries": [], "you": {}}
+	# Signing in has no signal behind it — `is_available` simply starts answering yes — so the
+	# screen the player opens to ask where they stand is also where the game notices they can now be
+	# on the board at all. Once per session, and only when the platform is there to answer: without
+	# it, a player who signed in after the page loaded has a record that waits for a relaunch.
+	if not _synced:
+		await sync()
 	if not _board_resolved() and not await _resolve_board():
 		return {"success": false, "message": "the board could not be reached", "entries": [], "you": {}}
 
@@ -387,6 +420,23 @@ static func format_score(score_ms: int) -> String:
 
 
 # --- Plumbing -----------------------------------------------------------------
+
+
+## The platform came back, or went away. Only the first is worth acting on.
+##
+## A board that has gone needs nothing from here: the record is saved, `_settle_status` already
+## says so, and a sync against a backend that is not there is a round trip that cannot succeed.
+## A board that has *arrived* is the case this exists for — startup gives up after eight seconds
+## (`Bootstrap.CONNECT_TIMEOUT_SECONDS`) and syncs once, so without this a connection that lands a
+## moment later leaves a victory from an earlier session in the records until the next relaunch.
+##
+## Not awaited, for the same reason `_on_save_initialized` does not await: this is a signal handler
+## and `sync` is already single-flight.
+func _on_availability_changed() -> void:
+	if not _online():
+		_settle_status()
+		return
+	sync()
 
 
 func _on_save_initialized() -> void:
