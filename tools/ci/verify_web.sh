@@ -85,9 +85,22 @@ check_files_present() {
   done
 
   # Flat on purpose. The export produces no directories, so one here means something was copied in.
+  #
+  # The `|| true` is load-bearing: `head` closes the pipe once it has its five lines, and with
+  # enough subdirectories to matter `find` is still writing when it does, takes SIGPIPE, and exits
+  # 141. `set -o pipefail` then aborts the whole script on the assignment — so the check written to
+  # report subdirectories killed the run silently in exactly the case it was watching for, the
+  # badly polluted upload, while a directory or two got reported normally.
   local directories
-  directories="$(find "$TARGET" -mindepth 1 -type d | head -5)"
+  directories="$(find "$TARGET" -mindepth 1 -type d | head -5 || true)"
   [ -z "$directories" ] || fail "the upload directory has subdirectories: $(tr '\n' ' ' <<<"$directories")"
+
+  # Every file rather than the required ones alone: check_size cats the whole directory and
+  # print_inventory hashes it, so one unreadable file anywhere aborts the run after the verdict
+  # line and before it, leaving cat's "Permission denied" as the only account of what happened.
+  while IFS= read -r name; do
+    [ -r "$TARGET/$name" ] || fail "$name is not readable"
+  done < <(cd "$TARGET" && find . -type f | sed 's|^\./||' | LC_ALL=C sort)
 }
 
 ## Anything present that the export does not produce. This is the leak check, and it is a
@@ -138,7 +151,12 @@ check_references() {
 
   local declared actual
   for name in index.pck index.wasm; do
-    declared="$(grep -o "\"$name\":[0-9]*" "$TARGET/index.html" | head -1 | cut -d: -f2)"
+    # `|| true` again, and this is the one that hid itself best: an index.html with no size for
+    # $name is precisely what the next three lines exist to report, and it was also the one input
+    # that stopped them from ever running. grep found nothing, exited 1, pipefail carried it out of
+    # the substitution, and the run ended right here — no message, no build id check, no inventory,
+    # no verdict. Every other malformed page reported itself properly, which is why it lasted.
+    declared="$(grep -o "\"$name\":[0-9]*" "$TARGET/index.html" | head -1 | cut -d: -f2 || true)"
     actual="$(file_bytes "$TARGET/$name")"
     if [ -z "$declared" ]; then
       fail "index.html declares no size for $name"
