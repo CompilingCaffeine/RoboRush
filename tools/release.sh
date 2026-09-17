@@ -61,8 +61,15 @@ relock() {
   local version templates_version sdk_version sdk_commit cli_version pinned_cli_version template_dir
   template_dir="$(template_root)"
   version="$(engine_version)"
-  templates_version="$(cat "$template_dir"/*/version.txt 2>/dev/null | head -1)"
+  # The `|| true` is load-bearing, for the same reason it is on the greps further down: with no
+  # templates installed the glob matches nothing, cat fails, `2>/dev/null` hides why, and
+  # `set -o pipefail` turns that into a silent abort of the entire relock — exit 1, no output, and
+  # nothing to suggest the templates are what is missing. The lock file survives that, because it
+  # is only written below, but the operator is told nothing at all.
+  templates_version="$(cat "$template_dir"/*/version.txt 2>/dev/null | head -1 || true)"
   [ -n "$version" ] || die "could not run '$GODOT --version'"
+  [ -n "$templates_version" ] || die \
+    "no export templates installed in $template_dir (see export_presets.cfg for how to install)"
 
   sdk_version="$(wavedash_sdk_version)"
   [ -n "$sdk_version" ] || die "no version= in $WAVEDASH_ADDON_DIR/plugin.cfg"
