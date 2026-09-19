@@ -67,7 +67,6 @@ const CASCADE_TEXTURE := preload("res://art/bosses/cascade_node.png")
 const ORCHESTRATOR_TEXTURE := preload("res://art/bosses/orchestrator.png")
 const CORE_TEXTURE := preload("res://art/bosses/core_intelligence.png")
 
-const TERMINAL_SCENE := preload("res://scenes/bosses/boss_terminal.tscn")
 
 ## Its own colour, worn only by the last mask.
 const CORE_TINT := Color(0.82, 0.9, 1.2)
@@ -654,20 +653,9 @@ func _raise_terminals() -> void:
 	var tuning := config as CoreIntelligenceConfig
 	if tuning == null:
 		return
-	var corners: Array[Vector2] = [
-		_body_bounds.position,
-		Vector2(_body_bounds.end.x, _body_bounds.position.y),
-		Vector2(_body_bounds.position.x, _body_bounds.end.y),
-		_body_bounds.end,
-	]
-	for index: int in mini(maxi(tuning.terminal_count, 0), corners.size()):
-		var terminal: BossTerminal = TERMINAL_SCENE.instantiate()
-		add_child(terminal)
-		# After `add_child`, always. See `RuntimeError.begin`, which paid for this lesson second.
-		terminal.global_position = corners[index]
-		terminal.configure(tuning.terminal_health)
-		terminal.destroyed.connect(_on_terminal_destroyed)
-		_terminals.append(terminal)
+	_terminals = make_corner_terminals(
+		_body_bounds, tuning.terminal_count, tuning.terminal_health, _on_terminal_destroyed
+	)
 	_terminals_remaining = _terminals.size()
 
 
@@ -680,10 +668,7 @@ func _on_terminal_destroyed(terminal: BossTerminal) -> void:
 
 
 func _clear_terminals() -> void:
-	for terminal: BossTerminal in _terminals:
-		if is_instance_valid(terminal):
-			terminal.queue_free()
-	_terminals.clear()
+	clear_terminals(_terminals)
 	_terminals_remaining = 0
 
 

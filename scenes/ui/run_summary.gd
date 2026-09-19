@@ -37,6 +37,7 @@ const RECORD_MARK := " *"
 ## player was most likely to press it, because a run that has just ended is when leaving the game
 ## is the obvious thing to do. RETRY and MENU are both still here, so nothing is lost by dropping it.
 const QUIT_LABEL := "QUIT"
+const MenuButtons = preload("res://scripts/utilities/menu_buttons.gd")
 
 const BUTTONS: Array = [
 	["RETRY", "_on_retry_pressed"],
@@ -97,23 +98,22 @@ func _build_buttons() -> void:
 		entries = entries.filter(func(entry: Array) -> bool: return entry[0] != QUIT_LABEL)
 
 	for entry: Array in entries:
-		var button := Button.new()
-		button.text = FOCUS_PADDING + (entry[0] as String)
-		button.focus_mode = Control.FOCUS_ALL
-		button.pressed.connect(Callable(self, entry[1] as String))
-		button.focus_entered.connect(_on_button_focused.bind(button, entry[0] as String))
-		button.focus_exited.connect(_on_button_unfocused.bind(button, entry[0] as String))
-		button.mouse_entered.connect(button.grab_focus)
-		_buttons.add_child(button)
+		MenuButtons.add(
+			_buttons,
+			FOCUS_PADDING + (entry[0] as String),
+			Callable(self, entry[1] as String),
+			_on_button_focused,
+			_on_button_unfocused,
+		)
 
 
 func _on_button_focused(button: Button, label: String) -> void:
-	button.text = FOCUS_MARKER + label
+	button.text = FOCUS_MARKER + label.trim_prefix(FOCUS_PADDING)
 	AudioManager.play_sfx(&"ui_move")
 
 
 func _on_button_unfocused(button: Button, label: String) -> void:
-	button.text = FOCUS_PADDING + label
+	button.text = label
 
 
 func _on_state_changed(_state: GameManager.State) -> void:

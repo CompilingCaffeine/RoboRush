@@ -14,6 +14,10 @@ extends CharacterBody2D
 
 const DRONE_SCENE := preload("res://scenes/player/player_drone.tscn")
 
+## The radius of the player's circular collision shape. Hazards use this shared geometry value
+## when expanding hit tests so collision changes cannot drift from damage bounds.
+const BODY_RADIUS := 5.0
+
 ## How close the robot must be to use something. Generous: the frustration of a shop stand
 ## that will not take your money is worse than the risk of buying the wrong one, and the
 ## stands are far enough apart that the nearest is never ambiguous.

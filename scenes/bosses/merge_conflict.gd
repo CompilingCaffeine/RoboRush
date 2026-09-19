@@ -29,7 +29,6 @@ extends Boss
 ## See `_begin_feint`.
 
 const PART_SCENE := preload("res://scenes/bosses/boss_part.tscn")
-const TERMINAL_SCENE := preload("res://scenes/bosses/boss_terminal.tscn")
 
 const RED := Color(1.0, 0.42, 0.42, 1.0)
 const GREEN := Color(0.42, 1.0, 0.62, 1.0)
@@ -523,19 +522,9 @@ func _spawn_part(at: Vector2, tint: Color) -> BossPart:
 ## Four terminals, one per corner of the arena. Corners because they are the furthest thing
 ## from wherever the boss is, so breaking one always means leaving the fight.
 func _spawn_terminals() -> void:
-	var corners: Array[Vector2] = [
-		_arena.position,
-		Vector2(_arena.end.x, _arena.position.y),
-		Vector2(_arena.position.x, _arena.end.y),
-		_arena.end,
-	]
-	for index: int in mini(config.terminal_count, corners.size()):
-		var terminal: BossTerminal = TERMINAL_SCENE.instantiate()
-		add_child(terminal)
-		terminal.global_position = corners[index]
-		terminal.configure(config.terminal_health)
-		terminal.destroyed.connect(_on_terminal_destroyed)
-		_terminals.append(terminal)
+	_terminals = make_corner_terminals(
+		_arena, config.terminal_count, config.terminal_health, _on_terminal_destroyed
+	)
 
 
 ## Dropped from the list the instant it dies, rather than left for `is_instance_valid` to
@@ -548,10 +537,7 @@ func _on_terminal_destroyed(terminal: BossTerminal) -> void:
 
 
 func _clear_terminals() -> void:
-	for terminal: BossTerminal in _terminals:
-		if is_instance_valid(terminal):
-			terminal.queue_free()
-	_terminals.clear()
+	clear_terminals(_terminals)
 	_terminals_remaining = 0
 
 

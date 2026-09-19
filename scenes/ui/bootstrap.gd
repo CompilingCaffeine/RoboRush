@@ -60,11 +60,6 @@ var navigation_enabled := true
 
 @onready var _status: Label = %Status
 
-## Set by the platform's own signal. A field rather than a local so that the wait below is a plain
-## loop over a fact, rather than a race between an `await` and a timer that may already have fired.
-var _backend_connected := false
-
-
 func _ready() -> void:
 	# The status line has to be on screen before anything is waited for, not after: the whole
 	# point of it is the seconds spent waiting.
@@ -131,11 +126,6 @@ static func build_id() -> String:
 ## running against a live Wavedash session — false means local-only, which is a normal outcome
 ## rather than a failure.
 func _connect_to_platform() -> bool:
-	# Connected before `init`, not after. The backend can answer immediately, and a listener
-	# attached afterwards would miss the one event it exists to hear.
-	if not WavedashSDK.backend_connected.is_connected(_on_backend_connected):
-		WavedashSDK.backend_connected.connect(_on_backend_connected)
-
 	if _sdk_init_calls == 0:
 		_sdk_init_calls += 1
 		# Called on every platform, though it only does anything in a browser: the SDK guards its
@@ -150,10 +140,10 @@ func _connect_to_platform() -> bool:
 		return false
 
 	var deadline := Time.get_ticks_msec() + int(CONNECT_TIMEOUT_SECONDS * 1000.0)
-	while not _backend_connected and Time.get_ticks_msec() < deadline:
+	while not WavedashConnection.is_connected and Time.get_ticks_msec() < deadline:
 		await get_tree().process_frame
 
-	if not _backend_connected:
+	if not WavedashConnection.is_connected:
 		# Not an error the player can act on, and not one worth a dialog (spec section 31.10).
 		_log("backend did not connect within %.0fs: local-only persistence" % CONNECT_TIMEOUT_SECONDS)
 		return false
@@ -161,18 +151,13 @@ func _connect_to_platform() -> bool:
 	# Connected, but a session is not an account. Wavedash cloud storage is per signed-in player,
 	# so a signed-out visitor gets the same local-only treatment as a broken network — the game
 	# works, and nothing of theirs is uploaded anywhere it could not be read back from.
-	var user_id := WavedashSDK.get_user_id()
+	var user_id := WavedashConnection.player_id()
 	if user_id.is_empty():
 		_log("connected but signed out: local-only persistence")
 		return false
 
 	_log("connected as %s" % user_id)
 	return true
-
-
-func _on_backend_connected(_payload: Variant) -> void:
-	_backend_connected = true
-
 
 ## The one thing in the whole sync path a player has to decide. Both copies changed since they
 ## last agreed, there is no way to tell which is derived from the other, and merging them would

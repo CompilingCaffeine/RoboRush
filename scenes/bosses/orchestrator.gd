@@ -1,5 +1,8 @@
 class_name Orchestrator
 extends Boss
+
+const PLAYER_RADIUS := Player.BODY_RADIUS
+
 ## Cloud Operations' boss: one instance that will not stay in one place, and is only vulnerable in
 ## the moment after it lands.
 ##
@@ -101,11 +104,6 @@ const PART_SCENE := preload("res://scenes/bosses/orchestrator_core.tscn")
 const ARENA_INSET := 26.0
 
 ## The player's chassis radius, for deciding whether they are standing on a plate. The same five
-## pixels `ThermalZone` uses, and — unlike `MigrationPad`, which deliberately does not add it — it
-## *is* added here. A pad is a route and should not move a robot that has not committed; a plate is
-## shelter, and shelter should be granted to a robot that is clearly on it.
-const PLAYER_RADIUS := 5.0
-
 ## The plate colours: a live plate, and a plate that has gone dark.
 ##
 ## The live one is the same spring green `MigrationPad` draws itself in, because it is the same idea
@@ -353,7 +351,7 @@ func get_plate_rect(index: int) -> Rect2:
 ## directly rather than infer from who took damage.
 func is_on_safe_ground(where: Vector2) -> bool:
 	for index: int in _live:
-		if get_plate_rect(index).grow(PLAYER_RADIUS).has_point(where):
+		if get_plate_rect(index).grow(Player.BODY_RADIUS).has_point(where):
 			return true
 	return false
 
@@ -569,7 +567,7 @@ func _refresh_live_plates() -> void:
 func _player_is_on(plate_index: int) -> bool:
 	if _player == null:
 		return false
-	return get_plate_rect(plate_index).grow(PLAYER_RADIUS).has_point(_player.global_position)
+	return get_plate_rect(plate_index).grow(Player.BODY_RADIUS).has_point(_player.global_position)
 
 
 # --- Attacks ------------------------------------------------------------------

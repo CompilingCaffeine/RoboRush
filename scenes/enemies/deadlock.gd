@@ -1,5 +1,8 @@
 class_name Deadlock
 extends Enemy
+
+const PLAYER_RADIUS := Player.BODY_RADIUS
+
 ## The one enemy on the floor that cannot be answered by aiming, and the only one whose
 ## answer is a *place* rather than a direction.
 ##
@@ -29,10 +32,6 @@ enum State {
 	## Line red, ticking down integrity.
 	DRAINING,
 }
-
-## The robot's collision radius, from player.tscn. Duplicated for the reason Firewall Node
-## and CompileLane both duplicate it — see `FirewallNode.PLAYER_RADIUS`.
-const PLAYER_RADIUS := 5.0
 
 ## Colour the body brightens toward while it holds a live tether, so the source of the line
 ## is never ambiguous in a room with two of them.

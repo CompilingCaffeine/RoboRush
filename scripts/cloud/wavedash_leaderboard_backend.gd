@@ -26,17 +26,8 @@ const Constants = preload("res://addons/wavedash/WavedashConstants.gd")
 const SORT_METHOD := Constants.LEADERBOARD_SORT_ASCENDING
 const DISPLAY_TYPE := Constants.LEADERBOARD_DISPLAY_TYPE_TIME_MILLISECONDS
 
-## Whether the platform has reported itself connected. The SDK announces transitions rather than
-## exposing an "am I connected" accessor, so this listens — the same arrangement
-## `WavedashCloudBackend` makes, and for the same reason: `Leaderboard` should not have to learn
-## the SDK's signal names on its behalf.
-var connected := false
-
-
 func _init() -> void:
-	WavedashSDK.backend_connected.connect(func(_payload: Variant) -> void: _set_connected(true))
-	WavedashSDK.backend_disconnected.connect(func(_payload: Variant) -> void: _set_connected(false))
-	WavedashSDK.backend_reconnecting.connect(func(_payload: Variant) -> void: _set_connected(false))
+	WavedashConnection.changed.connect(_on_connection_changed)
 
 
 ## Records the transition and announces it, in that order.
@@ -49,21 +40,16 @@ func _init() -> void:
 ## Guarded on the value actually changing: the SDK can report the same state twice, and a listener
 ## that re-syncs on every announcement would turn a flapping connection into a stream of round
 ## trips.
-func _set_connected(value: bool) -> void:
-	if connected == value:
-		return
-	connected = value
+func _on_connection_changed(_connected: bool) -> void:
 	availability_changed.emit()
 
 
 func is_available() -> bool:
-	# All three, in this order. Off the web there is no host page. Connected is not signed in, and
-	# a leaderboard entry belongs to an account: without an id there is no row to write.
-	return OS.has_feature("web") and connected and not player_id().is_empty()
+	return WavedashConnection.is_available()
 
 
 func player_id() -> String:
-	return WavedashSDK.get_user_id()
+	return WavedashConnection.player_id()
 
 
 func find_or_create(board_name: String) -> Dictionary:

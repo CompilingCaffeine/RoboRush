@@ -19,6 +19,7 @@ extends Control
 ## See `MainMenu.QUIT_LABEL`: removed by label in the browser build, where quitting strands the
 ## player on a dead canvas. ABANDON RUN is the way out of a run either way.
 const QUIT_LABEL := "QUIT"
+const MenuButtons = preload("res://scripts/utilities/menu_buttons.gd")
 
 ## Directly above ABANDON RUN, because the two of them are the same decision answered differently:
 ## both leave the run for the title screen, and the only thing that distinguishes them is whether
@@ -91,14 +92,13 @@ func _build_buttons() -> void:
 		entries = entries.filter(func(entry: Array) -> bool: return entry[0] != QUIT_LABEL)
 
 	for entry: Array in entries:
-		var button := Button.new()
-		button.text = FOCUS_PADDING + (entry[0] as String)
-		button.focus_mode = Control.FOCUS_ALL
-		button.pressed.connect(Callable(self, entry[1] as String))
-		button.focus_entered.connect(_on_button_focused.bind(button, entry[0] as String))
-		button.focus_exited.connect(_on_button_unfocused.bind(button, entry[0] as String))
-		button.mouse_entered.connect(button.grab_focus)
-		_buttons.add_child(button)
+		var button := MenuButtons.add(
+			_buttons,
+			FOCUS_PADDING + (entry[0] as String),
+			Callable(self, entry[1] as String),
+			_on_button_focused,
+			_on_button_unfocused,
+		)
 		if entry[0] == SAVE_LABEL:
 			_save_button = button
 
@@ -127,12 +127,12 @@ func _focus_first() -> void:
 
 
 func _on_button_focused(button: Button, label: String) -> void:
-	button.text = FOCUS_MARKER + _current_label(button, label)
+	button.text = FOCUS_MARKER + _current_label(button, label.trim_prefix(FOCUS_PADDING))
 	AudioManager.play_sfx(&"ui_move")
 
 
 func _on_button_unfocused(button: Button, label: String) -> void:
-	button.text = FOCUS_PADDING + _current_label(button, label)
+	button.text = FOCUS_PADDING + _current_label(button, label.trim_prefix(FOCUS_PADDING))
 
 
 ## What a button should say right now. Every entry but one says what it has always said; the save

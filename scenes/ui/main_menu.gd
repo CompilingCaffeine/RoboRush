@@ -23,6 +23,7 @@ const QUIT_LABEL := "QUIT"
 ## Removed by label on any build with no board to show, exactly as QUIT is — see
 ## `Leaderboard.is_offered`.
 const LEADERBOARD_LABEL := "LEADERBOARD"
+const MenuButtons = preload("res://scripts/utilities/menu_buttons.gd")
 
 const BUTTONS: Array = [
 	["START RUN", "_on_start_pressed"],
@@ -121,16 +122,13 @@ func _build_buttons() -> void:
 		])
 
 	for entry: Array in entries:
-		var button := Button.new()
-		button.text = FOCUS_PADDING + (entry[0] as String)
-		button.focus_mode = Control.FOCUS_ALL
-		button.pressed.connect(Callable(self, entry[1] as String))
-		button.focus_entered.connect(_on_button_focused.bind(button, entry[0] as String))
-		button.focus_exited.connect(_on_button_unfocused.bind(button, entry[0] as String))
-		# Hovering moves focus rather than merely highlighting, so the mouse and the gamepad
-		# can never disagree about which entry is selected.
-		button.mouse_entered.connect(button.grab_focus)
-		_buttons.add_child(button)
+		MenuButtons.add(
+			_buttons,
+			FOCUS_PADDING + (entry[0] as String),
+			Callable(self, entry[1] as String),
+			_on_button_focused,
+			_on_button_unfocused,
+		)
 
 
 func _focus_first() -> void:
@@ -139,12 +137,12 @@ func _focus_first() -> void:
 
 
 func _on_button_focused(button: Button, label: String) -> void:
-	button.text = FOCUS_MARKER + label
+	button.text = FOCUS_MARKER + label.trim_prefix(FOCUS_PADDING)
 	AudioManager.play_sfx(&"ui_move")
 
 
 func _on_button_unfocused(button: Button, label: String) -> void:
-	button.text = FOCUS_PADDING + label
+	button.text = label
 
 
 ## Two lines rather than a panel: a table of personal bests is what a player glances at on

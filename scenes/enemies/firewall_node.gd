@@ -1,5 +1,8 @@
 class_name FirewallNode
 extends Enemy
+
+const PLAYER_RADIUS := Player.BODY_RADIUS
+
 ## Spec section 15: "Remains stationary and projects rotating hazard beams."
 ##
 ## Its purpose is to control space, and it is the only enemy in the game that threatens
@@ -13,11 +16,6 @@ extends Enemy
 ##
 ## Beams stop at walls. A hazard that sweeps through solid geometry reads as a bug, and a
 ## node tucked behind a pillar should be a node that controls less space.
-
-## The robot's collision radius, from player.tscn. Duplicated here rather than read off the
-## player, because the alternative is reaching into another actor's collision shape every
-## frame to recover a number that has not changed since milestone 1.
-const PLAYER_RADIUS := 5.0
 
 var _tuning: FirewallNodeConfig
 var _beams: Array[Line2D] = []
@@ -104,7 +102,7 @@ func _damage_player_in_beams(ends: Array[Vector2]) -> void:
 		var closest := Geometry2D.get_closest_point_to_segment(
 			_player.global_position, global_position, end_point
 		)
-		if _player.global_position.distance_to(closest) > _tuning.beam_half_width + PLAYER_RADIUS:
+		if _player.global_position.distance_to(closest) > _tuning.beam_half_width + Player.BODY_RADIUS:
 			continue
 
 		var offset := _player.global_position - global_position

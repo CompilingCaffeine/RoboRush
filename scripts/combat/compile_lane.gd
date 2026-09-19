@@ -1,5 +1,8 @@
 class_name CompileLane
 extends Node2D
+
+const PLAYER_RADIUS := Player.BODY_RADIUS
+
 ## The shared telegraph-then-strike hazard behind Floor 2's "compile lane": a rectangle that
 ## fades in amber, waits long enough to read, then flashes red and checks for the player
 ## once. Deliberately built to take a plain `Rect2` rather than a row/column index, so the
@@ -31,12 +34,6 @@ enum State { TELEGRAPH, STRIKE }
 const AMBER := Color(0.95, 0.72, 0.24)
 const RED := Color(1.0, 0.42, 0.42)
 const STRIKE_ALPHA := 0.85
-
-## The player's collision radius, from player.tscn. Duplicated rather than read off the
-## player, same call Firewall Node already made for the identical reason (see its own
-## PLAYER_RADIUS) — grown onto the lane's rect so the player's body, not just its exact
-## centre point, decides whether they were caught.
-const PLAYER_RADIUS := 5.0
 
 var _size := Vector2.ZERO
 var _damage := 0.0
@@ -112,7 +109,7 @@ func _strike_player() -> void:
 	if player == null:
 		return
 
-	var local_rect := Rect2(Vector2.ZERO, _size).grow(PLAYER_RADIUS)
+	var local_rect := Rect2(Vector2.ZERO, _size).grow(Player.BODY_RADIUS)
 	if not local_rect.has_point(to_local(player.global_position)):
 		return
 

@@ -1,5 +1,8 @@
 class_name BossPart
 extends CharacterBody2D
+
+const PLAYER_RADIUS := Player.BODY_RADIUS
+
 ## One shootable body belonging to a boss.
 ##
 ## A boss with two versions of itself still has one health pool, so the two bodies cannot
@@ -36,11 +39,6 @@ signal took_damage(info: DamageInfo)
 ## Large enough that no single hit can empty it before it is refilled, so the part never
 ## reaches zero and never emits `died`.
 const RECEIVER_POOL := 100000.0
-
-## The player's collision radius, from player.tscn. Duplicated for the reason `CompileLane`,
-## `ThermalZone` and `CascadeFailure` all duplicate it: a body has to be able to ask who it is
-## touching without depending on how the player scene is assembled.
-const PLAYER_RADIUS := 5.0
 
 @export_group("Contact")
 
@@ -121,7 +119,7 @@ func _step_contact_damage(delta: float) -> void:
 	if player == null:
 		return
 	var offset := player.global_position - global_position
-	if offset.length() > contact_radius + PLAYER_RADIUS:
+	if offset.length() > contact_radius + Player.BODY_RADIUS:
 		return
 
 	var health := HealthComponent.find_on(player)

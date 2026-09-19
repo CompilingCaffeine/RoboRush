@@ -43,10 +43,8 @@ const SYNC_STATE_PATH := "user://cloud/sync_state.json"
 ## afternoon, and a player who picks wrong at four in the morning has something to be pointed at.
 const ARCHIVE_DIR := "user://cloud/archive"
 
-## The largest cloud file that will be looked at, matching `SaveManager.MAX_SAVE_BYTES`. A real
-## save is about four kilobytes. Anything near this ceiling is a file that has been appended to or
-## filled with junk, and refusing to parse it is cheaper than finding out what it parses into.
-const MAX_SAVE_BYTES := 256 * 1024
+## Compatibility alias for tests and tooling. The policy is owned by SaveManager.
+const MAX_SAVE_BYTES := SaveManager.MAX_SAVE_BYTES
 
 ## How long to wait before retrying a failed upload, in seconds, and how many attempts there are.
 ## Bounded on purpose: past the end of this list the save is simply pending, and the next commit
@@ -456,10 +454,10 @@ func _inspect_staged_file() -> Dictionary:
 
 	var size := file.get_length()
 	file.close()
-	if size > MAX_SAVE_BYTES:
+	if size > SaveManager.MAX_SAVE_BYTES:
 		# Checked before parsing, not after: the point is to not hand a parser a file of unknown
 		# provenance and unbounded size.
-		return _rejected("%d bytes, over the %d-byte ceiling" % [size, MAX_SAVE_BYTES])
+		return _rejected("%d bytes, over the %d-byte ceiling" % [size, SaveManager.MAX_SAVE_BYTES])
 
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(_remote_path))
 	if parsed is not Dictionary:

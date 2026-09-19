@@ -1,5 +1,8 @@
 class_name CascadeFailure
 extends Boss
+
+const PLAYER_RADIUS := Player.BODY_RADIUS
+
 ## The Data Center's boss: four server nodes wired into one rack, running too hot.
 ##
 ## The Scrap King asks the player to **notice**. Runtime Error asks them to **predict**. This one
@@ -160,11 +163,6 @@ const TINT_GAIN := 2.1
 ## stretch needs six, so this never binds on a fight anybody plays. It exists so that a config with
 ## a one-tile footprint and a wide ring cannot ask the arena for two hundred zones on one frame.
 const MAX_LINE_VENTS := 12
-
-## The player's collision radius, from player.tscn. Duplicated for the reason `CompileLane`,
-## `FirewallNode` and `ThermalZone` all duplicate it: a hazard has to be able to ask who it caught
-## without depending on how the player scene is assembled.
-const PLAYER_RADIUS := 5.0
 
 ## Where the breath starts: fully exhaled, so the fight opens with the rack at its widest and the
 ## first thing it does is close in. A ring that started contracted would put four nodes on top of
@@ -823,7 +821,7 @@ func _step_packets(delta: float) -> void:
 func _strike_player(packet: Vector2) -> void:
 	if _player == null or _packet_cooldown > 0.0:
 		return
-	if _player.global_position.distance_to(packet) > config.packet_radius + PLAYER_RADIUS:
+	if _player.global_position.distance_to(packet) > config.packet_radius + Player.BODY_RADIUS:
 		return
 
 	var health := HealthComponent.find_on(_player)

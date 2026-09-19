@@ -10,30 +10,12 @@ extends CloudBackend
 ## signal carrying the same dictionary; this uses the return value rather than the signal, because
 ## a signal is shared by every caller and a return value belongs to the call that made it.
 
-## Whether the platform has reported itself connected. The SDK has no "am I connected" accessor —
-## it announces transitions and expects listeners — so this object listens, rather than making the
-## coordinator learn the SDK's signal names on its behalf.
-var connected := false
-
-
-func _init() -> void:
-	WavedashSDK.backend_connected.connect(func(_payload: Variant) -> void: connected = true)
-	# Both of the SDK's unhappy transitions, because a session that has dropped is one whose
-	# uploads would fail slowly rather than fail fast, and the coordinator's answer to "no cloud
-	# right now" is already the correct one: keep saving locally and try again later.
-	WavedashSDK.backend_disconnected.connect(func(_payload: Variant) -> void: connected = false)
-	WavedashSDK.backend_reconnecting.connect(func(_payload: Variant) -> void: connected = false)
-
-
 func is_available() -> bool:
-	# All three, in this order, and all three matter. Off the web there is no host page. Connected
-	# is not the same as signed in, and Wavedash cloud storage is per-account: without an id there
-	# is nowhere for a file to go that it could be read back from.
-	return OS.has_feature("web") and connected and not player_id().is_empty()
+	return WavedashConnection.is_available()
 
 
 func player_id() -> String:
-	return WavedashSDK.get_user_id()
+	return WavedashConnection.player_id()
 
 
 func exists(path: String) -> Dictionary:

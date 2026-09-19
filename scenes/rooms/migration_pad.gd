@@ -153,7 +153,7 @@ func _physics_process(delta: float) -> void:
 		return
 
 	# The robot's *centre*, with no chassis radius added — unlike `ThermalZone`, which grows its
-	# rect by `PLAYER_RADIUS` before asking. The asymmetry is deliberate and runs the way it should:
+	# rect by `Player.BODY_RADIUS` before asking. The asymmetry is deliberate and runs the way it should:
 	# a hazard ought to catch a robot that is only partly inside one, and a route ought not to move
 	# a robot that has not driven onto it. Brushing the corner of a pad does nothing.
 	if not get_rect().has_point(player.global_position):

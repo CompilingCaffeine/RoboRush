@@ -23,6 +23,7 @@ buses/default_bus_layout="res://data/audio/default_bus_layout.tres"
 
 EventBus="*res://autoload/event_bus.gd"
 WavedashSDK="*uid://cpea88r4gd2a5"
+WavedashConnection="*res://scripts/cloud/wavedash_connection.gd"
 CloudSaveCoordinator="*res://autoload/cloud_save_coordinator.gd"
 Leaderboard="*res://autoload/leaderboard.gd"
 GameManager="*res://autoload/game_manager.gd"
