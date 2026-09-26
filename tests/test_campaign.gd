@@ -245,6 +245,16 @@ func _test_the_validator_catches_content_faults() -> void:
 			"a floor promising an item on a clear it never reaches",
 		)
 
+	var no_repairs := _write_floor("content_no_repairs", &"beta", 2, func(config: FloorConfig) -> void:
+		config.repair_every_clears = 0
+	)
+	if not no_repairs.is_empty():
+		_expect_error(
+			_campaign([[&"alpha", first], [&"beta", no_repairs]]),
+			"drops a repair cell every 0 clears",
+			"a floor whose repair cadence would divide by zero on its first clear",
+		)
+
 	var bad_track := _write_floor("content_track", &"beta", 2, func(config: FloorConfig) -> void:
 		var theme := config.theme.duplicate() as FloorTheme
 		theme.explore_music = &"__no_such_track"

@@ -1199,11 +1199,10 @@ func _test_repair_cells_drop_on_every_third_clear() -> void:
 		if _count_repair_cells() > before:
 			repairs_on.append(clear_index)
 
-	# Derived from the constant rather than typed as 3 and 6, so retuning the cadence moves the
+	# Derived from the floor's cadence rather than typed as 3 and 6, so retuning it moves the
 	# expectation with it instead of turning this into a failure to explain.
-	var expected: Array[int] = [
-		FloorController.REPAIR_EVERY_CLEARS, FloorController.REPAIR_EVERY_CLEARS * 2
-	]
+	var cadence := floor_node.config.repair_every_clears
+	var expected: Array[int] = [cadence, cadence * 2]
 	check(
 		repairs_on == expected,
 		"repair cells drop on clears %s, got %s" % [expected, repairs_on],

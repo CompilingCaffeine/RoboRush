@@ -176,6 +176,9 @@ static func _fingerprint_of(config: FloorConfig, floor_id: StringName, seed_valu
 
 	for clear_index: int in config.item_clear_indices:
 		value = RunRng.fold_int(value, clear_index)
+	# A repair cell scatters from the loot stream like the scrap beside it, so how often one drops
+	# changes where every later drop on the floor lands.
+	value = RunRng.fold_int(value, config.repair_every_clears)
 	for tag: StringName in config.floor_tags:
 		value = RunRng.fold_text(value, tag)
 

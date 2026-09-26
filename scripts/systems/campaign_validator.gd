@@ -275,6 +275,12 @@ static func _validate_floor_rewards(report: Report, where: String, config: Floor
 		if range_value.x < 0 or range_value.y < range_value.x:
 			report.error("%s has an inverted or negative %s (%s)." % [where, pair[0], range_value])
 
+	# Zero would be a modulo by zero on the first clear; below that is a typo for "never", which a
+	# floor should say by being given no repair cadence it can reach rather than a negative one.
+	if config.repair_every_clears < 1:
+		report.error("%s drops a repair cell every %d clears; it must be at least one."
+			% [where, config.repair_every_clears])
+
 	# Item drops are keyed to which combat clear it is, and a floor only has so many combat rooms
 	# — the rest of its room count is the start room and the three special rooms. An index past
 	# that is an item the floor promises and never hands over.
