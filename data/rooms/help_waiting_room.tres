@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="1_template"]
+
+[resource]
+script = ExtResource("1_template")
+id = &"help_waiting_room"
+type = 1
+obstacles = Array[Rect2i]([Rect2i(3, 3, 5, 1), Rect2i(10, 3, 6, 1), Rect2i(18, 3, 5, 1), Rect2i(3, 8, 5, 1), Rect2i(10, 8, 6, 1), Rect2i(18, 8, 5, 1)])
+enemy_spawns = Array[Vector2i]([Vector2i(5, 1), Vector2i(20, 1), Vector2i(5, 10), Vector2i(20, 10)])
+reward_spawn = Vector2i(13, 6)
+difficulty = 2
+floor_tags = Array[StringName]([&"help_desk"])
+min_floor = 1
+max_floor = 2
+metadata/design_notes = "A waiting room: two rows of benches with the enemies sitting behind them. The benches stop shots as well as bodies, so the player fights through the gaps between them. The open band down the middle, between the two rows, is where a side door delivers them."

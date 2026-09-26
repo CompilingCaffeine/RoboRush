@@ -2,9 +2,8 @@ class_name StatusEffectController
 extends Node2D
 ## Timed conditions on one actor: chilled, frozen, burning.
 ##
-## Spec section 14 has listed this since milestone 4 and `ProjectileConfig.status_effects`
-## has been declared and unread for just as long, because nothing needed it. Cold Cache and
-## Hot Reload are the first two callers, which is when it earns its place.
+## Spec section 14's statuses, applied from `ProjectileConfig.status_effects`. Cold Cache and
+## Hot Reload are the items that put them on a shot.
 ##
 ## Two rules from the Development plan shape everything here.
 ##

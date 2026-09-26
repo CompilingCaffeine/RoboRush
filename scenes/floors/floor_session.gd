@@ -108,7 +108,6 @@ func close() -> void:
 
 
 ## How many spawns are queued and not yet landed. For tests and diagnostics: the interesting
-## number is that it is zero after a boundary, which is the state the old code could not reach
-## because it had nowhere to count.
+## number is that it is zero after a boundary.
 func pending_count() -> int:
 	return _pending.size()

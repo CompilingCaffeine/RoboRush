@@ -11,9 +11,8 @@
 ## explanatory comments in project.godot survive regeneration.
 extends SceneTree
 
-## Stick and trigger deadzones. Keyboard/mouse events ignore these.
+## Stick deadzone. Keyboard and mouse events ignore it.
 const STICK_DEADZONE := 0.2
-const TRIGGER_DEADZONE := 0.5
 
 ## Binds a joypad event to every controller rather than to one. `InputMap` matches an action's
 ## event to an incoming one only when the devices agree *or* the binding says -1, and a freshly
@@ -54,9 +53,11 @@ func _initialize() -> void:
 		# No fire button. Spec section 5 maps the right trigger to fire, but once
 		# shooting is directional the direction *is* the trigger, and a separate button
 		# would only be able to fire where the player is already firing.
-		"use_active_item": _action(
-			[_mouse(MOUSE_BUTTON_RIGHT), _axis(JOY_AXIS_TRIGGER_LEFT, 1.0)], TRIGGER_DEADZONE
-		),
+		#
+		# The mouse is the one exception, because a pointer is a direction with no way to
+		# say "now": the left button fires towards it. Only while the mouse aim setting is
+		# on — see `PlayerInput.mouse_aim`.
+		"shoot_pointer": _action([_mouse(MOUSE_BUTTON_LEFT)], STICK_DEADZONE),
 
 		# --- Verbs ---
 		"dash": _action([_key(KEY_SPACE), _button(JOY_BUTTON_A)], STICK_DEADZONE),

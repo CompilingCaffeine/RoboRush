@@ -532,6 +532,18 @@ func _test_the_manifest_names_every_floor_and_the_content_it_will_build() -> voi
 			"and an edited floor fingerprints differently on the same seed",
 		)
 
+		# A drop table decides which item a seed's drops land on, so re-weighting one is a content
+		# change even though no list on the floor moved.
+		var reweighted := config.duplicate() as FloorConfig
+		var table := config.clear_drops.duplicate() as DropTable
+		table.rarity_weights = [1, 1, 1, 1, 1] as Array[int]
+		reweighted.clear_drops = table
+		check(
+			RunManifest.row_for(reweighted, 0, config.id, seed_value)["fingerprint"]
+				!= rows[0]["fingerprint"],
+			"and so does a floor whose combat-clear drop table is re-weighted",
+		)
+
 	# A campaign asked about a floor it does not have describes it rather than refusing, because the
 	# manifest is most wanted exactly when the campaign is broken.
 	var missing := RunManifest.floor_row(campaign, 4242, campaign.size())

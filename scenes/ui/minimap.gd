@@ -19,6 +19,15 @@ const UNKNOWN_COLOR := Color("222a36")
 const LINK_COLOR := Color("2f3947")
 const TREASURE_COLOR := Color("f2a13c")
 const START_COLOR := Color("6d7a8c")
+## The item blue from the sprite palette. Not amber, which is the treasure room's, and not the
+## accent, which is the outline around the room the player is in.
+const SHOP_COLOR := Color("4c8cf0")
+const BOSS_COLOR := UIPalette.DANGER
+
+## A dark notch in the middle of the boss room's cell. Red and amber are the pair colour-blind
+## players confuse most, and the boss room and the treasure room are the two a player is looking
+## for, so the boss room says what it is by shape as well as by colour.
+const BOSS_MARK := Vector2(3.0, 2.0)
 
 ## Inset from the top-right corner of the screen.
 const MARGIN := 5.0
@@ -139,6 +148,8 @@ func _draw() -> void:
 			continue
 		var rect := Rect2(_top_left_of(room.cell - origin), CELL)
 		draw_rect(rect, _colour_for(room))
+		if room.type == RoomTemplate.Type.BOSS and _shows_type(room):
+			draw_rect(Rect2(rect.get_center() - BOSS_MARK * 0.5, BOSS_MARK), UIPalette.VOID)
 		if room.id == _floor.current_room_id:
 			# Outline rather than fill, so the current room reads even against its own colour.
 			draw_rect(rect.grow(1.0), CURRENT_COLOR, false, 1.0)
@@ -155,16 +166,28 @@ func _is_known(room: RoomPlan) -> bool:
 	return false
 
 
-## Unvisited rooms deliberately share one neutral colour: the shape of the floor is
-## information the player has earned, the contents are not.
+## Whether the map says what a room is: once the player has been inside it. Unvisited rooms
+## deliberately share one neutral colour: the shape of the floor is information the player has
+## earned, the contents are not.
+func _shows_type(room: RoomPlan) -> bool:
+	return reveal_all or _floor.visited.has(room.id)
+
+
+## The shop and the boss are coloured as well as the treasure room, because they are the rooms a
+## player walks back to: the shop once they have more scrap, and the boss arena once they have spent
+## it, to take the prize that carries them down.
 func _colour_for(room: RoomPlan) -> Color:
-	if not (_floor.visited.has(room.id) or reveal_all):
+	if not _shows_type(room):
 		return UNKNOWN_COLOR
 	match room.type:
 		RoomTemplate.Type.START:
 			return START_COLOR
 		RoomTemplate.Type.TREASURE:
 			return TREASURE_COLOR
+		RoomTemplate.Type.SHOP:
+			return SHOP_COLOR
+		RoomTemplate.Type.BOSS:
+			return BOSS_COLOR
 		_:
 			return VISITED_COLOR
 

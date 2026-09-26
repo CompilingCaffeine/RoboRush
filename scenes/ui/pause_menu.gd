@@ -2,10 +2,9 @@ class_name PauseMenu
 extends Control
 ## What Escape does mid-run. Spec section 23's Paused state, given something to show.
 ##
-## Pausing used to put the statistics screen up with the line "ESC RESUME    R ABANDON RUN",
-## which is a game explaining itself in keypresses — the thing milestone 6 exists to stop.
-## The statistics are still a key away during play (hold Tab); pausing is now for the four
-## things a player pauses to do.
+## Pausing is for the four things a player pauses to do, as buttons rather than a line of
+## keypresses: a game explaining itself in keypresses is what a new player cannot read. The
+## statistics are a key away during play (hold Tab).
 ##
 ## Driven entirely by `GameManager.state`, so there is exactly one place that decides whether
 ## the game is paused and this is not it. Pressing Escape here does not resume: it falls

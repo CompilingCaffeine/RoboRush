@@ -2,9 +2,9 @@
 
 Robo Rush is a 2D top-down roguelite shooter built with Godot 4 and GDScript. Play an obsolete maintenance robot fighting through a corrupted software megacorporation, collecting upgrades that combine into new projectile behaviours.
 
-The complete campaign has six procedural floors. Each floor has a start room, combat rooms, a treasure vault, a shop, and a boss arena. The game supports keyboard and gamepad controls, persistent settings and records, deterministic seeded runs, desktop exports, and a browser build with Wavedash leaderboard support.
+The complete campaign has six procedural floors. Each floor has a start room, combat rooms, a treasure vault, a shop, and a boss arena. The game supports keyboard, mouse, and gamepad controls, persistent settings and records, deterministic seeded runs, desktop exports, and a browser build with Wavedash leaderboard support.
 
-For the original design requirements, see [robo_rush_build_spec.md](robo_rush_build_spec.md). The detailed six-floor plan is in [SIX_FLOOR_SCALING_GAMEPLAN.md](SIX_FLOOR_SCALING_GAMEPLAN.md). Proposed fixes, feature upgrades, and new content are in [ROADMAP.md](ROADMAP.md).
+For the original design requirements, see [robo_rush_build_spec.md](robo_rush_build_spec.md). The detailed six-floor plan is in [SIX_FLOOR_SCALING_GAMEPLAN.md](SIX_FLOOR_SCALING_GAMEPLAN.md). Proposed fixes, feature upgrades, and new content are in [ROADMAP.md](ROADMAP.md). What changed in each build, for playtesters, is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Run
 
@@ -41,15 +41,15 @@ godot --headless --import
 | --- | --- | --- |
 | Move | `WASD` | Left stick |
 | Aim and fire | Arrow keys | Right stick |
+| Fire at the pointer | Hold left mouse | — |
 | Dash | `Space` | A / cross |
 | Buy / take reward | `E` | X / square |
 | View run statistics | Hold `Tab` | Hold L1 / LB |
 | Pause | `Escape` | Start |
 | Restart | `R` | Y / triangle |
-| Active item | Right mouse | Left trigger |
 | Toggle debug overlay | `F1` | — |
 
-Holding an arrow key aims and fires in that direction. Movement and firing are independent, so you can move and shoot in different directions. The game shows its controls on first launch and from the title and pause menus.
+Holding an arrow key aims and fires in that direction. Movement and firing are independent, so you can move and shoot in different directions. With **Mouse aim** on (the default; see Settings), the robot also aims at the mouse pointer when it moves, and holding the left button fires towards it. Whichever you used last, the arrows, the stick or the mouse, sets the aim. The game shows its controls on first launch and from the title and pause menus.
 
 ## Test
 

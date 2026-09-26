@@ -51,6 +51,7 @@ func _test_defaults_are_sane() -> void:
 	check(not settings.crt_enabled, "the CRT filter defaults off (spec section 21: optional)")
 	check(not settings.fullscreen, "the game defaults to windowed")
 	check_near(settings.screen_shake, 1.0, "screen shake defaults to the authored intensity")
+	check(settings.mouse_aim, "mouse aim defaults on (roadmap FIX-7: the browser build expects it)")
 	check(
 		settings.master_volume > 0.0 and settings.master_volume <= 1.0,
 		"master volume defaults to something audible",
@@ -67,6 +68,7 @@ func _test_settings_round_trip() -> void:
 	written.flash_intensity = 1.75
 	written.crt_enabled = true
 	written.damage_numbers = false
+	written.mouse_aim = false
 
 	var read := GameSettings.from_dict(written.to_dict())
 
@@ -78,6 +80,11 @@ func _test_settings_round_trip() -> void:
 	check_near(read.flash_intensity, 1.75, "flash intensity survives a round trip")
 	check(read.crt_enabled, "the CRT toggle survives a round trip")
 	check(not read.damage_numbers, "damage numbers off survives a round trip")
+	check(not read.mouse_aim, "mouse aim off survives a round trip")
+	check(
+		GameSettings.from_dict({}).mouse_aim,
+		"a save from before mouse aim existed gets the default rather than losing the setting",
+	)
 
 
 ## Spec section 24: "handle missing or outdated fields gracefully". Every one of these is a

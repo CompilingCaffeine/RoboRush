@@ -222,7 +222,7 @@ func _assign_kind(stand: ShopStand, index: int, restored: Array[ItemConfig]) -> 
 
 
 func _restock(stand: ShopStand) -> void:
-	var drawn := RunManager.draw_item(_pool, _rng)
+	var drawn := RunManager.draw_item(_pool, _rng, config.drops)
 	stand.stock_item(drawn, config.price_for(drawn))
 
 

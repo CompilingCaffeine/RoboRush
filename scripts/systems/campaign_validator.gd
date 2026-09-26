@@ -275,6 +275,14 @@ static func _validate_floor_rewards(report: Report, where: String, config: Floor
 		if range_value.x < 0 or range_value.y < range_value.x:
 			report.error("%s has an inverted or negative %s (%s)." % [where, pair[0], range_value])
 
+	# A missing table would quietly fall back to a uniform draw, which is exactly the bug the tables
+	# exist to fix (roadmap FIX-3), so each kind of offer the floor makes must name one.
+	_validate_drop_table(report, where, "combat-clear", config.clear_drops)
+	if config.treasure_grants_item:
+		_validate_drop_table(report, where, "treasure", config.treasure_drops)
+	if config.shop != null:
+		_validate_drop_table(report, where, "shop", config.shop.drops)
+
 	# Zero would be a modulo by zero on the first clear; below that is a typo for "never", which a
 	# floor should say by being given no repair cadence it can reach rather than a negative one.
 	if config.repair_every_clears < 1:
@@ -297,6 +305,28 @@ static func _validate_floor_rewards(report: Report, where: String, config: Floor
 			report.error("%s lists clear %d twice; the second one never drops."
 				% [where, clear_index])
 		seen[clear_index] = true
+
+
+## One `DropTable`: present, one weight per rarity, none negative, and not all zero. A short table
+## reads its missing tiers as zero, which is a tier silently withheld; a long one is a weight for a
+## rarity that does not exist yet, most likely a stale copy from before one was removed.
+static func _validate_drop_table(
+	report: Report, where: String, offer: String, table: DropTable
+) -> void:
+	if table == null:
+		report.error("%s has no %s drop table." % [where, offer])
+		return
+	var tiers := ItemConfig.Rarity.size()
+	if table.rarity_weights.size() != tiers:
+		report.error("%s's %s drop table has %d rarity weights; it needs one per rarity (%d)."
+			% [where, offer, table.rarity_weights.size(), tiers])
+	var total := 0
+	for weight: int in table.rarity_weights:
+		if weight < 0:
+			report.error("%s's %s drop table has a negative weight (%d)." % [where, offer, weight])
+		total += maxi(weight, 0)
+	if total == 0:
+		report.error("%s's %s drop table weighs every rarity at zero." % [where, offer])
 
 
 static func _validate_floor_presentation(report: Report, where: String, config: FloorConfig) -> void:

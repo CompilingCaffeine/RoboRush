@@ -25,9 +25,43 @@ func run() -> void:
 	await _test_a_click_through_the_controls_card_cannot_reach_the_menu()
 	await _test_the_controls_card_still_dismisses_on_a_click()
 	await _test_hovering_through_a_panel_cannot_steal_focus()
+	await _test_the_controls_card_follows_the_mouse_aim_setting()
 
 
 # --- Checks -------------------------------------------------------------------
+
+
+## The card is the copy of the controls the player sees, so it has to describe the controls they
+## have. Toggled between two openings of the same card, as a player would from the pause menu:
+## a card built once at start-up would keep describing the setting the game booted with.
+func _test_the_controls_card_follows_the_mouse_aim_setting() -> void:
+	var saved := SaveManager.settings.mouse_aim
+	await _open_pause_menu()
+	var card: ControlsCard = _pause.get_node("ControlsCard")
+
+	for mouse_aim: bool in [false, true, false]:
+		SaveManager.settings.mouse_aim = mouse_aim
+		card.open()
+		await advance_physics(1)
+		var texts: Array[String] = []
+		for label: Node in card.get_node("%Grid").get_children():
+			if not label.is_queued_for_deletion():
+				texts.append((label as Label).text)
+		var explanation: String = (card.get_node("%Explanation") as Label).text
+		check(
+			texts.has(ControlsCard.MOUSE_ROW[0]) == mouse_aim,
+			"with mouse aim %s the card %s the mouse row"
+			% ["on" if mouse_aim else "off", "shows" if mouse_aim else "leaves out"],
+		)
+		check(
+			explanation.contains("NO FIRE BUTTON") != mouse_aim,
+			"and says there is no fire button only when the mouse has none",
+		)
+		card.close()
+		await advance_physics(1)
+
+	SaveManager.settings.mouse_aim = saved
+	await _teardown()
 
 
 ## Neither menu may offer a button `SceneRouter` would refuse to honour.

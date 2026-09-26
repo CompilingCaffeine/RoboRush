@@ -7,9 +7,8 @@ extends Control
 ## "game over screen" and "statistics screen" would be two things to keep in step showing the
 ## same numbers.
 ##
-## It no longer answers for the paused state — `PauseMenu` does, and does it with buttons
-## rather than the line of keypresses this screen used to print. What is left here is the two
-## endings and the mid-run peek.
+## It does not answer for the paused state; `PauseMenu` does. What it shows is the two endings
+## and the mid-run peek.
 ##
 ## One line differs by more than its wording: the global rank under the statistics, which only a
 ## victory has and only a browser build can show. See `_refresh_rank` — it is also the only thing

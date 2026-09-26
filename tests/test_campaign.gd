@@ -255,6 +255,35 @@ func _test_the_validator_catches_content_faults() -> void:
 			"a floor whose repair cadence would divide by zero on its first clear",
 		)
 
+	# Roadmap FIX-3: a missing table would fall back to the uniform draw the tables replaced, and a
+	# short one would withhold a rarity without saying so.
+	for fault: Array in [
+		["content_no_clear_table", "has no combat-clear drop table",
+			func(config: FloorConfig) -> void: config.clear_drops = null],
+		["content_short_table", "it needs one per rarity",
+			func(config: FloorConfig) -> void:
+				var table := DropTable.new()
+				table.rarity_weights = [50, 50] as Array[int]
+				config.treasure_drops = table],
+		["content_negative_table", "has a negative weight",
+			func(config: FloorConfig) -> void:
+				var table := DropTable.new()
+				table.rarity_weights = [50, 50, 10, -1, 0] as Array[int]
+				config.clear_drops = table],
+		["content_zero_table", "weighs every rarity at zero",
+			func(config: FloorConfig) -> void:
+				var table := DropTable.new()
+				table.rarity_weights = [0, 0, 0, 0, 0] as Array[int]
+				config.treasure_drops = table],
+	]:
+		var broken := _write_floor(fault[0], &"beta", 2, fault[2])
+		if not broken.is_empty():
+			_expect_error(
+				_campaign([[&"alpha", first], [&"beta", broken]]),
+				fault[1],
+				"a floor whose drop table %s" % fault[1],
+			)
+
 	var bad_track := _write_floor("content_track", &"beta", 2, func(config: FloorConfig) -> void:
 		var theme := config.theme.duplicate() as FloorTheme
 		theme.explore_music = &"__no_such_track"

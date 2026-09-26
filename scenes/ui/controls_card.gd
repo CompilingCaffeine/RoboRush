@@ -2,10 +2,12 @@ class_name ControlsCard
 extends Control
 ## What the buttons do. Spec section 31.11: "controls are explained in game".
 ##
-## The single most load-bearing screen for milestone 6's success condition — a new player
-## understanding the game without a developer next to them — because Robo Rush does not fire
-## where the mouse is. Holding an arrow key aims *and* fires, and nothing on screen would ever
-## teach that. Everything else here is a courtesy; that one line is the reason the card exists.
+## The single most load-bearing screen for the game's first-play goal — a new player
+## understanding the game without a developer next to them — because holding an arrow key aims
+## *and* fires, and nothing on screen would ever teach that. Everything else here is a courtesy;
+## that one line is the reason the card exists. With mouse aim on (`GameSettings.mouse_aim`) the
+## card adds the mouse, and is rebuilt each time it opens, because the setting can change between
+## one opening and the next.
 ##
 ## Shown automatically the first time the game is launched, and from a menu after that. The
 ## "first time" is `SaveManager.tutorial_completed`, which is what spec section 24 means by
@@ -17,10 +19,14 @@ extends Control
 
 signal closed
 
+## Shown only with mouse aim on. The gamepad has nothing to say here.
+const MOUSE_ROW: Array = ["FIRE AT POINTER", "LEFT MOUSE (HOLD)", "--"]
+
 ## Label, keyboard binding, gamepad binding. Ordered by what a player needs first.
 const ROWS: Array = [
 	["MOVE", "WASD", "LEFT STICK"],
 	["AIM AND FIRE", "ARROW KEYS", "RIGHT STICK"],
+	MOUSE_ROW,
 	["DASH", "SPACE", "A"],
 	["BUY / TAKE", "E", "X"],
 	["DIAGNOSTICS", "TAB (HOLD)", "L1 (HOLD)"],
@@ -29,11 +35,16 @@ const ROWS: Array = [
 ]
 
 ## The one thing a player cannot work out by pressing keys, because the game never stops them
-## to say it. Kept to two lines: a wall of text on the first screen is a wall of text nobody
+## to say it. Kept to three lines: a wall of text on the first screen is a wall of text nobody
 ## reads.
 const EXPLANATION := """THERE IS NO FIRE BUTTON. HOLD AN ARROW TO
 AIM AND FIRE. MOVING AND SHOOTING ARE
 INDEPENDENT -- RUN ONE WAY, FIRE THE OTHER."""
+
+## The same, with mouse aim on, where "no fire button" is no longer true of the mouse.
+const EXPLANATION_WITH_MOUSE := """HOLD AN ARROW TO AIM AND FIRE -- OR AIM
+WITH THE MOUSE AND HOLD THE LEFT BUTTON.
+RUN ONE WAY, FIRE THE OTHER."""
 
 @onready var _grid: GridContainer = %Grid
 @onready var _explanation: Label = %Explanation
@@ -45,7 +56,6 @@ func _ready() -> void:
 	visible = false
 
 	UIPalette.style(_explanation, UIPalette.WARN)
-	_explanation.text = EXPLANATION
 	UIPalette.style(_hint, UIPalette.TEXT_FAINT)
 	_hint.text = "PRESS ANY BUTTON TO CONTINUE"
 
@@ -66,6 +76,7 @@ func open() -> void:
 	# size it claims to be from the first frame, and a headless run has no canvas to wait for. It
 	# took a screenshot of the real export in a real browser.
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_build_grid()
 	visible = true
 	# See SettingsMenu.open: a focused button behind a modal panel still answers the d-pad.
 	get_viewport().gui_release_focus()
@@ -109,12 +120,24 @@ func _gui_input(event: InputEvent) -> void:
 		accept_event()
 
 
+## The rows the card shows under the current settings.
+static func rows_for(mouse_aim: bool) -> Array:
+	return ROWS.filter(func(row: Array) -> bool: return mouse_aim or row != MOUSE_ROW)
+
+
+## Built on `_ready` and again on every `open`, from the settings as they are now.
 func _build_grid() -> void:
+	var mouse_aim := SaveManager.settings.mouse_aim
+	_explanation.text = EXPLANATION_WITH_MOUSE if mouse_aim else EXPLANATION
+	for child: Node in _grid.get_children():
+		_grid.remove_child(child)
+		child.queue_free()
+
 	_grid.add_child(UIPalette.make_label("ACTION", UIPalette.TEXT_FAINT))
 	_grid.add_child(UIPalette.make_label("KEYBOARD", UIPalette.TEXT_FAINT))
 	_grid.add_child(UIPalette.make_label("GAMEPAD", UIPalette.TEXT_FAINT))
 
-	for row: Array in ROWS:
+	for row: Array in rows_for(mouse_aim):
 		_grid.add_child(UIPalette.make_label(row[0], UIPalette.TEXT_DIM))
 		_grid.add_child(UIPalette.make_label(row[1], UIPalette.TEXT))
 		_grid.add_child(UIPalette.make_label(row[2], UIPalette.TEXT))

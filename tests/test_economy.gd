@@ -67,6 +67,7 @@ const MAX_ENEMY_HEALTH_SCALE := 2.5
 var _campaign: RunDefinition
 var _config: FloorConfig
 var _pool: Array[ItemConfig] = []
+var _campaign_floors: Array[FloorConfig] = []
 
 
 func run() -> void:
@@ -85,6 +86,11 @@ func run() -> void:
 	await _test_a_shot_leaves_where_off_by_one_points_it()
 	_test_no_offer_comes_up_empty_across_ten_thousand_campaigns()
 	_test_the_same_seed_draws_the_same_campaign()
+	_test_drop_tables_offer_each_rarity_at_its_weight()
+	_test_an_empty_tier_is_skipped_and_the_rest_keep_their_proportions()
+	_test_a_drop_table_never_empties_an_offer()
+	_test_a_pick_spends_the_stream_the_same_way_whatever_is_left()
+	_test_the_first_floor_offers_rare_items_rarely()
 	await _test_every_boss_reward_is_three_choices_with_something_worth_taking()
 	await _test_a_beneficial_choice_is_reserved_when_hindrances_dominate()
 	await _test_boss_rewards_differ_between_runs()
@@ -243,9 +249,17 @@ func _test_a_shot_leaves_where_off_by_one_points_it() -> void:
 
 ## The headline acceptance criterion: ten thousand complete campaigns, and not one offer that comes
 ## up empty.
+##
+## Each floor's offers are drawn the way the floor makes them, each from its own drop table: the
+## shop's stands when the floor is built, then the combat clears and the treasure room, then the
+## boss's three. A table can only reorder which items a run meets when (see `DropTable.pick`), so
+## the guarantee has to hold with them exactly as it did for a uniform draw.
 func _test_no_offer_comes_up_empty_across_ten_thousand_campaigns() -> void:
-	var per_floor := CampaignValidator.offers_required(_config)
-	var offers := per_floor * _campaign.target_floor_count
+	var offers := 0
+	for config: FloorConfig in _floors():
+		offers += CampaignValidator.offers_required(config)
+	# The finale's boss leaves a trophy rather than three items; see `_draw_offers`.
+	offers -= BossRewardDraw.COUNT
 
 	var restore := RunManager.offered_item_ids.duplicate()
 	var rng := RandomNumberGenerator.new()
@@ -256,8 +270,7 @@ func _test_no_offer_comes_up_empty_across_ten_thousand_campaigns() -> void:
 	for run_index: int in SIMULATIONS:
 		RunManager.offered_item_ids.clear()
 		rng.seed = run_index
-		for _offer: int in offers:
-			var item := RunManager.draw_item(_pool, rng)
+		for item: ItemConfig in _draw_offers(rng):
 			if item == null:
 				empty += 1
 				if worst_run < 0:
@@ -614,10 +627,215 @@ func _draw_campaign(seed_value: int) -> PackedStringArray:
 	rng.seed = seed_value
 	RunManager.offered_item_ids.clear()
 	var drawn: PackedStringArray = []
-	for _offer: int in CampaignValidator.offers_required(_config) * _campaign.target_floor_count:
-		var item := RunManager.draw_item(_pool, rng)
+	for item: ItemConfig in _draw_offers(rng):
 		drawn.append(str(item.id) if item != null else "<empty>")
 	return drawn
+
+
+## Every offer a whole campaign makes, floor by floor, in the order a floor makes them and from the
+## table each kind of offer uses: the shop's stands (stocked when the floor is built), the combat
+## clears that drop an item, the treasure room, and the boss's three. One stream for all of them,
+## which the game does not do — the point here is the pool and the tables, not the streams. Null
+## entries are offers that came up empty.
+##
+## The last floor's boss offers nothing: it leaves the trophy that ends the run (`BossArena`).
+## Drawing three items for it anyway, as `CampaignValidator.offers_required` conservatively counts,
+## would have the boss's reserved beneficial slot reach for a chip on runs whose last few unique
+## items are hindrances — a reward no player is ever offered.
+func _draw_offers(rng: RandomNumberGenerator) -> Array[ItemConfig]:
+	var drawn: Array[ItemConfig] = []
+	var floors := _floors()
+	for index: int in floors.size():
+		var config := floors[index]
+		var pool := config.get_items()
+		if config.shop != null:
+			for _stand: int in config.shop.item_stand_count:
+				drawn.append(RunManager.draw_item(pool, rng, config.shop.drops))
+		for _clear: int in config.item_clear_indices.size():
+			drawn.append(RunManager.draw_item(pool, rng, config.clear_drops))
+		if config.treasure_grants_item:
+			drawn.append(RunManager.draw_item(pool, rng, config.treasure_drops))
+		if index == floors.size() - 1:
+			continue
+		var reward := BossRewardDraw.draw(pool, RunManager.offered_item_ids, rng)
+		for item: ItemConfig in reward:
+			if not item.is_repeatable():
+				RunManager.offered_item_ids.append(item.id)
+		drawn.append_array(reward)
+		for _missing: int in BossRewardDraw.COUNT - reward.size():
+			drawn.append(null)
+	return drawn
+
+
+## The campaign's floors, loaded once.
+func _floors() -> Array[FloorConfig]:
+	if _campaign_floors.is_empty():
+		for index: int in _campaign.size():
+			_campaign_floors.append(_campaign.load_floor(index))
+	return _campaign_floors
+
+
+# --- Drop tables (roadmap FIX-3) ------------------------------------------------
+
+
+## Each shipped table, over the pool's unique items with nothing spent: every tier has candidates,
+## so what comes out should be the table's own proportions. Drawn with replacement — the same list
+## every time — because the question is what the table does, not what a run's spending does to it.
+func _test_drop_tables_offer_each_rarity_at_its_weight() -> void:
+	var uniques := _uniques()
+	for pair: Array in _shipped_tables():
+		var table: DropTable = pair[1]
+		var counts := _tier_counts(table, uniques, SIMULATIONS, 1)
+		var total := 0
+		for weight: int in table.rarity_weights:
+			total += weight
+		for rarity: int in ItemConfig.Rarity.size():
+			var expected := float(table.weight_of(rarity as ItemConfig.Rarity)) / total
+			var observed := float(counts[rarity]) / SIMULATIONS
+			check(
+				absf(observed - expected) <= 0.02,
+				"the %s table offers %s %.1f%% of the time (weight %.1f%%)"
+				% [pair[0], ItemConfig.Rarity.keys()[rarity], observed * 100.0, expected * 100.0],
+			)
+
+
+## Late in a run a tier runs out. The draw has to skip it rather than hand its share to whichever
+## tier happens to sit next to it, or the table would quietly mean something else by floor five.
+func _test_an_empty_tier_is_skipped_and_the_rest_keep_their_proportions() -> void:
+	var no_rares: Array[ItemConfig] = []
+	for item: ItemConfig in _uniques():
+		if item.rarity != ItemConfig.Rarity.RARE:
+			no_rares.append(item)
+	var table: DropTable = _floors()[0].clear_drops
+	var counts := _tier_counts(table, no_rares, SIMULATIONS, 2)
+	check(counts[ItemConfig.Rarity.RARE] == 0, "a tier with nothing left is never drawn")
+
+	var remaining := 0
+	for rarity: int in ItemConfig.Rarity.size():
+		if rarity != ItemConfig.Rarity.RARE:
+			remaining += table.weight_of(rarity as ItemConfig.Rarity)
+	var expected := float(table.weight_of(ItemConfig.Rarity.COMMON)) / remaining
+	var observed := float(counts[ItemConfig.Rarity.COMMON]) / SIMULATIONS
+	check(
+		absf(observed - expected) <= 0.02,
+		"and the others keep their proportions (common %.1f%%, expected %.1f%%)"
+		% [observed * 100.0, expected * 100.0],
+	)
+
+
+## The pool can be down to a tier the table weighs at zero. The table decides how often, never
+## whether: an offer must not come up empty while the run still has items it could make.
+func _test_a_drop_table_never_empties_an_offer() -> void:
+	var only_corrupted := DropTable.new()
+	only_corrupted.rarity_weights = [0, 0, 0, 0, 1] as Array[int]
+	var commons: Array[ItemConfig] = []
+	for item: ItemConfig in _uniques():
+		if item.rarity == ItemConfig.Rarity.COMMON:
+			commons.append(item)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 3
+	var picked := only_corrupted.pick(commons, rng)
+	check(
+		picked != null and picked.rarity == ItemConfig.Rarity.COMMON,
+		"a table weighing every remaining tier at zero still offers one of them",
+	)
+	check(only_corrupted.pick([] as Array[ItemConfig], rng) == null, "and an empty list gives nothing")
+
+
+## `DropTable.pick` promises to take exactly two numbers from its stream however many tiers are
+## left, so what a floor draws after an offer does not depend on what the run has already spent.
+func _test_a_pick_spends_the_stream_the_same_way_whatever_is_left() -> void:
+	var table: DropTable = _floors()[0].clear_drops
+	var commons: Array[ItemConfig] = []
+	for item: ItemConfig in _uniques():
+		if item.rarity == ItemConfig.Rarity.COMMON:
+			commons.append(item)
+
+	var rng := RandomNumberGenerator.new()
+	var after: Array[int] = []
+	for candidates: Array[ItemConfig] in [_uniques(), commons]:
+		rng.seed = 20260926
+		table.pick(candidates, rng)
+		after.append(rng.randi())
+	check(after[0] == after[1], "a pick from a full pool and from one tier leave the stream in step")
+
+
+## The complaint FIX-3 answers, measured where a player meets it. With a uniform draw a third of
+## the first floor's combat-clear items were rare, because the pool has more rare items than any
+## other kind; with the table it is the rarity the table says. The uniform figure is measured too,
+## so this cannot pass on a pool that has simply stopped holding many rare items.
+func _test_the_first_floor_offers_rare_items_rarely() -> void:
+	var config := _floors()[0]
+	var runs := 2000
+	var weighted := _first_floor_clear_tiers(config.clear_drops, runs)
+	var uniform := _first_floor_clear_tiers(null, runs)
+	var drops := float(runs * config.item_clear_indices.size())
+
+	var rare := weighted[ItemConfig.Rarity.RARE] / drops
+	var uniform_rare := uniform[ItemConfig.Rarity.RARE] / drops
+	check(
+		uniform_rare > 0.3,
+		"calibration: a uniform draw makes %.0f%% of floor-one clear items rare" % (uniform_rare * 100.0),
+	)
+	check(
+		rare < 0.15,
+		"with the table, %.0f%% are (weight %d%%)"
+		% [rare * 100.0, config.clear_drops.weight_of(ItemConfig.Rarity.RARE)],
+	)
+	check(
+		weighted[ItemConfig.Rarity.COMMON] > weighted[ItemConfig.Rarity.RARE] * 3,
+		"and common is the tier a player meets most (%d common against %d rare)"
+		% [weighted[ItemConfig.Rarity.COMMON], weighted[ItemConfig.Rarity.RARE]],
+	)
+
+
+## How often each tier comes out of `table` over `draws` picks from `candidates`.
+func _tier_counts(
+	table: DropTable, candidates: Array[ItemConfig], draws: int, seed_value: int
+) -> Array[int]:
+	var counts: Array[int] = []
+	counts.resize(ItemConfig.Rarity.size())
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	for _draw: int in draws:
+		counts[table.pick(candidates, rng).rarity] += 1
+	return counts
+
+
+## Tiers of the first floor's combat-clear items over `runs` fresh runs, drawn after the shop is
+## stocked as they are in the game. `table` null is the old uniform draw.
+func _first_floor_clear_tiers(table: DropTable, runs: int) -> Array[int]:
+	var config := _floors()[0]
+	var restore := RunManager.offered_item_ids.duplicate()
+	var counts: Array[int] = []
+	counts.resize(ItemConfig.Rarity.size())
+	var rng := RandomNumberGenerator.new()
+	for run_index: int in runs:
+		RunManager.offered_item_ids.clear()
+		rng.seed = run_index
+		for _stand: int in config.shop.item_stand_count:
+			RunManager.draw_item(_pool, rng, config.shop.drops if table != null else null)
+		for _clear: int in config.item_clear_indices.size():
+			counts[RunManager.draw_item(_pool, rng, table).rarity] += 1
+	RunManager.offered_item_ids = restore
+	return counts
+
+
+func _uniques() -> Array[ItemConfig]:
+	var uniques: Array[ItemConfig] = []
+	for item: ItemConfig in _pool:
+		if not item.is_repeatable():
+			uniques.append(item)
+	return uniques
+
+
+func _shipped_tables() -> Array[Array]:
+	var config := _floors()[0]
+	return [
+		["combat-clear", config.clear_drops],
+		["treasure", config.treasure_drops],
+		["shop", config.shop.drops],
+	]
 
 
 ## Marks `count` of the pool's one-time items as already offered, so a reward can be drawn against

@@ -5,8 +5,8 @@ extends Node2D
 ## One node subscribes to the EventBus and owns the entire mapping from "what
 ## happened" to "what it looks and sounds like". Two things fall out of that:
 ## gameplay scripts contain no presentation calls at all (spec section 26.9), and
-## milestone 6's polish pass is a change to this one file rather than an audit of
-## every combat script.
+## a polish pass is a change to this one file rather than an audit of every combat
+## script.
 ##
 ## Screen shake and hit pause are applied here rather than at their sources, which is
 ## how the "do not overuse screen shake" rule (spec section 7) stays enforceable —

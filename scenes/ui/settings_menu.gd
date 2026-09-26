@@ -1,15 +1,15 @@
 class_name SettingsMenu
 extends Control
-## Spec section 21's eight settings, as a screen.
+## Spec section 21's eight settings and mouse aim, as a screen (see `GameSettings`).
 ##
 ## One panel, instanced by both the title screen and the pause menu, because the settings a
-## player wants to change mid-run are the same eight they wanted to change before it. Drawn
+## player wants to change mid-run are the same ones they wanted to change before it. Drawn
 ## *over* whichever screen opened it and returning there when dismissed, which is why
 ## settings is not one of `GameManager`'s states: there is no "where do I go back to" to get
 ## wrong.
 ##
-## Rows are declared rather than laid out. Eight settings hand-built would be eight near
-## identical blocks of code, and the ninth would be the one that forgets to save. Here a
+## Rows are declared rather than laid out. Nine settings hand-built would be nine near
+## identical blocks of code, and the tenth would be the one that forgets to save. Here a
 ## setting is a label, a kind, and a pair of callables, and everything else — the bar, the
 ## navigation, the persistence — is shared.
 ##
@@ -124,8 +124,8 @@ func _is_pressed(event: InputEvent, action: StringName) -> bool:
 	return InputMap.has_action(action) and event.is_action_pressed(action)
 
 
-## Declares the eight settings from spec section 21, in the order a player looks for them:
-## the ones they will change first at the top.
+## Declares the settings, in the order a player looks for them: the ones they will change
+## first at the top.
 ##
 ## Every closure re-reads `SaveManager.settings` rather than capturing it, because loading a
 ## save replaces that object wholesale — a captured reference would edit the settings the
@@ -147,6 +147,9 @@ func _build_rows() -> void:
 		_range_row("FLASH INTENSITY", GameSettings.INTENSITY_MAX, INTENSITY_STEP,
 			func() -> float: return SaveManager.settings.flash_intensity,
 			func(value: float) -> void: SaveManager.settings.flash_intensity = value),
+		_toggle_row("MOUSE AIM",
+			func() -> bool: return SaveManager.settings.mouse_aim,
+			func(value: bool) -> void: SaveManager.settings.mouse_aim = value),
 		_toggle_row("DAMAGE NUMBERS",
 			func() -> bool: return SaveManager.settings.damage_numbers,
 			func(value: bool) -> void: SaveManager.settings.damage_numbers = value),
@@ -183,7 +186,7 @@ func _toggle_row(label: String, getter: Callable, setter: Callable) -> Dictionar
 
 
 func _move_selection(delta: int) -> void:
-	# Wraps, because a list of nine that stops at both ends makes the player travel the whole
+	# Wraps, because a list of ten that stops at both ends makes the player travel the whole
 	# way back to reach "back".
 	_selected = wrapi(_selected + delta, 0, _rows.size())
 	_refresh()

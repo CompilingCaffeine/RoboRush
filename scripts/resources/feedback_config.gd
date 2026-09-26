@@ -4,9 +4,9 @@ extends Resource
 ##
 ## Spec section 21 lists screen shake, flash intensity, and damage numbers as
 ## player-facing settings; section 7 requires a damage number toggle. This resource
-## is the single place those live, so the milestone 6 settings menu edits this and
-## nothing else, and so accessibility-relevant intensity is never hardcoded into an
-## effect.
+## is the single place those live, so the settings menu edits this and nothing else
+## (through `SaveManager.apply_settings`), and so accessibility-relevant intensity is
+## never hardcoded into an effect.
 
 @export_group("Camera")
 

@@ -527,11 +527,17 @@ func try_spend_scrap(amount: int) -> bool:
 ## economy, not a dilution of it — on a campaign whose offer budget the unique pool covers, a
 ## player may never see one, and that is the intended shape.
 ##
+## Within the chosen class, `table` decides how often each rarity comes up for this kind of offer
+## (see `DropTable`); every floor drop and shop stand passes one. Without one the draw is uniform,
+## which is what the policy tests use to talk about the classes alone.
+##
 ## Still returns null for a pool with neither, which every caller treats as "drop nothing". That is
 ## now a content bug rather than a tuning one — `CampaignValidator` refuses a campaign whose pool
 ## cannot fill its offers — but the graceful fallback stays, because a crash in front of the player
 ## is worse than a repair cell.
-func draw_item(pool: Array[ItemConfig], rng: RandomNumberGenerator) -> ItemConfig:
+func draw_item(
+	pool: Array[ItemConfig], rng: RandomNumberGenerator, table: DropTable = null
+) -> ItemConfig:
 	var unique_candidates: Array[ItemConfig] = []
 	var repeatable_candidates: Array[ItemConfig] = []
 	for item: ItemConfig in pool:
@@ -546,7 +552,10 @@ func draw_item(pool: Array[ItemConfig], rng: RandomNumberGenerator) -> ItemConfi
 	if candidates.is_empty():
 		return null
 
-	var drawn := candidates[rng.randi_range(0, candidates.size() - 1)]
+	var drawn: ItemConfig = (
+		table.pick(candidates, rng) if table != null
+		else candidates[rng.randi_range(0, candidates.size() - 1)]
+	)
 	# Only uniques are spent. Recording a chip would strike it off the run the first time it was
 	# offered, which is the opposite of what makes it a chip.
 	if not drawn.is_repeatable():

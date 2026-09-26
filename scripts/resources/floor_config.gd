@@ -112,6 +112,12 @@ extends Resource
 ## can be kinder or harsher without code. Counted per floor, from the first clear on this floor.
 @export var repair_every_clears: int = 3
 
+## How often each rarity is offered by this floor's combat clears and by its treasure room (see
+## `DropTable`). Every floor points at the same two tables today; a floor that should lean rarer
+## can name its own.
+@export var clear_drops: DropTable
+@export var treasure_drops: DropTable
+
 ## Whether the treasure room hands over an item. Spec section 9 says a treasure room
 ## contains one; this exists so a floor built around a shop instead can say otherwise.
 @export var treasure_grants_item: bool = true

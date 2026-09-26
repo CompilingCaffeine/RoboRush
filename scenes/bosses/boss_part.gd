@@ -18,11 +18,11 @@ const PLAYER_RADIUS := Player.BODY_RADIUS
 ## ## It also hurts to touch
 ##
 ## Every ordinary enemy that has a body the player can walk into charges them for walking into it
-## (`Enemy._step_contact_damage`), and until recently the bosses were the one exception: three
-## fights in which standing inside the thing you are shooting was free. That is the wrong lesson
-## in the room where positioning matters most, and it is worst in the fight built entirely out of
-## where you are standing — Cascade Failure's nodes could be ridden around the ring, which put the
-## player on the one patch of floor the boss was about to vent and charged them nothing for it.
+## (`Enemy._step_contact_damage`), and a boss has to as well. A fight in which standing inside the
+## thing you are shooting is free teaches the wrong lesson in the room where positioning matters
+## most, and it is worst in the fight built entirely out of where you are standing: Cascade
+## Failure's nodes could otherwise be ridden around the ring, putting the player on the one patch
+## of floor the boss is about to vent and charging them nothing for it.
 ##
 ## So a part is a hazard as well as a receiver, and it lives here rather than in each of the three
 ## controllers for the reason the receiver does: a body that hurts to touch hurts on all of it,

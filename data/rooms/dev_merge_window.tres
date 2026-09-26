@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="1_template"]
+
+[resource]
+script = ExtResource("1_template")
+id = &"dev_merge_window"
+type = 1
+obstacles = Array[Rect2i]([Rect2i(12, 2, 2, 3), Rect2i(5, 5, 2, 2), Rect2i(19, 5, 2, 2), Rect2i(12, 7, 2, 3)])
+enemy_spawns = Array[Vector2i]([Vector2i(7, 2), Vector2i(18, 2), Vector2i(7, 9), Vector2i(18, 9)])
+reward_spawn = Vector2i(13, 6)
+difficulty = 3
+floor_tags = Array[StringName]([&"development"])
+min_floor = 2
+max_floor = 2
+metadata/design_notes = "A merge window: a wall down the middle of the room with one window in it, and the reward standing in the window, and a block of cover in each half. Two enemies start on each side. The window is the only way across the middle of the room, so the player can fight one half at a time or stand in the window and be seen by both; the gaps along the top and bottom walls are the long way round."

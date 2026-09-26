@@ -24,7 +24,10 @@ func run() -> void:
 func _test_content_and_distribution() -> void:
 	check(CAMPAIGN.size() == 6, "the shipped campaign has all six floors")
 	check(CAMPAIGN.require_complete, "the shipped campaign treats missing content as fatal")
-	check(CAMPAIGN.content_version == 5, "the finale moves checkpoints to content version 5")
+	check(
+		CAMPAIGN.content_version == 6,
+		"rarity-weighted offers and the new early rooms move checkpoints to content version 6",
+	)
 	var report := CampaignValidator.validate(CAMPAIGN)
 	check(report.is_valid(), "the completed campaign validates:\n%s" % report.describe())
 	check(report.warnings.is_empty(), "the completed campaign has no provisional warnings")
@@ -640,7 +643,7 @@ func _test_fifth_boundary_resumes_the_finale() -> void:
 	check(floor_node.config.id == &"core_intelligence", "the fifth boundary lands in the finale")
 	var checkpoint := RunCheckpoint.from_dict(JSON.parse_string(JSON.stringify(SaveManager.get_checkpoint().to_dict())))
 	check(checkpoint.validate(CAMPAIGN).is_empty(), "the finale boundary checkpoint survives JSON")
-	check(checkpoint.content_version == 5 and checkpoint.floor_number == 6, "the checkpoint names version 5 floor 6")
+	check(checkpoint.content_version == 6 and checkpoint.floor_number == 6, "the checkpoint names version 6 floor 6")
 	var fingerprint := floor_node.get_content_fingerprint()
 	floor_node.queue_free()
 	await advance_physics(2)
