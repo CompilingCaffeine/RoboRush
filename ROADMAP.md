@@ -1,6 +1,6 @@
 # Robo Rush Roadmap: Improvements, Feature Upgrades, and New Content
 
-- **Status:** Planning proposal. Nothing below is implemented yet.
+- **Status:** Planning proposal, partly implemented. [Progress](#progress) lists what is done and what the owner chose to skip; everything else below is still a proposal.
 - **Baseline:** `1c450d8` on `main` (2026-09-19). Six floors, six bosses, 16 enemies, 54 items, 52 room templates, and 35 test files.
 - **Authority:** [robo_rush_build_spec.md](robo_rush_build_spec.md) is still the design authority. Where this plan departs from it, the entry says so. The post-boss hazard contract in [SIX_FLOOR_SCALING_GAMEPLAN.md](SIX_FLOOR_SCALING_GAMEPLAN.md) still holds.
 
@@ -13,6 +13,14 @@
 | ENG-4 Static analysis | **Done.** gdlint, ruff, shellcheck, the design-notes check, and a script-UID check run through `tools/ci/lint.sh` and the Lint workflow. The linters' real findings are fixed, and two missing `.uid` files are committed. |
 | ENG-1 Split FloorController | **Done.** The file went from 1,159 lines to 561. `FloorController` now owns only the floor's lifecycle (open, descend or win, release, save and resume) and the floor's public face. Per-floor behaviour lives in the session and ends with it: `RoomLoop` runs room entry, sealing, clears and rewards, and `BossArena` runs the boss fight, its prize and the trophy. Construction and policy were extracted earlier: `FloorBuilder`, `FloorDoors`, `BossRewardDraw`, `BossEncounterDraw`, and `FloorConfig.repair_every_clears`. Resume and save state travels as one `FloorProgress` value. A probe of 30 seeds on all six floors (enemies, shop, doors, loot, the boss fight, the claim and descent, and a mid-floor save and resume) is byte-identical before and after each step. The only difference is the fingerprint change the cadence move intended. |
 | ENG-5 CI shape | **Partly done.** Lint is its own fast workflow. The test runner accepts `-- --suite=Name`. `profile_executive` works again: it had been failing on `main` since the campaign started ending on a trophy. A nightly job is still to do. |
+| FIX-2 Hindrances as free drops | **Skipped** by the owner (Q2): hindrances stay in free floor drops. FIX-3 keeps the corrupted tier at about its old share of each kind of offer, so the rarity weights do not quietly change this. |
+| FIX-3 Rarity weights | **Done.** A `DropTable` resource weights each rarity per kind of offer: combat clears, treasure rooms and shops (common/uncommon/rare/prototype/corrupted as 45/30/9/1/15, 20/35/28/2/15 and 30/30/23/2/15). It picks a tier by weight, then an item within it. The boss keeps its own policy. Rare items are now 16–22% of free drops on every floor; the uniform draw gave 38% on floor 1 falling to 2% on floor 6. The validator requires the tables, the manifest fingerprints them, and `content_version` is 6. This is the rarity-weights half of IMP-3; category weights and enabler-aware offers are still to do. |
+| FIX-4 Red/green boss read | **Skipped** by the owner for now. IMP-10's colour-vision modes still depend on it. |
+| FIX-6 Active item control | **Done** the minimal way, as the owner asked: the README row, the `use_active_item` binding and its gamepad-suite entry are removed. SYS-3 brings the control back with something to do. |
+| FIX-7 Mouse aim | **Done.** A **Mouse aim** setting, on by default: the cannon follows the pointer once it moves, and holding the left button (`shoot_pointer`) fires towards it. The arrows and stick win while in use, and a pointer nobody moves never takes the aim. The controls card and README describe it. The fire toggle, rebinding and device glyphs in IMP-1 are still to do. |
+| FIX-8 Thin early floors | **Done.** Four combat rooms each on the Help Desk and Development (RM-9), at difficulty 2 and 3. Distinct combat rooms per floor rose from 3.4 to about 4.5, and repeated rooms per floor fell from 2.6 to about 1.5. Rides on the same `content_version` 6 bump as FIX-3. |
+| FIX-9 Minimap shop and boss | **Done.** A visited shop is item blue and a visited boss room is danger red with a dark notch, so it does not rely on red against the treasure room's amber. |
+| ENG-12 Comment hygiene and changelog | **Done.** Eighteen comments that narrated history now say what the code does. [CHANGELOG.md](CHANGELOG.md) is written for playtesters. |
 
 This plan comes from reading the code and data, not from playing the game. Every finding cites the file that shows it. Every proposal is sized, lists its dependencies, and states the evidence that should count as "done". The six-floor campaign already works, so the plan builds on it without restructuring it.
 
@@ -300,7 +308,7 @@ Keep the explanatory "why" comments; they are an asset. Move historical narratio
 | --- | --- | --- | --- |
 | IMP-1 | Controls: mouse aim, fire toggle, rebinding, device glyphs | M–L | FIX-7 |
 | IMP-2 | Item readability (**owner decision**) | M | — |
-| IMP-3 | Reward model v2: drop tables, rarity weights, enabler-aware offers | M | FIX-2, FIX-3 |
+| IMP-3 | Reward model v2: drop tables, rarity weights, enabler-aware offers | M | FIX-3 (done) |
 | IMP-4 | Shop v2 | M | IMP-3 |
 | IMP-5 | Minimap and navigation | S–M | FIX-9 |
 | IMP-6 | Combat feel pass | M | — |
@@ -336,7 +344,7 @@ The code deliberately never shows `description`; see the `ItemConfig.description
 - **Enabler-aware offers.** Wide Bus and Fragmentation say in their descriptions that they do nothing alone ("Does nothing without something that splits"). Add `requires_any_tags: Array[StringName]` and `boost_if_any_tags`. An item whose requirement is unmet is not offered as a free drop and is down-weighted in shops. When an enabler is held, the dependent item's weight rises. This steers toward synergy without scripting it.
 - **Diversity guard:** avoid offering a third item whose only tag is `knockback` while two unchosen knockback items are already on offer.
 - **Determinism:** reuse `SHOP` and `REWARD` streams and add `SECRET` and `CHALLENGE` streams. Bump `content_version`.
-- **Acceptance:** extend `test_economy` to 10,000 campaigns and assert the observed rarity frequencies per context fall within ±2% of the weights, no empty required offer, and no free hindrance.
+- **Acceptance:** extend `test_economy` to 10,000 campaigns and assert the observed rarity frequencies per context fall within ±2% of the weights and no empty required offer. (FIX-3 added the first two checks for the rarity tables. "No free hindrance" is dropped: the owner kept hindrances as free drops, Q2.)
 
 ### IMP-4: Shop v2
 
@@ -888,6 +896,8 @@ Each milestone ends with a playable, releasable build, per spec §33.
 ---
 
 ## 10. Decisions needed from the owner
+
+Answers so far (2026-09-26): **Q2: keep them.** Hindrances stay free floor drops, so FIX-2 is skipped. **Q3 yes**, done as FIX-3. **Q4 not yet**: the advertised control is removed (FIX-6) until SYS-3. **Q5 yes**, done as FIX-7, on by default.
 
 | # | Question | Recommendation |
 | --- | --- | --- |
