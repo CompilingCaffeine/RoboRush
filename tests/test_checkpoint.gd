@@ -118,9 +118,9 @@ func _test_a_mid_floor_save_does_not_pay_the_floor_twice() -> void:
 	# Stands in for the player having fought through that one room. Reaching into the controller
 	# rather than killing ten enemies through the physics server: what is under test is what a save
 	# records and a resume rebuilds, and driving a real fight would test the fight.
-	floor_node._cleared[done_id] = true
+	floor_node.get_room_loop().mark_cleared(done_id)
 	floor_node.visited[done_id] = true
-	floor_node._clears = 3
+	floor_node.get_room_loop().clears = 3
 	RunManager.add_scrap(40)
 	var scrap_at_save := RunManager.scrap
 
@@ -163,8 +163,8 @@ func _test_a_mid_floor_save_does_not_pay_the_floor_twice() -> void:
 		"while a room the player never reached still has its enemies waiting",
 	)
 	check(
-		resumed_floor._clears == 3,
-		"the reward cadence resumes where it was (%d)" % resumed_floor._clears,
+		resumed_floor.get_room_loop().clears == 3,
+		"the reward cadence resumes where it was (%d)" % resumed_floor.get_room_loop().clears,
 	)
 	check(RunManager.scrap == scrap_at_save, "and the run comes back with the scrap it saved with")
 
@@ -434,7 +434,7 @@ func _test_a_restore_does_not_duplicate_credit() -> void:
 ## Drawing again is not a cosmetic mistake. Every boss the run has met is struck off, so the floor
 ## either draws a *different* boss than the run recorded, or — on a floor whose pool holds one boss,
 ## which is every floor of a campaign with one boss each — draws nothing at all. A boss room with no
-## boss still seals behind the player (`_needs_clearing`: a boss room is shut until it is cleared)
+## boss still seals behind the player (`RoomLoop._needs_clearing`: a boss room is shut until it is cleared)
 ## and nothing in it can ever clear it: an empty room, locked, for the rest of the run. That is the
 ## shape this was reported in, and it is the reason the check below walks into the room rather than
 ## stopping at the encounter being non-null.
@@ -491,7 +491,7 @@ func _test_a_resumed_floor_keeps_the_boss_it_already_drew() -> void:
 	if require(boss_room, "the resumed floor has a boss room"):
 		var player: Player = game.get_node("%Player")
 		player.global_position = boss_room.get_interior_rect().get_center()
-		resumed._enter_room(boss_room.plan.id)
+		resumed.get_room_loop().enter(boss_room.plan.id)
 		# Two frames: the boss is added deferred, for the physics-flush reason `BossArena._add_boss` gives.
 		await advance_physics(2)
 		var boss := resumed.get_boss_arena().get_boss()
@@ -1339,7 +1339,7 @@ func _open_first_floor(arena: Node2D, seed_value: int) -> FloorController:
 ## handlers directly, the way every floor-advance check in `test_floor.gd` does.
 func _descend(floor_node: FloorController) -> void:
 	var boss_room: Room = null
-	for room: Room in floor_node._rooms.values():
+	for room: Room in floor_node.get_room_loop().rooms.values():
 		if room.plan.type == RoomTemplate.Type.BOSS:
 			boss_room = room
 			break

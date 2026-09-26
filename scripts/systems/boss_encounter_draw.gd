@@ -18,7 +18,7 @@ extends RefCounted
 ## `fought_boss_ids`. Drawing again would therefore skip past the run's own boss — to a different
 ## one on a floor whose pool holds two, and to *nothing* on a floor whose pool holds one, which is
 ## every floor of a campaign that gives each floor a boss of its own. A boss room with no boss still
-## seals behind the player (see `FloorController._needs_clearing`) and nothing in it can ever clear
+## seals behind the player (see `RoomLoop._needs_clearing`) and nothing in it can ever clear
 ## it, so what the second draw actually produced was an empty locked room for the rest of the run.
 ## Asking the run which boss this floor already drew is what makes a resumed floor the same floor.
 ##

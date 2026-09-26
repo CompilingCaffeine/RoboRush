@@ -154,7 +154,7 @@ var floor_shop := ShopStock.new()
 var floor_boss_reward_ids: Array[StringName] = []
 
 ## The floor's own clear counter, which decides when the next repair cell and the next item drop
-## are due (`FloorController._clears`). Carried for the same reason as the ids: restarting it at
+## are due (`RoomLoop.clears`). Carried for the same reason as the ids: restarting it at
 ## zero would restart the reward cadence with it, so a resumed floor would hand out its early
 ## drops a second time.
 var floor_clears: int = 0

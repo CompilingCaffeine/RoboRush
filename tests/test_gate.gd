@@ -234,9 +234,9 @@ func _test_the_whole_chain_leaves_nothing_behind() -> void:
 			"and owns the only projectile container (%d do)" % _containers_under(floor_node),
 		)
 		check(
-			floor_node._rooms.size() == floor_node.config.room_count,
+			floor_node.get_room_loop().rooms.size() == floor_node.config.room_count,
 			"and has %d rooms, not two floors' worth (%d)"
-				% [floor_node.config.room_count, floor_node._rooms.size()],
+				% [floor_node.config.room_count, floor_node.get_room_loop().rooms.size()],
 		)
 		check(
 			floor_node.get_session().generation == number,

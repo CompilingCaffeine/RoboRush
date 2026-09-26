@@ -497,7 +497,7 @@ func _defeat_the_boss() -> void:
 
 
 func _boss_room() -> Room:
-	for room: Room in _floor._rooms.values():
+	for room: Room in _floor.get_room_loop().rooms.values():
 		if room.plan.type == RoomTemplate.Type.BOSS:
 			return room
 	return null

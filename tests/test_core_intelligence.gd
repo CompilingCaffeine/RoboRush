@@ -698,7 +698,7 @@ func _new_floor(parent: Node, index: int) -> FloorController:
 
 func _claim_boss_reward(floor_node: FloorController) -> void:
 	var boss_room: Room = null
-	for room: Room in floor_node._rooms.values():
+	for room: Room in floor_node.get_room_loop().rooms.values():
 		if room.plan.type == RoomTemplate.Type.BOSS:
 			boss_room = room
 			break

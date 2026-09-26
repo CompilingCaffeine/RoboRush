@@ -4,7 +4,7 @@ extends RefCounted
 ##
 ## Construction only. It runs once per floor, holds nothing afterwards, and decides nothing about
 ## how the floor is played: `FloorController` owns the room loop, the boss and the boundary, and
-## hands this the streams and callbacks it needs. Keeping the two apart is what keeps the
+## hands this the streams it needs. Keeping the two apart is what keeps the
 ## controller about *running* a floor.
 ##
 ## The encounter and shop streams are consumed here in a fixed order — rooms in layout order, the
@@ -34,10 +34,7 @@ var shop: ShopRoom
 ## its seed describes rather than a different one that merely starts the same.
 ##
 ## `resumed_shop` is the shelf a resumed run left in this floor's shop, or null for a floor being
-## opened for the first time.
-##
-## `on_entered` is connected to every room's `player_entered`, and `on_cleared` — bound to the room's
-## id — to every room's `RoomCombat.cleared`.
+## opened for the first time. Nothing is wired to the rooms here: that is `RoomLoop.attach`.
 func build_rooms(
 	session: FloorSession,
 	layout: FloorLayout,
@@ -46,8 +43,6 @@ func build_rooms(
 	shop_rng: RandomNumberGenerator,
 	cleared: Dictionary[int, bool],
 	resumed_shop: ShopStock,
-	on_entered: Callable,
-	on_cleared: Callable,
 ) -> void:
 	for plan: RoomPlan in layout.rooms:
 		var room: Room = ROOM_SCENE.instantiate()
@@ -61,8 +56,6 @@ func build_rooms(
 		elif plan.type == RoomTemplate.Type.SHOP:
 			_stock_shop(room, config, shop_rng, resumed_shop)
 		room.set_active(false)
-		room.player_entered.connect(on_entered)
-		room.get_room_combat().cleared.connect(on_cleared.bind(plan.id))
 		rooms[plan.id] = room
 
 

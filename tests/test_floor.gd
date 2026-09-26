@@ -969,7 +969,7 @@ func _test_a_run_never_fights_the_same_boss_twice() -> void:
 ## The cheap shot, and the window that answers it.
 ##
 ## Beta reports were all the same shape: walk through a door, lose a point before the room is on
-## screen. `FloorController._enter_room` wakes the room and *then* announces the entry, so anything
+## screen. `RoomLoop.enter` wakes the room and *then* announces the entry, so anything
 ## already aimed at the doorway fires into a player who has not seen it — which is a point spent on
 ## a decision they were never offered.
 ##
@@ -1017,7 +1017,7 @@ func _test_walking_into_a_room_buys_a_moment_of_grace() -> void:
 		await advance_physics(1)
 		return
 
-	floor_node._enter_room(destination)
+	floor_node.get_room_loop().enter(destination)
 	check(health.is_invulnerable(), "crossing the threshold makes the robot untouchable")
 	# The other half of the complaint, and the reason the grant is a quiet one: the flash is what
 	# the player sees when they lose a point, so a robot that flashes on every doorway is reporting
@@ -1089,7 +1089,7 @@ func _test_the_doorway_window_is_not_shown() -> void:
 	health.grant_invulnerability(0.0)
 	await advance_physics(int(player.config.room_entry_grace * 60.0) + 4)
 
-	floor_node._enter_room(destinations[0])
+	floor_node.get_room_loop().enter(destinations[0])
 	check(health.is_invulnerable(), "walking through a door still grants the window")
 	check(not player.should_flash(), "and the robot does not strobe about it")
 
@@ -1100,7 +1100,7 @@ func _test_the_doorway_window_is_not_shown() -> void:
 	check(health.apply_damage(DamageInfo.new(1.0)), "a hit lands once the window has shut")
 	check(player.should_flash(), "and that window is shown")
 
-	floor_node._enter_room(destinations[1])
+	floor_node.get_room_loop().enter(destinations[1])
 	check(player.should_flash(), "carrying it through a door does not silence it")
 
 	arena.queue_free()
@@ -1194,7 +1194,7 @@ func _test_repair_cells_drop_on_every_third_clear() -> void:
 		var before := _count_repair_cells()
 		# The two emissions in RoomCombat's order: the local signal first, the EventBus one
 		# after. Reversing these two lines is the entire defect.
-		floor_node._on_room_cleared(ids[clear_index % ids.size()])
+		floor_node.get_room_loop().record_clear(ids[clear_index % ids.size()])
 		EventBus.room_cleared.emit()
 		await advance_physics(1)
 		if _count_repair_cells() > before:
@@ -1296,7 +1296,7 @@ func _test_boss_defeat_advances_to_the_next_floor_and_only_the_last_wins() -> vo
 			floor_node.floor_index == index + 1,
 			"and knows it is standing on floor %d" % (number + 1),
 		)
-		check(floor_node._clears == 0, "floor %d starts with a clean clear count" % (number + 1))
+		check(floor_node.get_room_loop().clears == 0, "floor %d starts with a clean clear count" % (number + 1))
 		check(
 			floor_node.visited.size() == 1,
 			"floor %d starts with only its own start room visited" % (number + 1),
@@ -1312,7 +1312,7 @@ func _test_boss_defeat_advances_to_the_next_floor_and_only_the_last_wins() -> vo
 ## A floor begins in its start room and nowhere else. This looks like a statement too obvious
 ## to spend a test on, and it is the one that shipped broken.
 ##
-## `build()` instantiates the new floor's rooms before `_place_player_in_start_room` moves the
+## `build()` instantiates the new floor's rooms before `RoomLoop.place_player_at_start` moves the
 ## player off the old floor's coordinates, so the new room that lands on the spot where the
 ## player took the boss reward registers an overlap on its entry Area2D. Godot delivers that
 ## `body_entered` on the next physics flush — after the start room was entered explicitly,
@@ -1377,7 +1377,7 @@ func _test_a_descent_enters_only_the_new_floors_start_room() -> void:
 			await advance_physics(1)
 			continue
 		player.global_position = boss_room.get_interior_rect().get_center()
-		floor_node._enter_room(boss_room.plan.id)
+		floor_node.get_room_loop().enter(boss_room.plan.id)
 		await advance_physics(2)
 
 		_defeat_boss(floor_node)
@@ -1473,7 +1473,7 @@ func _test_a_floor_ended_mid_fight_takes_its_boss_with_it() -> void:
 		await advance_physics(1)
 		return
 
-	floor_node._enter_room(boss_room.plan.id)
+	floor_node.get_room_loop().enter(boss_room.plan.id)
 	var pending := floor_node.get_boss_arena().get_boss()
 	check(is_instance_valid(pending) and pending.get_parent() == null, "the boss is summoned, not yet added")
 	check(_arena_listeners() == 1, "and its arena listens for the defeat")
@@ -1485,7 +1485,7 @@ func _test_a_floor_ended_mid_fight_takes_its_boss_with_it() -> void:
 
 	check(floor_node.build(player, campaign.floor_seed_for(2718, 0)), "the floor opens again")
 	boss_room = _find_boss_room(floor_node)
-	floor_node._enter_room(boss_room.plan.id)
+	floor_node.get_room_loop().enter(boss_room.plan.id)
 	await advance_physics(2)
 	var fighting := floor_node.get_boss_arena().get_boss()
 	check(is_instance_valid(fighting) and fighting.is_inside_tree(), "a boss walked in on is in its arena")
@@ -1592,8 +1592,8 @@ func _test_five_boundaries_leave_exactly_one_floor() -> void:
 			"and owns the only projectile container (%d do)" % _containers_under(floor_node),
 		)
 		check(
-			floor_node._rooms.size() == expected_rooms,
-			"and has %d rooms, not %d floors' worth" % [expected_rooms, floor_node._rooms.size()],
+			floor_node.get_room_loop().rooms.size() == expected_rooms,
+			"and has %d rooms, not %d floors' worth" % [expected_rooms, floor_node.get_room_loop().rooms.size()],
 		)
 		check(
 			floor_node.get_session().generation == number,
@@ -1729,7 +1729,7 @@ func _test_a_boundary_keeps_run_state_and_resets_floor_state() -> void:
 	RunManager.stats.enemies_defeated = 9
 	health.apply_damage(DamageInfo.new(1.0, null, Vector2.RIGHT))
 	inventory.add(_config.get_items()[0])
-	floor_node._clears = 3
+	floor_node.get_room_loop().clears = 3
 
 	var integrity := health.current
 	var offered_before := RunManager.offered_item_ids.size()
@@ -1753,7 +1753,7 @@ func _test_a_boundary_keeps_run_state_and_resets_floor_state() -> void:
 		"and the new floor's boss is recorded alongside the old one's",
 	)
 
-	check(floor_node._clears == 0, "the floor-local clear count resets")
+	check(floor_node.get_room_loop().clears == 0, "the floor-local clear count resets")
 	check(floor_node.visited.size() == 1, "only the new start room has been visited")
 	check(
 		floor_node.current_room_id == floor_node.layout.get_start_room().id,
@@ -1785,7 +1785,7 @@ func _test_an_ungeneratable_destination_keeps_the_current_floor() -> void:
 		return
 
 	var session := floor_node.get_session()
-	var rooms := floor_node._rooms.size()
+	var rooms := floor_node.get_room_loop().rooms.size()
 
 	await _descend(floor_node)
 
@@ -1793,7 +1793,7 @@ func _test_an_ungeneratable_destination_keeps_the_current_floor() -> void:
 	check(floor_node.get_session() == session, "the player keeps the floor they were standing on")
 	check(is_instance_valid(session), "which has not been released")
 	check(floor_node.config.floor_number == 1, "and is still floor 1")
-	check(floor_node._rooms.size() == rooms, "with all %d of its rooms" % rooms)
+	check(floor_node.get_room_loop().rooms.size() == rooms, "with all %d of its rooms" % rooms)
 	check(_sessions_under(floor_node) == 1, "and is the only floor in the tree")
 
 	arena.queue_free()

@@ -160,7 +160,7 @@ func _descend(
 	floor_node: FloorController, seed_value: int, failures: PackedStringArray
 ) -> bool:
 	var boss_room: Room = null
-	for room: Room in floor_node._rooms.values():
+	for room: Room in floor_node.get_room_loop().rooms.values():
 		if room.plan.type == RoomTemplate.Type.BOSS:
 			boss_room = room
 			break

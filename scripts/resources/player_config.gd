@@ -62,7 +62,7 @@ extends Resource
 ## just entered is allowed to charge them anything.
 ##
 ## Beta testers named this one: a room's enemies wake on the frame the player crosses its threshold
-## (`FloorController._enter_room` calls `Room.set_active` and then announces the entry), so a shot
+## (`RoomLoop.enter` calls `Room.set_active` and then announces the entry), so a shot
 ## already lined up on the doorway lands before the player has seen the room they are in. That is a
 ## point of integrity spent on nothing the player could have done, which is the definition of the
 ## hit they were complaining about.

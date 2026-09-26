@@ -190,7 +190,7 @@ func _boss_paid_out(final_floor: bool) -> bool:
 
 func _enter(room: Room) -> void:
 	_player.global_position = room.get_interior_centre() + Vector2(0, 45)
-	_floor._enter_room(room.plan.id)
+	_floor.get_room_loop().enter(room.plan.id)
 	_player.frame_room(_floor.get_view_rect_for(room), true)
 
 
