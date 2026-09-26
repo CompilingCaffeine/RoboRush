@@ -114,7 +114,7 @@ func _test_every_other_floor_still_offers_the_choice() -> void:
 		await advance_physics(2)
 
 		check(
-			_stands_in(arena).size() == FloorController.BOSS_REWARD_COUNT,
+			_stands_in(arena).size() == BossRewardDraw.COUNT,
 			"floor %d still offers its choice of three" % (index + 1),
 		)
 		check(_trophies_in(arena).is_empty(), "and no trophy" )
@@ -490,12 +490,10 @@ func _close() -> void:
 	await advance_physics(2)
 
 
-## Kills the boss the way the floor hears about it, with a stand-in for the body — freed rather
-## than dropped, because `Node` is not reference counted.
+## Kills the boss the way the floor hears about it: through the arena, as though its last hit had
+## just landed.
 func _defeat_the_boss() -> void:
-	var stand_in := Node.new()
-	_floor._on_boss_defeated(stand_in, _boss_room())
-	stand_in.free()
+	_floor.get_boss_arena().resolve_defeat()
 
 
 func _boss_room() -> Room:

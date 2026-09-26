@@ -492,10 +492,11 @@ func _test_a_resumed_floor_keeps_the_boss_it_already_drew() -> void:
 		var player: Player = game.get_node("%Player")
 		player.global_position = boss_room.get_interior_rect().get_center()
 		resumed._enter_room(boss_room.plan.id)
-		# Two frames: the boss is added deferred, for the physics-flush reason `_add_boss` gives.
+		# Two frames: the boss is added deferred, for the physics-flush reason `BossArena._add_boss` gives.
 		await advance_physics(2)
+		var boss := resumed.get_boss_arena().get_boss()
 		check(
-			is_instance_valid(resumed._boss) and resumed._boss.is_inside_tree(),
+			is_instance_valid(boss) and boss.is_inside_tree(),
 			"and walking into it seals the player in with a boss rather than with nothing",
 		)
 
@@ -603,15 +604,13 @@ func _test_a_reward_left_standing_survives_the_run_being_put_down() -> void:
 		await advance_physics(1)
 		return
 
-	# The kill, driven through the controller's own handler the way every boss check in the project
-	# does: what is under test is the save, not the fight.
-	var stand_in := Node.new()
-	floor_node._on_boss_defeated(stand_in, arena)
-	stand_in.free()
+	# The kill, driven through the arena the way every boss check in the project does: what is under
+	# test is the save, not the fight.
+	floor_node.get_boss_arena().resolve_defeat()
 	await advance_physics(2)
 
 	var offered := _reward_offer(arena)
-	check(offered.size() == FloorController.BOSS_REWARD_COUNT, "the boss puts up its choice of three")
+	check(offered.size() == BossRewardDraw.COUNT, "the boss puts up its choice of three")
 	check(floor_node.save_run_now(), "the run is saved with the prize still standing")
 	var checkpoint := SaveManager.get_checkpoint()
 	if not require(checkpoint, "and there is a checkpoint to come back to"):
@@ -1348,13 +1347,10 @@ func _descend(floor_node: FloorController) -> void:
 		fail("floor %d has no boss room to descend from" % floor_node.config.floor_number)
 		return
 
-	# Freed rather than left to the collector: `Node` is not reference counted.
-	var stand_in := Node.new()
-	floor_node._on_boss_defeated(stand_in, boss_room)
-	stand_in.free()
+	floor_node.get_boss_arena().resolve_defeat()
 	await advance_physics(1)
 
-	floor_node._on_boss_reward_taken(floor_node.config.get_items()[0])
+	floor_node.get_boss_arena().claim_reward(floor_node.config.get_items()[0])
 	# The rebuild is deferred, and so is the physics flush that follows it.
 	await advance_physics(4)
 

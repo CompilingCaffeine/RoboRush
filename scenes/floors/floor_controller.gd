@@ -43,20 +43,7 @@ signal boss_encountered(
 	display_name: String, defeat_banner: String, phase_banners: Array[String], is_final: bool
 )
 
-const SHOP_ROOM_SCENE := preload("res://scenes/shop/shop_room.tscn")
 const SESSION_SCENE := preload("res://scenes/floors/floor_session.tscn")
-const TROPHY_SCENE := preload("res://scenes/pickups/trophy.tscn")
-
-## How many items the boss offers, and where they stand relative to the reward point. The count is
-## the draw's (see `BossRewardDraw`), restated here because the validator, the shop layout and the
-## suites all ask the floor how many stands a boss puts up.
-const BOSS_REWARD_COUNT := BossRewardDraw.COUNT
-
-## Wide enough for the stands' labels, which is the only thing that decides it: at the 56 pixels this
-## used to be, three item names written above three stands 56 pixels apart overlapped into something
-## unreadable, and the reward the fight is for was the one choice in the run the player could not
-## read. `ShopStand.LABEL_WIDTH` plus a gutter, and tests/test_shop.gd holds the two together.
-const BOSS_REWARD_SPACING := 128.0
 
 ## How far below the top of the screen a room's outer wall sits. The remaining space at the
 ## bottom is the HUD strip, so the HUD never covers playable floor.
@@ -124,19 +111,9 @@ var _clears := 0
 ## node already knows the answer to.
 var _shop: ShopRoom
 
-## The boss, once the player has walked into its arena. Null until then — a boss that
-## existed from the moment the floor was built would be a boss firing at an empty room.
-var _boss: Boss
-
-## The boss's choice of three, while it stands unclaimed. Null before the boss dies and again once
-## the choice is taken, which is exactly the window a checkpoint has to be able to describe — see
-## `get_pending_boss_reward_ids`.
-var _boss_reward: ShopRoom
-
-## The campaign's trophy, while it stands unclaimed in the last floor's arena, and null on every
-## floor before it. The counterpart of `_boss_reward` above, and held for the same reason: it is
-## what a checkpoint taken in that window has to be able to describe — see `_restore_boss_reward`.
-var _trophy: Trophy
+## This floor's boss fight: the arena, the boss once summoned, and the prize it leaves. Lives in the
+## session and ends with it; null before the first `build`, and on a floor with no boss room.
+var _arena: BossArena
 
 ## Which boss guards this floor, drawn once in `build()`.
 var _boss_encounter: BossEncounter
@@ -149,14 +126,6 @@ var _session: FloorSession
 ## controller rather than the session because the session it belongs to is the thing being freed,
 ## and a token has to outlive what it invalidates.
 var _generation := 0
-
-## The bound `EventBus.boss_defeated` handler, held so it can be taken back down. A bound callable
-## cannot be reconstructed for `is_connected` — `_on_boss_defeated.bind(room)` makes a different
-## Callable every time it is written — so the one that was connected is the one that has to be
-## kept. Without it a floor released before its boss died leaves a connection pointing at a room
-## that no longer exists.
-var _boss_defeated_handler := Callable()
-
 
 ## Generates and builds the floor. Returns false if generation failed, so the caller can
 ## report it rather than presenting an empty world.
@@ -298,7 +267,7 @@ func _open_session(generated: FloorLayout, seed_value: int) -> void:
 		visited[id] = true
 
 	_build_floor(resumed_shop)
-	_restore_boss_reward(resumed_reward)
+	_open_arena(resumed_reward)
 	_place_player_in_start_room()
 
 	# The next floor starts loading now, while the player has this one to fight through. By the time
@@ -308,61 +277,25 @@ func _open_session(generated: FloorLayout, seed_value: int) -> void:
 		campaign.preload_floor(floor_index + 1)
 
 
-## Stands the boss's prize back up in a resumed floor's arena, if the run was saved with one
-## unclaimed. Nothing to do for every other checkpoint, which is nearly all of them: that window is
-## the seconds between the killing blow and the claim.
-##
-## Two prizes, decided by which floor this is. Every floor but the last puts back the three items
-## the checkpoint names; the last puts back the trophy, which needs no names — see below.
-##
-## The items are resolved rather than drawn, for the reason `_place_boss_reward` gives — they were
-## struck off the run's pool when they were first offered, and the run is still carrying that.
-##
-## Only into a boss room the checkpoint says is cleared. An offer standing over a *live* boss is not
-## a state this game can produce, so a file describing one has been edited, and the honest answer to
-## a state that cannot happen is to build the floor as though it did not say so — the player then
-## fights the boss and is offered a reward by the ordinary path.
-func _restore_boss_reward(ids: Array[StringName]) -> void:
+## Stands up this floor's boss fight in its arena (see `BossArena`), and puts back the prize a
+## resumed run left standing unclaimed there, if it left one. `resumed_reward` is empty for every
+## other floor opening, which is nearly all of them.
+func _open_arena(resumed_reward: Array[StringName]) -> void:
 	var arenas := layout.find_by_type(RoomTemplate.Type.BOSS)
 	if arenas.is_empty():
 		return
 	var plan: RoomPlan = arenas[0]
-
-	# The last floor's prize is not in the checkpoint, because there is nothing about it to record:
-	# every trophy is the same object, and a cleared arena on the final floor can only mean one is
-	# standing in it — the one thing that takes it also ends the run, and ending a run clears the
-	# checkpoint. So the arena being cleared *is* the saved state, and it is enough to put it back.
-	#
-	# Without this the finale had the failure the item stands were given `floor_boss_reward_ids` to
-	# fix, in its worst form: a run saved between the last killing blow and the trophy came back to
-	# an empty arena on the last floor of the campaign, with the boss gone and no way left to win.
-	if is_final_floor():
-		if is_room_cleared(plan.id):
-			_place_trophy(_rooms[plan.id])
-		return
-
-	if ids.is_empty():
-		return
-
-	if not is_room_cleared(plan.id):
-		push_warning(
-			"FloorController: the saved run left a boss reward on floor %d, whose arena is not "
-			% config.floor_number
-			+ "recorded as cleared; the offer has been dropped."
-		)
-		return
-
-	var catalogue: Dictionary[StringName, ItemConfig] = {}
-	for item: ItemConfig in config.get_items():
-		if item != null:
-			catalogue[item.id] = item
-
-	var items: Array[ItemConfig] = []
-	for id: StringName in ids:
-		var item: ItemConfig = catalogue.get(id)
-		if item != null:
-			items.append(item)
-	_place_boss_reward(_rooms[plan.id], items)
+	_arena = BossArena.new()
+	_arena.name = "BossArena"
+	_session.add_child(_arena)
+	_arena.setup(
+		_rooms[plan.id], _boss_encounter, config.shop, is_final_floor(), _draw_boss_reward,
+		config.floor_number,
+	)
+	_arena.encountered.connect(boss_encountered.emit)
+	_arena.defeated.connect(_on_boss_defeated)
+	_arena.finished.connect(_finish_floor)
+	_arena.restore_prize(resumed_reward, config.get_items(), is_room_cleared(plan.id))
 
 
 ## Points every subsystem's generator at its own stream of this floor's seed.
@@ -425,6 +358,11 @@ func _claim_boss(entry: BossEncounter) -> BossEncounter:
 	if entry.id not in RunManager.fought_boss_ids:
 		RunManager.fought_boss_ids.append(entry.id)
 	return entry
+
+
+## This floor's boss fight. Null before the first `build`; a different node after every boundary.
+func get_boss_arena() -> BossArena:
+	return _arena
 
 
 ## This floor's doors by room. A new set after every boundary.
@@ -522,8 +460,8 @@ func _enter_room(id: int) -> void:
 	# Not for an arena a resumed run had already won. Without the clearing check a player who saved
 	# after killing the boss and before taking the reward would walk back into a second one — and
 	# `fought_boss_ids` would deny them the credit for it, so it would be a fight for nothing.
-	if room.plan.type == RoomTemplate.Type.BOSS and _boss == null and not is_room_cleared(id):
-		_spawn_boss(room)
+	if room.plan.type == RoomTemplate.Type.BOSS and _arena != null and not is_room_cleared(id):
+		_arena.summon()
 
 	if _needs_clearing(id):
 		_doors.set_locked(id, true)
@@ -549,150 +487,11 @@ func _needs_clearing(id: int) -> bool:
 	return _rooms[id].has_living_enemies()
 
 
-## Wakes the boss when the player walks in. The arena it is handed is the room's interior,
-## so the boss lays out its terminals and clamps its own movement without ever asking what
-## room it is in.
-func _spawn_boss(room: Room) -> void:
-	if _boss_encounter == null or not _boss_encounter.is_valid():
-		push_error("FloorController: floor %d has no usable boss." % config.floor_number)
-		return
-	_boss = _boss_encounter.scene.instantiate()
-	boss_encountered.emit(
-		_boss_encounter.display_name,
-		_boss_encounter.defeat_banner,
-		_boss_encounter.phase_banners,
-		is_final_floor(),
-	)
-	# One-shot: a boss is defeated exactly once per floor, and this controller now outlives a
-	# single floor. Without it, the next floor's boss spawn would stack a second connection,
-	# and its death would also invoke the handler still bound to this (by-then-freed) room.
-	#
-	# Held rather than only connected, because one-shot only covers the boss that *dies*. A floor
-	# abandoned with its boss alive — a restart, a death, a campaign edit — leaves this pointing at
-	# a room that is about to be freed, and `_release_session` is what takes it back down.
-	_boss_defeated_handler = _on_boss_defeated.bind(room)
-	EventBus.boss_defeated.connect(_boss_defeated_handler, CONNECT_ONE_SHOT)
-	# Deferred, for the fourth time in this project and the same reason every time: rooms
-	# are entered through an Area2D trigger, and registering the boss's collision bodies
-	# while the physics server is flushing queries is refused outright.
-	_add_boss.call_deferred(room, _generation)
-
-
-## `generation` is the floor this boss was summoned for. A boss walked into on the same frame a
-## floor is released would otherwise be added to a room from the floor being left — and the boss
-## is the one deferred spawn whose arrival is loud, since it brings a health bar and an arena with
-## it. The instance is freed rather than dropped: it was created in `_spawn_boss` and, unparented,
-## nothing else would ever free it.
-func _add_boss(room: Room, generation: int) -> void:
-	if not is_instance_valid(_boss):
-		return
-	if generation != _generation or not is_instance_valid(room) or not room.is_inside_tree():
-		_boss.queue_free()
-		_boss = null
-		return
-	# Before the boss, so the ground is already drawn on the frame the fight starts rather than
-	# appearing under a player who has begun moving. See `BossEncounter.arena_thermal_zones` for
-	# why a hazard can belong to the fight rather than to the room, and `Room.add_thermal_zones`
-	# for what happens when the arena had already authored the same ground itself.
-	# Null only if the session was released between the spawn and this deferred call, which the
-	# generation check above has already caught every way it can happen; the guard is here because
-	# an unlucky ordering should cost the arena its grilles rather than the frame.
-	if _boss_encounter != null:
-		room.add_thermal_zones(_boss_encounter.arena_thermal_zones)
-	room.add_child(_boss)
-	_boss.begin(room.get_interior_rect())
-
-
-## Spec section 16's reward: three rare items on stands, and taking one closes the others.
-## Winning the run waits on that choice rather than on the killing blow, so the player is
-## never shown a victory screen with an unclaimed prize behind it.
-##
-## **Nothing is made safe here, and that is deliberate.** No projectile is cleared, no compile lane
-## is cancelled, and the player is granted no immunity. An attack that was fired or painted before
-## the boss died goes on to resolve, and it can damage or kill the player while the reward is
-## standing there — the fight is over when the arena is, not when the health bar empties. A player
-## who empties the pool and walks into the prize through their own last volley has earned the
-## death.
-##
-## The reason to say this out loud is that it looks exactly like a bug from the outside, and the
-## obvious fix — sweep the hazards when `boss_defeated` fires — is one line and would be silently
-## accepted by every test in this project that predates `tests/test_post_boss.gd`. That suite
-## exists to make the removal fail loudly. What a dead boss must not do is start anything *new*;
-## both bosses enforce that themselves by refusing to run their attack clock once dead.
-##
-## `_finish_floor` is where the other half lives: the hazards stay live, but if one of them kills
-## the player first, the loss wins.
-func _on_boss_defeated(_boss_node: Node, room: Room) -> void:
-	_cleared[room.plan.id] = true
-	_doors.set_locked(room.plan.id, false)
-
-	# The last floor pays out in a trophy instead, and takes nothing out of the item pool to do it.
-	# A choice of three is a decision about the rest of the run, and on this floor there is no rest
-	# of the run: whichever stand the player read, weighed and pressed E on, the next thing that
-	# happened was the victory screen. See `Trophy`.
-	if is_final_floor():
-		_place_trophy(room)
-		return
-
-	var items := _draw_boss_reward()
-	if items.is_empty():
-		# Nothing left in the pool to offer. Winning must not depend on there being a prize:
-		# an empty choice creates zero stands, `choice_taken` never fires, and the run would
-		# sit in a cleared arena with a dead boss and no victory — which is exactly how this
-		# was reported. The boss is dead and the floor is done, so the run is won.
-		#
-		# Deferred, for the sixth time in this project and the same reason every time: this
-		# runs inside the boss's damage callback, and winning pauses the tree. Pausing the
-		# scene tree while the physics server is flushing leaked nineteen objects and four
-		# audio streams — measured, by taking this path with a deliberately emptied pool. The
-		# ordinary reward path is already outside the callback, which is why it never showed
-		# this.
-		push_warning("FloorController: no items left for the boss reward; winning without one.")
-		_finish_floor()
-		return
-
-	_place_boss_reward(room, items)
-
-
-## Stands the offer up in the arena. Split from the draw above because a resumed floor has to put
-## back a choice that was already drawn: the items are spent out of the run's pool the moment they
-## are offered (`_draw_boss_reward`), so drawing a second set would both cost the run three more items
-## and hand the player a different prize than the one they walked away from.
-func _place_boss_reward(room: Room, items: Array[ItemConfig]) -> void:
-	if items.is_empty():
-		return
-	var reward: ShopRoom = SHOP_ROOM_SCENE.instantiate()
-	room.add_child(reward)
-	reward.choice_taken.connect(_on_boss_reward_taken)
-	reward.stock_choice(config.shop, items, _boss_reward_positions(room))
-	# Held so a checkpoint can be told what is standing there. Dropped when the choice is taken,
-	# because from that moment the floor is finishing and there is no offer left to record.
-	_boss_reward = reward
-
-
-## Stands the campaign's prize in the last arena. Reached twice: when the final boss falls, and
-## when a run saved in the window between that and picking it up is resumed — see
-## `_restore_boss_reward`, which is what decides the second case.
-##
-## Nothing is spent, nothing is drawn, and nothing is recorded against the run. That is the point
-## of it: the trophy is the same object for every player and every seed, so unlike the three stands
-## it replaces there is no state a checkpoint has to carry to put it back.
-func _place_trophy(room: Room) -> void:
-	var trophy: Trophy = TROPHY_SCENE.instantiate()
-	trophy.position = room.to_local(room.get_reward_position())
-	trophy.claimed.connect(_on_trophy_claimed)
-	room.add_child(trophy)
-	_trophy = trophy
-
-
-## Picking it up is what wins the campaign, and it goes through `_finish_floor` rather than calling
-## `GameManager.win_run` itself. That is deliberate: the last floor must lose the same races every
-## other floor loses. A compile lane that was already painted when the boss fell can kill the
-## player on their walk to the trophy, and `_finish_floor` is the one place that knows a run which
-## has already ended does not then win.
-func _on_trophy_claimed() -> void:
-	_trophy = null
-	_finish_floor()
+## The boss has fallen: the arena is cleared and its doors open, before the prize goes up. See
+## `BossArena` for why nothing else is made safe at this moment.
+func _on_boss_defeated(room_id: int) -> void:
+	_cleared[room_id] = true
+	_doors.set_locked(room_id, false)
 
 
 ## Whether this is the floor the campaign ends on, and therefore the floor whose boss stands over a
@@ -707,32 +506,10 @@ func is_final_floor() -> bool:
 	return campaign == null or campaign.is_terminal(floor_index)
 
 
-## What the boss's offer is holding, for a checkpoint taken while it is standing unclaimed. Empty
-## whenever there is nothing to put back: before the boss dies, and after the choice is taken.
-##
-## This is the second half of what `ShopStock` does for the floor's shop, and it exists for a
-## sharper reason than a leak. The boss room is marked cleared the instant the boss falls, so a
-## resumed floor rebuilds it with no boss in it — and the stands died with the session that owned
-## them. Nothing else can descend a floor: `_finish_floor` runs from a claimed prize and from
-## nothing else. A run saved in the seconds between the killing blow and taking the prize therefore
-## came back to a cleared arena with nothing in it and no way off the floor, for the rest of the
-## run.
-##
-## Always empty on the last floor, where the prize is a trophy rather than a choice and there is
-## nothing about it to write down — `_restore_boss_reward` says what puts that one back.
+## What the boss's offer is holding, for a checkpoint taken while it is standing unclaimed — see
+## `BossArena.pending_reward_ids`. Empty when there is no arena.
 func get_pending_boss_reward_ids() -> Array[StringName]:
-	var ids: Array[StringName] = []
-	if _boss_reward == null or not is_instance_valid(_boss_reward):
-		return ids
-	for stand: ShopStand in _boss_reward.get_stands():
-		if not stand.is_sold and stand.item != null:
-			ids.append(stand.item.id)
-	return ids
-
-
-func _on_boss_reward_taken(_item: ItemConfig) -> void:
-	_boss_reward = null
-	_finish_floor()
+	return _arena.pending_reward_ids() if _arena != null else [] as Array[StringName]
 
 
 ## Winning the run and advancing to the next floor are the same event from the boss's point of
@@ -754,7 +531,7 @@ func _finish_floor() -> void:
 	# it.
 	#
 	# Checked here rather than at the moment of death because death is not the only way in: the
-	# empty-pool path in `_on_boss_defeated` reaches this too.
+	# empty-pool path in `BossArena.resolve_defeat` reaches this too.
 	if GameManager.is_run_over():
 		return
 
@@ -775,7 +552,7 @@ func _finish_floor() -> void:
 ## Replaces this controller's floor with the campaign's next one. Deferred by the caller because
 ## this runs from inside a pickup's physics callback (the boss reward stand), and this project has
 ## hit "touching physics bodies while the server is flushing queries is refused outright" enough
-## times already (see `_add_boss`, `LootSpawner`) that rebuilding synchronously in that same
+## times already (see `BossArena._add_boss`, `LootSpawner`) that rebuilding synchronously in that same
 ## callback is not worth risking again.
 ##
 ## A transaction, in the order that makes it one:
@@ -859,29 +636,19 @@ func _advance_to_next_floor(next_index: int, seed_value: int) -> void:
 ## the player is in, how many rooms they have cleared *here*. `RunManager`'s cumulative totals are
 ## deliberately untouched — that split is what a boundary is.
 func _release_session() -> void:
-	if _boss_defeated_handler.is_valid():
-		if EventBus.boss_defeated.is_connected(_boss_defeated_handler):
-			EventBus.boss_defeated.disconnect(_boss_defeated_handler)
-		_boss_defeated_handler = Callable()
-
-	# Only reachable when the floor ends between the boss being summoned and the deferred add
-	# landing. Unparented, it is owned by nothing and freed by nothing.
-	if is_instance_valid(_boss) and _boss.get_parent() == null:
-		_boss.queue_free()
-	_boss = null
-
+	# The boss fight lives in the session, and takes itself down as the session leaves the tree —
+	# including a boss summoned in this frame and not yet added. See `BossArena._exit_tree`.
 	if _session != null:
 		_session.close()
 		remove_child(_session)
 		_session.queue_free()
 		_session = null
 
-	# The shop and the boss's offer die with the session that owns them — both are children of rooms
-	# just freed — so what is dropped here is only this node's references. Stale ones would have the
-	# next floor's checkpoint recording the shelves of the floor the run has left.
+	# The shop and the boss's arena die with the session that owns them, so what is dropped here is
+	# only this node's references. Stale ones would have the next floor's checkpoint recording the
+	# shelves of the floor the run has left.
 	_shop = null
-	_boss_reward = null
-	_trophy = null
+	_arena = null
 
 	_rooms.clear()
 	_doors = FloorDoors.new()
@@ -905,15 +672,6 @@ func _draw_boss_reward() -> Array[ItemConfig]:
 		if not item.is_repeatable():
 			RunManager.offered_item_ids.append(item.id)
 	return chosen
-
-
-func _boss_reward_positions(room: Room) -> Array[Vector2]:
-	var centre := room.get_reward_position()
-	var positions: Array[Vector2] = []
-	for index: int in BOSS_REWARD_COUNT:
-		var offset := (float(index) - float(BOSS_REWARD_COUNT - 1) * 0.5) * BOSS_REWARD_SPACING
-		positions.append(centre + Vector2(offset, 0.0))
-	return positions
 
 
 func _on_room_cleared(id: int) -> void:

@@ -571,13 +571,9 @@ func _test_direct_start_and_arrival_agree_on_a_floor() -> void:
 	):
 		var boss_room := _find_boss_room(floor_node)
 		if require(boss_room, "floor 1 has a boss room to fight through"):
-			# Freed rather than left to the collector: `Node` is not reference counted, and a
-			# stand-in boss dropped on the floor here is an object still alive at exit.
-			var stand_in := Node.new()
-			floor_node._on_boss_defeated(stand_in, boss_room)
-			stand_in.free()
+			floor_node.get_boss_arena().resolve_defeat()
 			await advance_physics(1)
-			floor_node._on_boss_reward_taken(campaign.load_floor(0).get_items()[0])
+			floor_node.get_boss_arena().claim_reward(campaign.load_floor(0).get_items()[0])
 			await advance_physics(2)
 
 			var derived := campaign.floor_seed_for(run_seed, 1)

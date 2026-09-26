@@ -23,7 +23,7 @@ const PLAYER_RADIUS := Player.BODY_RADIUS
 ## That outlives the *boss*, not the floor, and both halves are load-bearing. A lane painted before
 ## a boss died goes on to strike into an arena the player has apparently just won, and may kill
 ## them there; the run is lost, and the reward they were walking toward is not granted. Nothing in
-## `FloorController._on_boss_defeated` cancels a lane, and nothing should be added that does — see
+## `BossArena.resolve_defeat` cancels a lane, and nothing should be added that does — see
 ## its own note, and `tests/test_post_boss.gd`, which fails if one is. The floor boundary is the
 ## other end of it: the session is released when the reward is claimed, which takes every
 ## unresolved lane with it, so a hazard can outlast a boss but never a descent.

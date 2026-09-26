@@ -96,9 +96,9 @@ func _ready() -> void:
 			for frame: int in budget:
 				if _boss_paid_out(final_floor):
 					break
-				if frame % 30 == 0 and is_instance_valid(_floor._boss):
-					_break_terminals(_floor._boss)
-					for part: BossPart in _parts(_floor._boss):
+				if frame % 30 == 0 and is_instance_valid(_floor.get_boss_arena().get_boss()):
+					_break_terminals(_floor.get_boss_arena().get_boss())
+					for part: BossPart in _parts(_floor.get_boss_arena().get_boss()):
 						if is_instance_valid(part):
 							part.took_damage.emit(DamageInfo.new(9999.0, _player))
 				await _fight(1)
@@ -115,9 +115,9 @@ func _ready() -> void:
 			if final_floor:
 				# The campaign ends on a trophy rather than a fourth choice of three; claiming it is
 				# the same call a robot walking into it makes.
-				_floor._trophy.claim()
+				_floor.get_boss_arena().get_trophy().claim()
 			else:
-				_floor._on_boss_reward_taken(_floor.config.get_items()[0])
+				_floor.get_boss_arena().claim_reward(_floor.config.get_items()[0])
 			await get_tree().process_frame
 			if index < CAMPAIGN.size() - 1:
 				_transitions.append((Time.get_ticks_usec() - before) / 1000.0)
@@ -184,7 +184,7 @@ func _break_terminals(boss: Boss) -> void:
 ## last, and the trophy on the last.
 func _boss_paid_out(final_floor: bool) -> bool:
 	if final_floor:
-		return is_instance_valid(_floor._trophy)
+		return is_instance_valid(_floor.get_boss_arena().get_trophy())
 	return _floor.get_pending_boss_reward_ids().size() == 3
 
 

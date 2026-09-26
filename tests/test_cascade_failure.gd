@@ -1260,7 +1260,7 @@ func _drive_to_nodes(alive: int) -> void:
 
 ## Builds a real floor from `config_path`, forces Cascade Failure into the draw, and walks the
 ## player into the arena — the whole road a room's ground travels, since the encounter's zones are
-## laid by `FloorController._add_boss` and nothing shorter would prove they arrive.
+## laid by `BossArena._add_boss` and nothing shorter would prove they arrive.
 ##
 ## The boss is forced by striking the rest of the floor's pool off as already fought, which is the
 ## run's own mechanism rather than a seed hunted for. A seed would pin these checks to a generator

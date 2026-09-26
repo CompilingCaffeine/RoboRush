@@ -62,6 +62,7 @@ func run() -> void:
 	await _test_nothing_from_a_floor_survives_its_boundary()
 	await _test_a_boundary_keeps_run_state_and_resets_floor_state()
 	await _test_an_ungeneratable_destination_keeps_the_current_floor()
+	await _test_a_floor_ended_mid_fight_takes_its_boss_with_it()
 	_greybox.clean_up()
 
 
@@ -1258,7 +1259,7 @@ func _test_boss_defeat_advances_to_the_next_floor_and_only_the_last_wins() -> vo
 		if not require(boss_room, "floor %d has a boss room" % number):
 			break
 
-		_defeat_boss(floor_node, boss_room)
+		_defeat_boss(floor_node)
 		await advance_physics(1)
 		# Victory waits on the claim, not on the killing blow, on every floor including the last.
 		check(
@@ -1269,10 +1270,10 @@ func _test_boss_defeat_advances_to_the_next_floor_and_only_the_last_wins() -> vo
 		# The last floor's boss stands over a trophy rather than over three stands (see `Trophy`), so
 		# what is claimed here depends on which floor this is. Claiming the wrong one would descend a
 		# floor that has nothing on it to take.
-		if floor_node._trophy != null:
-			floor_node._trophy.claim()
+		if floor_node.get_boss_arena().get_trophy() != null:
+			floor_node.get_boss_arena().get_trophy().claim()
 		else:
-			floor_node._on_boss_reward_taken(config.get_items()[0])
+			floor_node.get_boss_arena().claim_reward(config.get_items()[0])
 		await advance_physics(1)
 
 		if campaign.is_terminal(index):
@@ -1379,9 +1380,9 @@ func _test_a_descent_enters_only_the_new_floors_start_room() -> void:
 		floor_node._enter_room(boss_room.plan.id)
 		await advance_physics(2)
 
-		_defeat_boss(floor_node, boss_room)
+		_defeat_boss(floor_node)
 		_entered_during_descent.clear()
-		floor_node._on_boss_reward_taken(floor_config.get_items()[0])
+		floor_node.get_boss_arena().claim_reward(floor_config.get_items()[0])
 		# Long enough for the deferred rebuild and for the physics flush that delivers a
 		# body_entered the rebuild caused — one frame is not.
 		await advance_physics(8)
@@ -1396,7 +1397,7 @@ func _test_a_descent_enters_only_the_new_floors_start_room() -> void:
 				RoomTemplate.Type.keys()[entered.plan.type] if entered else "?",
 				id,
 			])
-		if floor_node._boss != null:
+		if floor_node.get_boss_arena().get_boss() != null:
 			bosses_spawned += 1
 
 		floor_node.queue_free()
@@ -1446,18 +1447,75 @@ func _test_a_descent_enters_only_the_new_floors_start_room() -> void:
 	await advance_physics(1)
 
 
-## Reports a boss defeat to `floor_node` without a boss.
+## A floor can end with its fight half-begun — a restart, a death, a descent — and the fight lives in
+## the floor's session, so it has to go when the session does. Two moments are worth checking: the
+## boss summoned but not yet added, which is owned by nothing until its deferred add lands, and the
+## boss alive in its arena. In both the defeat handler must come off the EventBus, or the next boss
+## to die anywhere would be answered by an arena that no longer exists. An orphaned boss would also
+## fail the runner's per-suite orphan count.
 ##
-## The handler only needs something non-null to name as the source, so a bare `Node` stands in for
-## the fight. It has to be *freed*, which is the part that was missed at two of the call sites:
-## `Node` is not reference counted, so a stand-in dropped on the floor is an object alive for the
-## rest of the process — and one of those call sites is inside a 123-seed loop, which is where 123
-## of this project's 125 reported exit leaks came from. One helper rather than the same three lines
-## at each site, so the next call site cannot forget.
-func _defeat_boss(floor_node: FloorController, boss_room: Room) -> void:
-	var stand_in := Node.new()
-	floor_node._on_boss_defeated(stand_in, boss_room)
-	stand_in.free()
+## Checked in the same frame as the release, not after it. The session is only queued for freeing,
+## and freeing would disconnect the arena on its own at the end of the frame — but a descent builds
+## the next floor in the same call, and the release has always been complete before that starts.
+func _test_a_floor_ended_mid_fight_takes_its_boss_with_it() -> void:
+	var campaign := load(CAMPAIGN_PATH) as RunDefinition
+	var arena := Node2D.new()
+	add_child(arena)
+	var floor_node := _open_greybox(arena, campaign, 2718)
+	if floor_node == null:
+		arena.queue_free()
+		await advance_physics(1)
+		return
+	var player: Player = arena.get_node("Player")
+	var boss_room := _find_boss_room(floor_node)
+	if not require(boss_room, "the floor has a boss room"):
+		arena.queue_free()
+		await advance_physics(1)
+		return
+
+	floor_node._enter_room(boss_room.plan.id)
+	var pending := floor_node.get_boss_arena().get_boss()
+	check(is_instance_valid(pending) and pending.get_parent() == null, "the boss is summoned, not yet added")
+	check(_arena_listeners() == 1, "and its arena listens for the defeat")
+	floor_node._release_session()
+	check(_arena_listeners() == 0, "the floor ending takes the defeat handler off at once")
+	check(pending.is_queued_for_deletion(), "and frees a boss summoned but not yet added")
+	await advance_physics(2)
+	check(not is_instance_valid(pending), "rather than leaving it orphaned")
+
+	check(floor_node.build(player, campaign.floor_seed_for(2718, 0)), "the floor opens again")
+	boss_room = _find_boss_room(floor_node)
+	floor_node._enter_room(boss_room.plan.id)
+	await advance_physics(2)
+	var fighting := floor_node.get_boss_arena().get_boss()
+	check(is_instance_valid(fighting) and fighting.is_inside_tree(), "a boss walked in on is in its arena")
+	floor_node._release_session()
+	check(_arena_listeners() == 0, "a floor ended mid-fight takes the defeat handler off at once")
+	await advance_physics(2)
+	check(not is_instance_valid(fighting), "and the boss goes with the floor")
+
+	GameManager.start_run()
+	arena.queue_free()
+	await advance_physics(1)
+
+
+func _arena_listeners() -> int:
+	var found := 0
+	for connection: Dictionary in EventBus.boss_defeated.get_connections():
+		var callable: Callable = connection["callable"]
+		if callable.get_object() is BossArena:
+			found += 1
+	return found
+
+
+## Reports a boss defeat to `floor_node` without fighting one, through the arena as though the
+## last hit had just landed.
+##
+## This used to hand the floor's handler a bare `Node` standing in for the boss, and the stand-in had
+## to be freed — missing that at two call sites, one inside a 123-seed loop, was 123 of this
+## project's 125 reported exit leaks. The arena needs no stand-in, so there is nothing left to leak.
+func _defeat_boss(floor_node: FloorController) -> void:
+	floor_node.get_boss_arena().resolve_defeat()
 
 
 func _on_room_entered_during_descent(_type: int, id: int) -> void:
@@ -1750,16 +1808,16 @@ func _descend(floor_node: FloorController) -> void:
 		fail("floor %d has no boss room to descend from" % floor_node.config.floor_number)
 		return
 
-	_defeat_boss(floor_node, boss_room)
+	_defeat_boss(floor_node)
 	await advance_physics(1)
 
 	# The last floor's boss stands over a trophy rather than over three stands (see `Trophy`), so
 	# what is claimed here depends on which floor this is. Claiming the wrong one would descend a
 	# floor that has nothing on it to take.
-	if floor_node._trophy != null:
-		floor_node._trophy.claim()
+	if floor_node.get_boss_arena().get_trophy() != null:
+		floor_node.get_boss_arena().get_trophy().claim()
 	else:
-		floor_node._on_boss_reward_taken(floor_node.config.get_items()[0])
+		floor_node.get_boss_arena().claim_reward(floor_node.config.get_items()[0])
 	# The rebuild is deferred, and so is the physics flush that follows it. One frame is not enough.
 	await advance_physics(4)
 

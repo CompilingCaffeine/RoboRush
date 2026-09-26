@@ -137,7 +137,7 @@ static func validate(campaign: RunDefinition) -> Report:
 static func offers_required(config: FloorConfig) -> int:
 	if config == null:
 		return 0
-	var offers := config.item_clear_indices.size() + FloorController.BOSS_REWARD_COUNT
+	var offers := config.item_clear_indices.size() + BossRewardDraw.COUNT
 	if config.treasure_grants_item:
 		offers += 1
 	if config.shop != null:

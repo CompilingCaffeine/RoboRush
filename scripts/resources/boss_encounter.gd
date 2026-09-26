@@ -36,7 +36,7 @@ extends Resource
 
 ## Throughput zones this boss brings into whatever arena it is fought in, in tile coordinates.
 ## Same shape and same meaning as `RoomTemplate.thermal_zones` — see `ThermalZone` — and built
-## into the room by `FloorController._add_boss` at the moment the boss is stood up.
+## into the room by `BossArena._add_boss` at the moment the boss is stood up.
 ##
 ## **A hazard belongs to whichever of the two authored the fight it is part of.** A floor's
 ## signature mechanic lives on that floor's templates, which is what keeps the Data Center's

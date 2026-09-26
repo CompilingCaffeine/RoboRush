@@ -318,7 +318,7 @@ func _test_every_boss_reward_is_three_choices_with_something_worth_taking() -> v
 			floor_node._reward_rng.seed = offset * 7919 + spent
 
 			var reward := floor_node._draw_boss_reward()
-			if reward.size() != FloorController.BOSS_REWARD_COUNT:
+			if reward.size() != BossRewardDraw.COUNT:
 				short_offers += 1
 			var beneficial := 0
 			var ids: Dictionary[StringName, bool] = {}

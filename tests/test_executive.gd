@@ -235,12 +235,10 @@ func _new_floor(parent: Node, index: int) -> FloorController:
 func _descend(floor_node: FloorController) -> void:
 	for plan: RoomPlan in floor_node.layout.rooms:
 		if plan.type == RoomTemplate.Type.BOSS:
-			var stand_in := Node.new()
-			floor_node._on_boss_defeated(stand_in, floor_node.get_room(plan.id))
-			stand_in.free()
+			floor_node.get_boss_arena().resolve_defeat()
 			break
 	await advance_physics(1)
-	floor_node._on_boss_reward_taken(floor_node.config.get_items()[0])
+	floor_node.get_boss_arena().claim_reward(floor_node.config.get_items()[0])
 	await advance_physics(4)
 
 

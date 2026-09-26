@@ -727,11 +727,7 @@ func _descend(floor_node: FloorController) -> void:
 		fail("floor %d has no boss room to descend from" % floor_node.config.floor_number)
 		return
 
-	# Freed rather than left to the collector: `Node` is not reference counted, so a stand-in boss
-	# dropped here is an object still alive at exit.
-	var stand_in := Node.new()
-	floor_node._on_boss_defeated(stand_in, boss_room)
-	stand_in.free()
+	floor_node.get_boss_arena().resolve_defeat()
 	await advance_physics(1)
 	await _claim_reward(floor_node)
 
@@ -740,10 +736,10 @@ func _claim_reward(floor_node: FloorController) -> void:
 	# The last floor's boss stands over a trophy rather than over three stands (see `Trophy`), so
 	# what is claimed here depends on which floor this is. Claiming the wrong one would descend a
 	# floor that has nothing on it to take.
-	if floor_node._trophy != null:
-		floor_node._trophy.claim()
+	if floor_node.get_boss_arena().get_trophy() != null:
+		floor_node.get_boss_arena().get_trophy().claim()
 	else:
-		floor_node._on_boss_reward_taken(floor_node.config.get_items()[0])
+		floor_node.get_boss_arena().claim_reward(floor_node.config.get_items()[0])
 	# The rebuild is deferred, and so is the physics flush after it. One frame is not enough.
 	await advance_physics(4)
 
