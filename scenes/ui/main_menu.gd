@@ -2,9 +2,8 @@ class_name MainMenu
 extends Control
 ## The title screen, and the game's entry point. Spec section 23's Main Menu.
 ##
-## Before this, launching Robo Rush dropped the player straight into a room with no title, no
-## settings, and no explanation of a firing scheme that has no fire button. Milestone 6's
-## success condition is a new player understanding the game without being told, and this is
+## The first thing a player sees: a title, settings, and the controls card before any room. The
+## game's goal for a first play is a new player understanding it without being told, and this is
 ## where that is either true or false.
 ##
 ## Owns the two panels that are reachable from both here and the pause menu — settings and the

@@ -2,7 +2,7 @@ class_name ControlsCard
 extends Control
 ## What the buttons do. Spec section 31.11: "controls are explained in game".
 ##
-## The single most load-bearing screen for milestone 6's success condition — a new player
+## The single most load-bearing screen for the game's first-play goal — a new player
 ## understanding the game without a developer next to them — because holding an arrow key aims
 ## *and* fires, and nothing on screen would ever teach that. Everything else here is a courtesy;
 ## that one line is the reason the card exists. With mouse aim on (`GameSettings.mouse_aim`) the

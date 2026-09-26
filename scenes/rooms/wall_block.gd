@@ -8,9 +8,8 @@ extends StaticBody2D
 ## the collision rectangle and the tiled sprite together, so the two can never
 ## drift apart.
 ##
-## This is scaffolding for the movement sandbox. Real floors will be built from
-## handcrafted room templates in milestone 3; a hand-authored TileMap is not
-## editable as text, so blocks are the honest choice until the editor is in play.
+## `Room` builds its walls and its template's obstacles from these. A hand-authored
+## TileMap is not editable as text, and a room template is.
 
 ## Size in pixels. Multiples of the room's tile size keep the texture tiling clean.
 @export var size := Vector2i(16, 16):

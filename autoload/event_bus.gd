@@ -11,13 +11,9 @@ extends Node
 ## that actor instead. HealthComponent emits `damaged` locally; the actor decides
 ## whether that is worth telling the world about.
 ##
-## Spec section 14's event list is now fully represented except for the boss and shop events,
-## which arrive with the systems that emit them.
-##
-## Three signals were added in milestone 4 and each earns its place by the same test: two
-## systems that should not know about each other. Explosions and chain jumps are damage
-## resolved in combat code that must never draw anything, and the item banner is a HUD that
-## must never know what an inventory is.
+## The same test admits the less obvious ones. Explosions and chain jumps are damage resolved
+## in combat code that must never draw anything, and the item banner is a HUD that must never
+## know what an inventory is.
 
 # --- Player ---
 

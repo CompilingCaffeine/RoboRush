@@ -43,7 +43,7 @@ extends Resource
 ## section 16's "damage to one partially heals the other", and destroying a terminal is how
 ## the player turns it off.
 ##
-## Raised from 0.6 to 0.75 by milestone 6's balance audit. At 0.6 the arithmetic said that
+## 0.75 rather than 0.6, the value it started at. At 0.6 the arithmetic said that
 ## breaking all four terminals saved two seconds out of thirteen — an eighteen percent return
 ## for crossing the arena four times under fire, which made the boss's central mechanic very
 ## nearly a trap. At 0.75 ignoring the terminals costs roughly twice as long, so the puzzle

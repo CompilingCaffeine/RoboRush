@@ -128,10 +128,10 @@ func _ready() -> void:
 
 	_item_bar.add_theme_constant_override("separation", ITEM_SEPARATION)
 
-	# The readouts sit over whatever the camera happens to be framing below the room, which
-	# through milestone 5 was "usually black, sometimes a wall". Spec section 21 does not
-	# leave legibility to luck, so the strip is now an opaque bar with a lit edge — the
-	# bezel of the machine the interface is pretending to be.
+	# The readouts sit over whatever the camera happens to be framing below the room: usually
+	# black, sometimes a wall. Spec section 21 does not leave legibility to luck, so the strip
+	# is an opaque bar with a lit edge — the bezel of the machine the interface is pretending
+	# to be.
 	_backing.color = UIPalette.VOID
 	_backing_edge.color = UIPalette.PANEL_BORDER
 	_boss_backing.color = UIPalette.VOID

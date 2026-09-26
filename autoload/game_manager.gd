@@ -147,7 +147,7 @@ func suspend_run() -> void:
 
 ## Only the two shortcuts that must work from anywhere. Everything else a player can do at a
 ## menu is a button on that menu, because a game whose options are undocumented keypresses
-## fails milestone 6's success condition before it starts.
+## has lost a new player before they start.
 ##
 ## Nothing here fires on the title screen: the menu is not a run, and `R` there would restart
 ## one that does not exist. The menus themselves see these events first — unhandled input
