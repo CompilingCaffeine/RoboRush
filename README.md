@@ -46,7 +46,6 @@ godot --headless --import
 | View run statistics | Hold `Tab` | Hold L1 / LB |
 | Pause | `Escape` | Start |
 | Restart | `R` | Y / triangle |
-| Active item | Right mouse | Left trigger |
 | Toggle debug overlay | `F1` | — |
 
 Holding an arrow key aims and fires in that direction. Movement and firing are independent, so you can move and shoot in different directions. The game shows its controls on first launch and from the title and pause menus.

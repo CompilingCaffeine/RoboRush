@@ -30,7 +30,6 @@ const REQUIRED_GAMEPAD_ACTIONS: Array[StringName] = [
 	&"pause",
 	&"restart",
 	&"run_stats",
-	&"use_active_item",
 ]
 
 ## Godot's built-in menu actions. The pause and settings screens are navigated with these, so

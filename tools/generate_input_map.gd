@@ -54,9 +54,6 @@ func _initialize() -> void:
 		# No fire button. Spec section 5 maps the right trigger to fire, but once
 		# shooting is directional the direction *is* the trigger, and a separate button
 		# would only be able to fire where the player is already firing.
-		"use_active_item": _action(
-			[_mouse(MOUSE_BUTTON_RIGHT), _axis(JOY_AXIS_TRIGGER_LEFT, 1.0)], TRIGGER_DEADZONE
-		),
 
 		# --- Verbs ---
 		"dash": _action([_key(KEY_SPACE), _button(JOY_BUTTON_A)], STICK_DEADZONE),
