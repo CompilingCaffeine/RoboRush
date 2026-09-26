@@ -2,9 +2,9 @@
 
 Robo Rush is a 2D top-down roguelite shooter built with Godot 4 and GDScript. Play an obsolete maintenance robot fighting through a corrupted software megacorporation, collecting upgrades that combine into new projectile behaviours.
 
-The complete campaign has six procedural floors. Each floor has a start room, combat rooms, a treasure vault, a shop, and a boss arena. The game supports keyboard and gamepad controls, persistent settings and records, deterministic seeded runs, desktop exports, and a browser build with Wavedash leaderboard support.
+The complete campaign has six procedural floors. Each floor has a start room, combat rooms, a treasure vault, a shop, and a boss arena. The game supports keyboard, mouse, and gamepad controls, persistent settings and records, deterministic seeded runs, desktop exports, and a browser build with Wavedash leaderboard support.
 
-For the original design requirements, see [robo_rush_build_spec.md](robo_rush_build_spec.md). The detailed six-floor plan is in [SIX_FLOOR_SCALING_GAMEPLAN.md](SIX_FLOOR_SCALING_GAMEPLAN.md). Proposed fixes, feature upgrades, and new content are in [ROADMAP.md](ROADMAP.md).
+For the original design requirements, see [robo_rush_build_spec.md](robo_rush_build_spec.md). The detailed six-floor plan is in [SIX_FLOOR_SCALING_GAMEPLAN.md](SIX_FLOOR_SCALING_GAMEPLAN.md). Proposed fixes, feature upgrades, and new content are in [ROADMAP.md](ROADMAP.md). What changed in each build, for playtesters, is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Run
 
