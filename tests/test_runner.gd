@@ -111,6 +111,9 @@ func _ready() -> void:
 
 	if suites.is_empty():
 		if not wanted.is_empty():
+			# A named suite that does not compile is not a TestCase, so it cannot match — say why.
+			for failure: String in failures:
+				printerr("  - %s" % failure)
 			printerr("FAIL  --suite=%s matched no suite." % ",".join(wanted))
 			_finished = true
 			get_tree().quit(1)
