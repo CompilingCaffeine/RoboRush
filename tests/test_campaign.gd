@@ -43,6 +43,7 @@ func run() -> void:
 	_test_the_validator_counts_the_reward_budget()
 	_test_the_validator_reports_an_incomplete_campaign()
 	_test_the_last_boss_cannot_be_fought_early()
+	_test_the_boss_draw_is_a_pure_policy()
 	await _test_direct_start_and_arrival_agree_on_a_floor()
 	_clean_up()
 
@@ -395,6 +396,55 @@ func _test_the_validator_reports_an_incomplete_campaign() -> void:
 		_campaign(entries, 1),
 		"lists 2 floors but targets 1",
 		"a campaign longer than it says it is",
+	)
+
+
+## `BossEncounterDraw` on its own. The floor suites reach it only through a built floor; this holds
+## the contract the floor relies on — the draw records nothing, a re-opened floor takes its own boss
+## back without spending a number from the stream, and an exhausted pool repeats rather than leaving
+## a sealed arena empty.
+func _test_the_boss_draw_is_a_pure_policy() -> void:
+	var source := load(FLOOR_CONFIG_PATH) as FloorConfig
+	if not require(source and source.boss_pool.size() >= 2, "floor 1 supplies a pool to draw from"):
+		return
+	var first_boss := source.boss_pool[0]
+	var second_boss := source.boss_pool[1]
+	var pool: Array[BossEncounter] = [first_boss, second_boss]
+	var none_fought: Array[StringName] = []
+
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 77
+	var again := RandomNumberGenerator.new()
+	again.seed = 77
+	var drawn := BossEncounterDraw.draw(pool, none_fought, &"", rng)
+	check(drawn in pool, "a fresh floor draws from its pool")
+	check(drawn == BossEncounterDraw.draw(pool, none_fought, &"", again), "and the same stream draws the same boss")
+	check(none_fought.is_empty(), "without crediting the run: that is the floor's to record")
+
+	var first_fought: Array[StringName] = [first_boss.id]
+	var never_repeats := true
+	for seed_value: int in 20:
+		rng.seed = seed_value
+		never_repeats = never_repeats and BossEncounterDraw.draw(pool, first_fought, &"", rng) == second_boss
+	check(never_repeats, "a boss the run has fought is never drawn while another is left")
+
+	var both_fought: Array[StringName] = [first_boss.id, second_boss.id]
+	rng.seed = 5
+	var state_before := rng.state
+	check(
+		BossEncounterDraw.draw(pool, both_fought, first_boss.id, rng) == first_boss,
+		"a re-opened floor takes back the boss it already drew",
+	)
+	check(rng.state == state_before, "without spending a number from the stream")
+
+	check(
+		BossEncounterDraw.draw(pool, both_fought, &"", rng, "'policy check'") in pool,
+		"an exhausted pool repeats a boss rather than leaving the arena empty",
+	)
+	var empty: Array[BossEncounter] = []
+	check(
+		BossEncounterDraw.draw(empty, none_fought, &"", rng, "'policy check'") == null,
+		"and an empty pool draws nothing",
 	)
 
 
