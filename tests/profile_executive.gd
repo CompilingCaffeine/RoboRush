@@ -9,6 +9,11 @@ extends Node
 const MAIN := preload("res://main.tscn")
 const CAMPAIGN := preload("res://data/runs/main_campaign.tres")
 
+## Frames the probe spends killing a floor's boss before calling the floor a failure: 15 seconds for
+## every boss but the last, and 80 for Core Intelligence's five held masks.
+const BOSS_FRAME_BUDGET := 900
+const FINALE_FRAME_BUDGET := 4800
+
 var _process_ms: Array[float] = []
 var _physics_ms: Array[float] = []
 var _frame_ms: Array[float] = []
@@ -83,21 +88,36 @@ func _ready() -> void:
 			await _fight(180)
 			# Exercise actual receiver/phase/death code until the reward appears. This is
 			# an endurance probe, not an estimate of human completion time.
-			for frame: int in 900:
-				if not _floor.get_pending_boss_reward_ids().is_empty():
+			var final_floor := _floor.is_final_floor()
+			# The finale wears five masks, and each is held for its whole attack rotation however
+			# fast its share of the pool goes: about a minute of fight that no amount of damage
+			# shortens. Every other boss dies inside the 15-second budget.
+			var budget := FINALE_FRAME_BUDGET if final_floor else BOSS_FRAME_BUDGET
+			for frame: int in budget:
+				if _boss_paid_out(final_floor):
 					break
 				if frame % 30 == 0 and is_instance_valid(_floor._boss):
+					_break_terminals(_floor._boss)
 					for part: BossPart in _parts(_floor._boss):
 						if is_instance_valid(part):
 							part.took_damage.emit(DamageInfo.new(9999.0, _player))
 				await _fight(1)
 			_sampling = false
-			if _floor.get_pending_boss_reward_ids().size() != 3:
-				_failures.append("floor %d failed to offer three rewards" % (index + 1))
+			if not _boss_paid_out(final_floor):
+				_failures.append(
+					"floor %d failed to %s" % [
+						index + 1, "leave a trophy" if final_floor else "offer three rewards"
+					]
+				)
 				break
 			var session := _floor.get_session()
 			var before := Time.get_ticks_usec()
-			_floor._on_boss_reward_taken(_floor.config.get_items()[0])
+			if final_floor:
+				# The campaign ends on a trophy rather than a fourth choice of three; claiming it is
+				# the same call a robot walking into it makes.
+				_floor._trophy.claim()
+			else:
+				_floor._on_boss_reward_taken(_floor.config.get_items()[0])
 			await get_tree().process_frame
 			if index < CAMPAIGN.size() - 1:
 				_transitions.append((Time.get_ticks_usec() - before) / 1000.0)
@@ -150,6 +170,24 @@ func _process(_delta: float) -> void:
 	_last_frame = now
 
 
+## The Scrap King's terminals, and the finale's mask of him, refund damage while any stands.
+func _break_terminals(boss: Boss) -> void:
+	var terminals: Variant = boss.get("_terminals")
+	if not terminals is Array:
+		return
+	for terminal: Variant in (terminals as Array).duplicate():
+		if is_instance_valid(terminal):
+			(terminal as BossTerminal).get_health_component().apply_damage(DamageInfo.new(999.0))
+
+
+## Whether the floor's boss has left what it leaves: three reward stands on every floor but the
+## last, and the trophy on the last.
+func _boss_paid_out(final_floor: bool) -> bool:
+	if final_floor:
+		return is_instance_valid(_floor._trophy)
+	return _floor.get_pending_boss_reward_ids().size() == 3
+
+
 func _enter(room: Room) -> void:
 	_player.global_position = room.get_interior_centre() + Vector2(0, 45)
 	_floor._enter_room(room.plan.id)
@@ -160,7 +198,9 @@ func _fight(frames: int) -> void:
 	for frame: int in frames:
 		await get_tree().physics_frame
 		var target := Targeting.nearest_hostile(_player, _player.global_position, 500.0, Teams.Id.PLAYER)
-		var direction := _player.global_position.direction_to(target.global_position) if target != null else Vector2.RIGHT
+		var direction := Vector2.RIGHT
+		if target != null:
+			direction = _player.global_position.direction_to(target.global_position)
 		_player.get_weapon_controller().try_fire(_player.global_position, direction)
 
 
