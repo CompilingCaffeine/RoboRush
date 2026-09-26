@@ -11,7 +11,7 @@
 | FIX-1 Scrap Magnet | **Done.** Items are no longer pulled. The suspected repair-cell gap was real and is fixed too: a pickup touched without being collected now keeps asking while the robot stands on it. Covered by two new item checks. |
 | FIX-5 / ENG-3 Design notes | **Done.** Confirmed that a re-save dropped all 51 comment lines from `floor_3_data_center.tres`. All 104 files now use `metadata/design_notes`, which survives re-saving. `tools/ci/check_design_notes.py` guards against new comments. |
 | ENG-4 Static analysis | **Done.** gdlint, ruff, shellcheck, the design-notes check, and a script-UID check run through `tools/ci/lint.sh` and the Lint workflow. The linters' real findings are fixed, and two missing `.uid` files are committed. |
-| ENG-1 Split FloorController | **Started.** The boss-reward policy is now `BossRewardDraw`, and its output matches `main` seed for seed. Still to extract: `FloorTransition`, `RoomEntryDirector`, and `ShopStocker`. |
+| ENG-1 Split FloorController | **Done, with one optional slice left.** The file went from 1,159 lines to 955 (387 of them code). Moved out: the boss-reward and boss-encounter policies (`BossRewardDraw`, `BossEncounterDraw`), room, door and shop construction (`FloorBuilder`), door locking (`FloorDoors`), and the repair cadence (now `FloorConfig.repair_every_clears`). A probe of 30 seeds across all six floors is byte-identical before and after, apart from the fingerprint change the cadence move intended. Transitions and room entry stay in the controller: they are its state machine, and moving them would only hide the same coupling behind another object. The optional slice is placing and restoring the boss prize. |
 | ENG-5 CI shape | **Partly done.** Lint is its own fast workflow. The test runner accepts `-- --suite=Name`. `profile_executive` works again: it had been failing on `main` since the campaign started ending on a trophy. A nightly job is still to do. |
 
 This plan comes from reading the code and data, not from playing the game. Every finding cites the file that shows it. Every proposal is sized, lists its dependencies, and states the evidence that should count as "done". The six-floor campaign already works, so the plan builds on it without restructuring it.
@@ -402,7 +402,7 @@ Named in-fiction:
 - **Production** (today's game, unchanged).
 - **Incident** (hard): `enemy_health_scale` starts at 1.25, the elite chance doubles, repairs every 4 clears, and the boss reward is 2 of 3. The Incident tier unlocks after the first victory.
 
-`REPAIR_EVERY_CLEARS` is a `const` in `FloorController` (`floor_controller.gd:78`), so move it to `FloorConfig` or a `DifficultyConfig` first. Keep separate leaderboards per tier. The difficulty is recorded in the checkpoint and in `RunStats`.
+The repair cadence is already per floor (`FloorConfig.repair_every_clears`), so a tier can scale it. Keep separate leaderboards per tier. The difficulty is recorded in the checkpoint and in `RunStats`.
 
 ---
 
