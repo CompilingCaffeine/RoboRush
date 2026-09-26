@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="CombatCaps" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/combat_caps.gd" id="1_caps"]
+
+[resource]
+script = ExtResource("1_caps")
+max_player_projectiles = 160
+max_split_depth = 3
+max_children_per_impact = 8
+max_drones = 4
+max_player_hazards = 32
+max_explosions_per_frame = 32
+metadata/design_notes = "Each number is a ceiling the shipped pool never reaches, measured before it was set (2026-09-26).
+
+max_player_projectiles: The strongest legal build peaked at 45 live shots standing still on one point of integrity and firing into a wall, and at 56 across three six-floor profile runs. Each live shot costs about 6 microseconds of physics a frame on desktop, so 160 is about one millisecond there. A browser runs the same work slower; that has not been measured here. Three times the measured peak leaves room for multi-shot and echo items before this binds.
+
+max_split_depth: Three generations of splitting. Children, grandchildren and great-grandchildren live 60%, 36% and 22% of the parent's lifetime. A fourth generation would live 13% of it, which reads as sparks rather than shots.
+
+max_children_per_impact: The largest split in the pool today is five, from every splitting item at once.
+
+max_drones: The pool holds one drone item. The economy suite has always held the worst build to four; this makes the same number a rule the game enforces.
+
+max_player_hazards: No shipped item leaves hazards yet, so this is set from the cost side. A patch lasts 1.5 seconds by default and runs one area query every half second, so 32 of them cost a small fraction of what the projectile budget allows.
+
+max_explosions_per_frame: The profile's peak was 21 in one frame, from impact blasts and on-kill blasts together."

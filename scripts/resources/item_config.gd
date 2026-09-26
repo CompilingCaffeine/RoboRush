@@ -90,6 +90,10 @@ const HINDRANCE_TAG := &"hindrance"
 ## either direction, which is what makes it different from a negative amount of something good.
 const PENALTY_KEYS: Array[StringName] = [&"aim_offset_degrees"]
 
+## The weapon's `PENALTY_KEYS`. Spread with one projectile is inaccuracy, at any value; an item that
+## adds projectiles and spreads them has its upside in the projectile count, which the sign test reads.
+const WEAPON_PENALTY_KEYS: Array[StringName] = [&"spread_degrees"]
+
 ## The mirror of `PENALTY_KEYS`: fields that are a benefit at any value, so the sign test must not
 ## read a negative amount of them as a cost.
 ##
@@ -98,7 +102,10 @@ const PENALTY_KEYS: Array[StringName] = [&"aim_offset_degrees"]
 ## amount of it, and the sign test would have called the item a pure cost. That would be a quiet
 ## misclassification rather than a loud one: `is_hindrance` is a tag, so nothing would have broken
 ## today, and `has_upside` exists precisely to be the reality the tag is checked against.
-const BENEFIT_KEYS: Array[StringName] = [&"knockback"]
+##
+## `speed_over_life` is the other. A shot that slows to a halt and hangs in the air as a mine is the
+## whole of an item, and a negative amount of it is that item rather than a slower shot.
+const BENEFIT_KEYS: Array[StringName] = [&"knockback", &"speed_over_life"]
 
 ## Spec section 10's tags and synergy tags are one list: a tag is only useful because
 ## something else can look for it, which is what a synergy tag is.
@@ -119,10 +126,28 @@ const BENEFIT_KEYS: Array[StringName] = [&"knockback"]
 @export var projectile_scale: Dictionary = {}
 
 ## Applies this item's projectile modifiers only every Nth shot. 0 or 1 means every shot.
+## Weapon modifiers are not gated by it: a weapon's pattern is rebuilt when the build changes, not
+## per shot, so an item cannot ask for both and `CampaignValidator` refuses one that does.
 ## Capacitor Leak's "every fifth shot" is this and nothing else, counted against the
 ## weapon's lifetime shot count — which is why spec section 13's explicit Debug Drone
 ## synergy ("drone shots count toward the trigger") will need no code when drones arrive.
 @export var shot_interval: int = 0
+
+@export_group("Weapon modifiers")
+
+## The weapon's own fields, by `WeaponConfig` property name, in the same three operations as the
+## projectile dictionaries above: assigned, added, and multiplied. Roadmap SYS-1. How many
+## projectiles a shot fires, across what arc, how far apart, which way, and whether the trigger
+## charges are all reachable here; the fire rate is not, because it goes through `fire_rate_scale`
+## and the diminishing-returns curve. See `WeaponModifierStack` for the full list of refusals.
+##
+## They apply to the drones' weapons as well as the robot's, for the reason the projectile
+## modifiers do: a drone's shots are the player's shots.
+@export var weapon_set: Dictionary = {}
+
+@export var weapon_add: Dictionary = {}
+
+@export var weapon_scale: Dictionary = {}
 
 @export_group("Actor modifiers")
 
@@ -320,6 +345,7 @@ func is_hindrance() -> bool:
 func has_upside() -> bool:
 	return (
 		_changes_a_projectile_for_the_better()
+		or _changes_the_weapon_for_the_better()
 		or fire_rate_scale > 1.0
 		or max_integrity_delta > 0.0
 		or heal_on_pickup > 0.0
@@ -373,6 +399,28 @@ func _changes_a_projectile_for_the_better() -> bool:
 	return false
 
 
+## The same test as `_changes_a_projectile_for_the_better`, for the weapon's fields: a set turns
+## something on, a positive add or a scale above one is more of it, and `WEAPON_PENALTY_KEYS` are a
+## cost at any value.
+func _changes_the_weapon_for_the_better() -> bool:
+	for key: StringName in weapon_set:
+		if key not in WEAPON_PENALTY_KEYS:
+			return true
+	for key: StringName in weapon_add:
+		if key not in WEAPON_PENALTY_KEYS and float(weapon_add[key]) > 0.0:
+			return true
+	for key: StringName in weapon_scale:
+		if key not in WEAPON_PENALTY_KEYS and float(weapon_scale[key]) > 1.0:
+			return true
+	return false
+
+
+## Whether this item changes the weapon at all. Read by `WeaponModifierStack`, which leaves out the
+## items that do not.
+func modifies_weapon() -> bool:
+	return not (weapon_set.is_empty() and weapon_add.is_empty() and weapon_scale.is_empty())
+
+
 ## True for items whose whole effect is a number. Used by the suite that asserts spec
 ## section 10's "most items should change behaviour, not numbers" still holds.
 ##
@@ -385,6 +433,10 @@ func is_stat_only() -> bool:
 	return (
 		projectile_set.is_empty()
 		and projectile_add.is_empty()
+		# A new shape of shot is a behaviour; a weapon scaled up is a number, for the reason a
+		# projectile scale is.
+		and weapon_set.is_empty()
+		and weapon_add.is_empty()
 		and kill_explosion_radius <= 0.0
 		and pickup_magnet_radius <= 0.0
 		and drone_count <= 0

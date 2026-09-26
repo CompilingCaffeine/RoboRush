@@ -284,6 +284,42 @@ func _test_the_validator_catches_content_faults() -> void:
 				"a floor whose drop table %s" % fault[1],
 			)
 
+	# Roadmap SYS-1 and SYS-2: an item's modifiers are strings, and a wrong one does nothing at all
+	# until somebody holds the item. Each fault is one malformed item added to a working pool.
+	for fault: Array in [
+		["content_item_typo", "which a projectile does not have",
+			func(item: ItemConfig) -> void: item.projectile_add = {&"bouce_count": 1}],
+		["content_item_weapon_typo", "which a weapon does not have",
+			func(item: ItemConfig) -> void: item.weapon_add = {&"projectiles_per_shoot": 1}],
+		["content_item_fire_rate", "fire rate goes through fire_rate_scale",
+			func(item: ItemConfig) -> void: item.weapon_scale = {&"shots_per_second": 1.5}],
+		["content_item_interval", "the interval only gates projectile modifiers",
+			func(item: ItemConfig) -> void:
+				item.shot_interval = 5
+				item.weapon_add = {&"projectiles_per_shot": 1}],
+		["content_item_status", "applies the status '__frostbite', which is not defined",
+			func(item: ItemConfig) -> void: item.projectile_add = {&"status_effects": [&"__frostbite"]}],
+		["content_item_hazard", "applies the status '__lava', which is not defined",
+			func(item: ItemConfig) -> void:
+				item.projectile_set = {&"trail_hazard_effect": &"__lava", &"trail_hazard_interval": 0.1}],
+	]:
+		var malformed := _write_floor(fault[0], &"beta", 2, func(config: FloorConfig) -> void:
+			var item := ItemConfig.new()
+			item.id = StringName(fault[0])
+			item.display_name = "Malformed"
+			fault[2].call(item)
+			var pool := ItemPool.new()
+			pool.items = config.item_pool.items.duplicate()
+			pool.items.append(item)
+			config.item_pool = pool
+		)
+		if not malformed.is_empty():
+			_expect_error(
+				_campaign([[&"alpha", first], [&"beta", malformed]]),
+				fault[1],
+				"an item that %s" % fault[1],
+			)
+
 	var bad_track := _write_floor("content_track", &"beta", 2, func(config: FloorConfig) -> void:
 		var theme := config.theme.duplicate() as FloorTheme
 		theme.explore_music = &"__no_such_track"

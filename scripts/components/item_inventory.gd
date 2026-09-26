@@ -96,6 +96,11 @@ func build_modifier_stack() -> ProjectileModifierStack:
 	return ProjectileModifierStack.from_items(_items)
 
 
+## The weapon's counterpart, rebuilt the same way and for the same reason. See `WeaponModifierStack`.
+func build_weapon_modifier_stack() -> WeaponModifierStack:
+	return WeaponModifierStack.from_items(_items)
+
+
 ## Multiplicative, so two fire-rate items compound instead of one overwriting the other:
 ## Cooling Fan and Unsafe Overclock together are 1.2 * 1.25, not 1.25. Softened above the knee, so
 ## twelve of them are not 1.2 * 1.25 twelve times over — see `DiminishingReturns` for the curve and

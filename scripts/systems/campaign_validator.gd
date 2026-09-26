@@ -125,10 +125,58 @@ static func validate(campaign: RunDefinition) -> Report:
 		configs[index] = config
 		_validate_floor(report, index, entry, config)
 
+	_validate_item_modifiers(report, configs)
 	_validate_reward_capacity(report, configs)
 	_validate_boss_supply(report, configs)
 	_validate_the_last_boss_is_only_the_last(report, campaign, configs)
 	return report
+
+
+## Every item any floor can offer, checked once however many pools hold it, for the three ways an
+## item's modifier dictionaries go wrong without saying so.
+##
+## - **A field that does not exist**, or that a weapon refuses. Items name fields as strings, and a
+##   typo does nothing at all: the stacks report it at runtime, which is the first time anybody holds
+##   the item, and this reports it before a run starts.
+## - **Weapon modifiers with a shot interval.** The interval gates projectile modifiers per shot; a
+##   weapon's pattern is rebuilt per pickup and has no shot to gate. An item asking for both would
+##   change the weapon on every shot or none, and neither is what "every fifth shot" means.
+## - **A status nobody defined.** A shot carrying an unknown status, or leaving a hazard that applies
+##   one, reports it on every hit and does nothing.
+static func _validate_item_modifiers(report: Report, configs: Array[FloorConfig]) -> void:
+	var checked: Dictionary[StringName, bool] = {}
+	for config: FloorConfig in configs:
+		if config == null or config.item_pool == null:
+			continue
+		for item: ItemConfig in config.item_pool.items:
+			if item == null or checked.has(item.id):
+				continue
+			checked[item.id] = true
+			_validate_one_item(report, item)
+
+
+static func _validate_one_item(report: Report, item: ItemConfig) -> void:
+	for key: String in ProjectileModifierStack.unknown_keys(item):
+		report.error("item '%s' modifies '%s', which a projectile does not have." % [item.id, key])
+	for key: String in WeaponModifierStack.unknown_keys(item):
+		var refusal := WeaponModifierStack.refusal(StringName(key))
+		if refusal.is_empty():
+			report.error("item '%s' modifies '%s', which a weapon does not have." % [item.id, key])
+		else:
+			report.error("item '%s' modifies weapon field '%s': %s." % [item.id, key, refusal])
+	if item.shot_interval > 1 and item.modifies_weapon():
+		report.error(("item '%s' has a shot interval and weapon modifiers; the interval only gates "
+			+ "projectile modifiers.") % item.id)
+
+	var statuses: Array = []
+	for source: Dictionary in [item.projectile_set, item.projectile_add]:
+		var named: Variant = source.get(&"status_effects", [])
+		statuses.append_array(named if named is Array else [named])
+		if source.has(&"trail_hazard_effect"):
+			statuses.append(source[&"trail_hazard_effect"])
+	for status: Variant in statuses:
+		if not StatusEffectController.DEFINITIONS.has(StringName(status)):
+			report.error("item '%s' applies the status '%s', which is not defined." % [item.id, status])
 
 
 ## How many item offers one floor promises to fill, counted the way `FloorController` actually

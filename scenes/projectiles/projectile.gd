@@ -6,6 +6,11 @@ extends Area2D
 ## 13's synergies free: Ricochet Driver raises `bounce_count`, Fork Bomb raises
 ## `split_count`, and "bounces once then splits" already works.
 ##
+## The flight behaviours from roadmap SYS-2 — orbiting, pausing to re-aim, ramping speed and
+## damage, growing, auras, trail hazards, criticals, copies on a kill, a last shot on expiry — are
+## the same kind of thing: fields on the config, each neutral at its default, read here and nowhere
+## else. None of them knows which item asked for it or which of the others it is flying with.
+##
 ## Movement is stepped manually instead of using a physics body, for one concrete
 ## reason: wall handling needs a surface *normal*, which a ray query provides and
 ## which Area2D's body_entered cannot. Bounce and correctly-oriented impact sparks
@@ -22,6 +27,25 @@ const BOUNCE_CLEARANCE := 0.5
 ## How much of the parent's lifetime a split child gets. Children are a bonus, not a
 ## second volley, and full-lifetime children would spend most of it wandering the room.
 const SPLIT_LIFETIME_SCALE := 0.6
+
+## Pixels of travel over which `radius_over_distance` arrives: a little over half a room's width, so
+## a growing shot is at its full size by the time it reaches the far side of a fight.
+const GROWTH_DISTANCE := 240.0
+
+## Seconds between an aura's hits. Quarter-second ticks read as a shot that hurts to be near rather
+## than as a stream of separate hits, and keep the damage numbers legible.
+const AURA_TICK_SECONDS := 0.25
+
+## Damage tag an aura's hits carry, so a resistance can tell them from a direct hit.
+const AURA_TAG := &"aura"
+
+## How far a pause or an expiry looks for something to re-aim at. Further than any room is wide,
+## because the room is the real bound: `_room_bounds` is passed with every search.
+const RETARGET_RADIUS := 480.0
+
+## Total arc the copies of a killing shot fan across. Narrow, because they are the same shot carrying
+## on, not a burst.
+const DUPLICATE_SPREAD_DEGREES := 16.0
 
 var config: ProjectileConfig
 var team := Teams.Id.PLAYER
@@ -53,6 +77,30 @@ var _lifetime_left := 0.0
 var _pierce_left := 0
 var _bounce_left := 0
 var _has_returned := false
+
+## Seconds spent in flight — not circling, not paused. What the over-life ramps read.
+var _age := 0.0
+
+## Pixels flown, for `radius_over_distance`.
+var _travelled := 0.0
+
+## The collision radius now, which `radius_over_distance` grows from `config.radius`.
+var _radius := 0.0
+
+## Radians of orbit still owed, and where on the circle the shot is.
+var _orbit_left := 0.0
+var _orbit_angle := 0.0
+
+## Whether the one pause is still to come, and how much of it is left once it has begun.
+var _pause_pending := false
+var _pause_left := 0.0
+
+## Whether the shot has struck a body, which is what decides whether its expiry is a miss.
+var _has_hit := false
+
+## Seconds to the next aura tick and the next hazard patch.
+var _aura_left := 0.0
+var _hazard_left := 0.0
 
 ## Set the moment the projectile is used up. `queue_free` does not take effect until the
 ## end of the frame, so a spent projectile keeps receiving `body_entered` for every other
@@ -98,6 +146,11 @@ func _ready() -> void:
 	_lifetime_left = config.lifetime
 	_pierce_left = config.pierce_count
 	_bounce_left = config.bounce_count
+	_radius = config.radius
+	_orbit_left = maxf(config.orbit_turns, 0.0) * TAU
+	_orbit_angle = _direction.angle()
+	_pause_pending = config.pause_and_retarget_seconds > 0.0
+	_hazard_left = config.trail_hazard_interval
 
 	# Asked for here rather than passed in, so every way a projectile comes into the world gets it
 	# for nothing: a weapon's shot, a split child fanning off an impact, a boss's ring. All any of
@@ -124,29 +177,186 @@ func _ready() -> void:
 	body_entered.connect(_on_body_entered)
 
 
+## Three states, one at a time: circling the shooter, stopped to re-aim, or in flight. Only flight
+## ages the shot and spends its lifetime — the other two are a wind-up and a held breath, and
+## neither should cost the shot its range.
 func _physics_process(delta: float) -> void:
-	_lifetime_left -= delta
-	if _lifetime_left <= 0.0:
-		_expire()
+	if _orbit_left > 0.0:
+		_step_orbit(delta)
+	elif _pause_left > 0.0:
+		_pause_left -= delta
+		if _pause_left <= 0.0:
+			_retarget()
+	else:
+		_lifetime_left -= delta
+		if _lifetime_left <= 0.0:
+			_expire()
+			return
+		_age += delta
+		if _pause_pending and _age >= config.pause_after_seconds:
+			_pause_pending = false
+			_pause_left = config.pause_and_retarget_seconds
+		else:
+			_fly(delta)
+
+	if _is_spent:
 		return
 
-	_apply_homing(delta)
-
-	var step := _direction * config.speed * delta
-	var wall := _cast_to_wall(step)
-	if wall.is_empty():
-		global_position += step
-	else:
-		_handle_wall(wall)
-
-	if not _is_spent and _has_left_its_room():
+	if _has_left_its_room():
 		# Not `_expire`: that offers Return Protocol another lap, and a shot that has left the room
 		# is not a shot the player is owed anything more from. The boundary is the end of it.
 		EventBus.projectile_expired.emit(self)
 		_despawn()
 		return
 
+	_step_aura(delta)
+	_step_trail_hazard(delta)
 	_update_trail()
+
+
+## One frame of ordinary flight: steer, move, and meet whatever wall is in the way.
+func _fly(delta: float) -> void:
+	_apply_homing(delta)
+
+	var step := _direction * _current_speed() * delta
+	# A shot that has slowed to a halt goes nowhere, so there is no wall for it to meet. Casting
+	# anyway would cost a ray every frame it waits, and a homing mine turning to face a wall beside
+	# it would meet one it never moved into.
+	if step.is_zero_approx():
+		return
+
+	var wall := _cast_to_wall(step)
+	if wall.is_empty():
+		global_position += step
+		_grow(step.length())
+	else:
+		_handle_wall(wall)
+
+
+## Circles the shooter, at the shot's own speed along the circle, until the turns are spent. A
+## shooter that has gone — a dead enemy, a freed drone — releases it at once, the way it was facing.
+##
+## Walls are not met while circling. The robot is inside the room, the circle is a couple of tiles
+## across, and a shot that bounced or died against the wall the player was standing beside would
+## make the item worse the closer the fight got.
+func _step_orbit(delta: float) -> void:
+	var centre := get_shooter() as Node2D
+	if centre == null or not centre.is_inside_tree():
+		_release_orbit()
+		return
+
+	var circle := maxf(config.orbit_radius, 1.0)
+	var turn := minf(_current_speed() / circle * delta, _orbit_left)
+	_orbit_left -= turn
+	_orbit_angle += turn
+	var outward := Vector2.from_angle(_orbit_angle)
+	global_position = centre.global_position + outward * circle
+	rotation = _orbit_angle + PI * 0.5
+	if _orbit_left <= 0.0:
+		_release_orbit()
+
+
+## Sends the shot straight out from the centre of its circle. After whole turns that is the line it
+## was aimed down.
+func _release_orbit() -> void:
+	_orbit_left = 0.0
+	_direction = Vector2.from_angle(_orbit_angle)
+	rotation = _direction.angle()
+
+
+## Turns the shot toward the nearest enemy in its room, or leaves it as it was if there is none.
+func _retarget() -> void:
+	var target := Targeting.nearest_hostile(
+		self, global_position, RETARGET_RADIUS, team, _hit_bodies, _room_bounds
+	)
+	if target == null:
+		return
+	var offset := target.global_position - global_position
+	if offset.is_zero_approx():
+		return
+	_direction = offset.normalized()
+	rotation = _direction.angle()
+
+
+func _current_speed() -> float:
+	return config.speed * _over_life(config.speed_over_life)
+
+
+## The shot's damage now: its own, along its over-life ramp. What a hit, a blast and a chain are all
+## worked out from, so an accelerating shot's explosion hits as hard as the shot does.
+func _current_damage() -> float:
+	return config.damage * _over_life(config.damage_over_life)
+
+
+## Where along the line from 1.0 to `end` the shot is, by the time it has spent in flight.
+func _over_life(end: float) -> float:
+	if is_equal_approx(end, 1.0):
+		return 1.0
+	var span := config.over_life_seconds if config.over_life_seconds > 0.0 else config.lifetime
+	return lerpf(1.0, end, clampf(_age / maxf(span, 0.001), 0.0, 1.0))
+
+
+## Grows the shot by the distance it just flew, up to `radius_over_distance` times its own radius.
+## The collision circle, the sprite and the trail grow together, so what the player sees is what
+## hits.
+func _grow(distance: float) -> void:
+	if is_equal_approx(config.radius_over_distance, 1.0):
+		return
+	_travelled += distance
+	var growth := lerpf(
+		1.0, config.radius_over_distance, clampf(_travelled / GROWTH_DISTANCE, 0.0, 1.0)
+	)
+	_radius = maxf(config.radius * growth, 0.1)
+	(_shape.shape as CircleShape2D).radius = _radius
+	_sprite.scale = Vector2.ONE * growth
+	_trail.width = maxf(_radius, 1.0)
+
+
+## Hurts every enemy near the shot, every `AURA_TICK_SECONDS`, including the first frame it flies.
+func _step_aura(delta: float) -> void:
+	if config.aura_damage_scale <= 0.0 or config.aura_radius <= 0.0:
+		return
+	_aura_left -= delta
+	if _aura_left > 0.0:
+		return
+	_aura_left += AURA_TICK_SECONDS
+
+	var amount := _current_damage() * config.aura_damage_scale
+	for body: Node2D in Targeting.hostiles_near(
+		self, global_position, config.aura_radius, team, [], _room_bounds
+	):
+		var health := HealthComponent.find_on(body)
+		if health == null:
+			continue
+		var away := body.global_position - global_position
+		health.apply_damage(DamageInfo.new(
+			amount,
+			get_shooter(),
+			away.normalized() if not away.is_zero_approx() else _direction,
+			0.0,
+			false,
+			[AURA_TAG] as Array[StringName],
+		))
+
+
+## Leaves a hazard patch behind the shot every `trail_hazard_interval`, starting one interval out of
+## the muzzle rather than on it.
+func _step_trail_hazard(delta: float) -> void:
+	if config.trail_hazard_interval <= 0.0 or config.trail_hazard_effect.is_empty():
+		return
+	_hazard_left -= delta
+	if _hazard_left > 0.0:
+		return
+	_hazard_left += config.trail_hazard_interval
+	HazardPatch.drop(
+		self,
+		global_position,
+		config.trail_hazard_radius,
+		config.trail_hazard_seconds,
+		config.trail_hazard_effect,
+		team,
+		_room_bounds,
+	)
 
 
 ## Steers toward the nearest hostile body, by at most `homing_strength` radians this
@@ -193,7 +403,7 @@ func _has_left_its_room() -> bool:
 ## Casts one radius further than the step so impacts land on the wall's face rather
 ## than a body-length inside it.
 func _cast_to_wall(step: Vector2) -> Dictionary:
-	var target := global_position + step + _direction * config.radius
+	var target := global_position + step + _direction * _radius
 	var query := PhysicsRayQueryParameters2D.create(global_position, target, Teams.LAYER_WORLD)
 	# Catches the case where a shooter pressed against a wall spawns the muzzle
 	# inside geometry: the projectile dies there instead of appearing behind it.
@@ -209,7 +419,7 @@ func _handle_wall(hit: Dictionary) -> void:
 	# meaningless. Expire instead of bouncing to a garbage direction.
 	if _bounce_left > 0 and not normal.is_zero_approx():
 		_bounce_left -= 1
-		global_position = point + normal * (config.radius + BOUNCE_CLEARANCE)
+		global_position = point + normal * (_radius + BOUNCE_CLEARANCE)
 		_direction = _direction.bounce(normal)
 		rotation = _direction.angle()
 		# A rebounding shot may legitimately re-hit something it already passed
@@ -223,7 +433,7 @@ func _handle_wall(hit: Dictionary) -> void:
 	# Return Protocol reads as "bounce off the first wall, come back off the second" rather than
 	# the two items fighting over the same collision.
 	if config.return_enabled and not _has_returned and not normal.is_zero_approx():
-		global_position = point + normal * (config.radius + BOUNCE_CLEARANCE)
+		global_position = point + normal * (_radius + BOUNCE_CLEARANCE)
 		_reverse()
 		return
 
@@ -235,16 +445,71 @@ func _on_body_entered(body: Node2D) -> void:
 	if _is_spent or body in _hit_bodies:
 		return
 	_hit_bodies.append(body)
+	_has_hit = true
 
 	var health := HealthComponent.find_on(body)
 	if health != null:
-		health.apply_damage(
-			DamageInfo.new(config.damage, get_shooter(), _direction, config.knockback)
-		)
+		var was_alive := health.is_alive()
+		health.apply_damage(_hit_on(body))
 		_execute_if_broken(health)
+		if was_alive and not health.is_alive():
+			_continue_as_copies()
 
 	_apply_status_effects(body)
 	_impact(body, global_position, -_direction)
+
+
+## The damage a direct hit on `body` deals: the shot's own now, raised against a target already
+## carrying a status, and then perhaps critical. The status is read before this shot applies its own
+## — see `_apply_status_effects`, which runs after — so a shot never pays itself the bonus.
+func _hit_on(body: Node) -> DamageInfo:
+	var amount := _current_damage()
+	if config.bonus_vs_status > 0.0:
+		var status := StatusEffectController.find_on(body)
+		if status != null and status.has_any_effect():
+			amount *= 1.0 + config.bonus_vs_status
+	# Rolled only when there is a chance to roll, so a shot that cannot crit never draws a number.
+	var critical := config.crit_chance > 0.0 and randf() < config.crit_chance
+	if critical:
+		amount *= config.crit_scale
+	return DamageInfo.new(amount, get_shooter(), _direction, config.knockback, critical)
+
+
+## Duplicate on kill. The copies are this shot carrying on from the kill: what it had left of its
+## lifetime, its pierces and bounces, and whether it still owes a return or a pause. They never
+## duplicate again, and they begin already past everything this shot has struck.
+func _continue_as_copies() -> void:
+	var count := mini(config.split_on_kill_count, CombatCaps.active().max_children_per_impact)
+	if count <= 0:
+		return
+
+	var arc := deg_to_rad(DUPLICATE_SPREAD_DEGREES)
+	for index: int in count:
+		var offset := 0.0
+		if count > 1:
+			offset = -arc * 0.5 + arc * (float(index) / float(count - 1))
+
+		var copy := config.spawn_copy()
+		copy.split_on_kill_count = 0
+		copy.orbit_turns = 0.0
+		copy.lifetime = maxf(_lifetime_left, 0.05)
+		copy.pierce_count = _pierce_left
+		copy.bounce_count = _bounce_left
+		copy.return_enabled = config.return_enabled and not _has_returned
+		if not _pause_pending:
+			copy.pause_and_retarget_seconds = 0.0
+
+		# Deferred, like splits: this runs inside a physics callback.
+		ProjectileFactory.spawn_configured(
+			self,
+			copy,
+			_direction.rotated(offset),
+			global_position,
+			team,
+			get_shooter(),
+			_hit_bodies,
+			true,
+		)
 
 
 ## Finishes a target the hit left under this shot's execute threshold.
@@ -315,7 +580,7 @@ func _impact(body: Node, point: Vector2, normal: Vector2) -> void:
 			self,
 			point,
 			config.explosion_radius,
-			config.damage * config.explosion_damage_scale,
+			_current_damage() * config.explosion_damage_scale,
 			team,
 			get_shooter(),
 			struck,
@@ -328,7 +593,7 @@ func _impact(body: Node, point: Vector2, normal: Vector2) -> void:
 			point,
 			config.chain_count,
 			config.chain_radius,
-			config.damage * config.chain_damage_scale,
+			_current_damage() * config.chain_damage_scale,
 			team,
 			get_shooter(),
 			struck,
@@ -357,7 +622,33 @@ func _expire() -> void:
 		return
 
 	EventBus.projectile_expired.emit(self)
+	if config.expire_retarget_shot and not _has_hit:
+		_fire_at_nearest()
 	_despawn()
+
+
+## A missed shot's last word: this shot again, fresh, straight at the nearest enemy in its room. It
+## does not do this a second time, and it does not circle — it is fired from where the miss ended,
+## not from the robot.
+##
+## Not deferred: an expiry happens in `_physics_process`, where a weapon's own shots are added too,
+## rather than inside a physics callback.
+func _fire_at_nearest() -> void:
+	var target := Targeting.nearest_hostile(
+		self, global_position, RETARGET_RADIUS, team, [], _room_bounds
+	)
+	if target == null:
+		return
+	var offset := target.global_position - global_position
+	if offset.is_zero_approx():
+		return
+
+	var shot := config.spawn_copy()
+	shot.expire_retarget_shot = false
+	shot.orbit_turns = 0.0
+	ProjectileFactory.spawn_configured(
+		self, shot, offset.normalized(), global_position, team, get_shooter()
+	)
 
 
 ## Turns the projectile around. Reached either because it flew its `return_after_distance` or
@@ -377,14 +668,21 @@ func _reverse() -> void:
 
 ## Fans `split_count` weaker children out from the point of impact.
 ##
-## Children are one generation only. A child that could split again would cascade without
-## bound the moment Fork Bomb met a wall, and "the room fills with projectiles until the
-## frame rate dies" is not a synergy.
+## Children split again only while `split_depth` has generations left, and never past
+## `CombatCaps.max_split_depth`: one generation is the default and what every shipped item gives.
+## A child that could always split again would cascade without bound the moment Fork Bomb met a
+## wall, and "the room fills with projectiles until the frame rate dies" is not a synergy. Each
+## generation is weaker and shorter-lived than the last, which is what makes a deeper split read as
+## a burst rather than a second volley.
 func _spawn_splits(origin: Vector2, base_direction: Vector2, excluded: Array[Node]) -> void:
 	if config.split_count <= 0 or base_direction.is_zero_approx():
 		return
 
-	var count := config.split_count
+	var caps := CombatCaps.active()
+	var count := mini(config.split_count, caps.max_children_per_impact)
+	var depth := mini(config.split_depth, caps.max_split_depth)
+	if depth <= 0:
+		return
 	var arc := deg_to_rad(config.split_spread_degrees)
 
 	for index: int in count:
@@ -394,9 +692,14 @@ func _spawn_splits(origin: Vector2, base_direction: Vector2, excluded: Array[Nod
 
 		var child := config.spawn_copy()
 		child.damage *= config.split_damage_scale
-		child.split_count = 0
+		child.split_depth = depth - 1
+		if child.split_depth <= 0:
+			child.split_count = 0
 		child.pierce_count = 0
 		child.return_enabled = false
+		# A child is born at the point of impact, a room away from the robot; circling back to it
+		# would be a teleport.
+		child.orbit_turns = 0.0
 		# Ricochet Driver plus Fork Bomb: children inherit whatever bounces the parent had
 		# left, so "bounces once, then splits" carries on bouncing if it can.
 		child.bounce_count = _bounce_left
@@ -415,6 +718,18 @@ func _spawn_splits(origin: Vector2, base_direction: Vector2, excluded: Array[Nod
 			excluded,
 			true,
 		)
+
+
+## Removes the projectile without anything it would normally do on the way out: no split, no
+## return, no expiry. `ProjectileFactory` calls it when the live-shot cap needs the room — see
+## `CombatCaps.max_player_projectiles`. Safe on a projectile that has not reached the tree yet.
+func retire() -> void:
+	_despawn()
+
+
+## Whether the projectile has been used up and is only waiting for the end of the frame to go.
+func is_spent() -> bool:
+	return _is_spent
 
 
 ## Marks the projectile spent before freeing it. The flag, not `queue_free`, is what stops

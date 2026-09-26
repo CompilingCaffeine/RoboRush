@@ -19,6 +19,16 @@ const PROJECTILE_SCENE := preload("res://scenes/projectiles/projectile.tscn")
 ## on; a test arena registers its own.
 const CONTAINER_GROUP := &"projectile_container"
 
+## How much of the shot's trail opacity an echo keeps. Half, so an echo reads as the ghost of a
+## shot rather than as a second one, while keeping the colour that says whose it is.
+const ECHO_TRAIL_ALPHA := 0.5
+
+## Player projectiles that have been created and not yet retired, oldest first. Counted from the
+## moment of creation rather than from entering the tree, because a split is deferred to the next
+## idle frame and a burst of them would otherwise all see room under the cap. Pruned lazily: an
+## entry that has been freed or spent is dropped the next time anything asks.
+static var _live_player: Array[Projectile] = []
+
 
 ## Spawns one projectile from a weapon. `damage_multiplier` is the shooter's flat scaling
 ## and is baked into this projectile's own config copy.
@@ -29,7 +39,8 @@ const CONTAINER_GROUP := &"projectile_container"
 ##
 ## `modifiers` is the shooter's item stack, or null for anything without items — every
 ## enemy in the game. `shot_index` is the weapon's lifetime shot count, which is what
-## lets an item apply only every Nth shot.
+## lets an item apply only every Nth shot. `size_multiplier` scales the radius the same way
+## `damage_multiplier` scales the damage, before the items: it is how a charged shot is bigger.
 static func spawn(
 	spawner: Node,
 	weapon: WeaponConfig,
@@ -40,6 +51,7 @@ static func spawn(
 	attributed_to: Node = null,
 	modifiers: ProjectileModifierStack = null,
 	shot_index := 0,
+	size_multiplier := 1.0,
 ) -> Projectile:
 	if weapon.projectile == null:
 		push_error("WeaponConfig '%s' has no projectile assigned." % weapon.display_name)
@@ -49,6 +61,7 @@ static func spawn(
 	# counters, and carry its own item modifiers, without touching the shared resource.
 	var config := weapon.projectile.spawn_copy()
 	config.damage *= damage_multiplier
+	config.radius *= size_multiplier
 	if modifiers != null:
 		modifiers.apply(config, shot_index)
 
@@ -60,14 +73,11 @@ static func spawn(
 	if not is_zero_approx(config.aim_offset_degrees):
 		launched = direction.rotated(deg_to_rad(config.aim_offset_degrees))
 
-	return spawn_configured(
-		spawner,
-		config,
-		launched,
-		muzzle,
-		team,
-		attributed_to if attributed_to != null else spawner,
-	)
+	var credited := attributed_to if attributed_to != null else spawner
+	var projectile := spawn_configured(spawner, config, launched, muzzle, team, credited)
+	if projectile != null and config.echo_delay > 0.0:
+		_schedule_echo(spawner, config, launched, muzzle, team, credited)
+	return projectile
 
 
 ## Spawns a projectile from a config that is already final. Used for children that no
@@ -94,6 +104,9 @@ static func spawn_configured(
 		return null
 
 	var projectile: Projectile = PROJECTILE_SCENE.instantiate()
+	if team == Teams.Id.PLAYER:
+		_make_room_for_player_shot()
+		_live_player.append(projectile)
 	projectile.configure(
 		config,
 		team,
@@ -116,6 +129,83 @@ static func spawn_configured(
 	else:
 		container.add_child(projectile)
 	return projectile
+
+
+## Fires a copy of a weapon's shot `echo_delay` seconds from now, from the same muzzle, the same
+## way, at `echo_damage_scale` of its damage. Roadmap SYS-2.
+##
+## Here rather than in the projectile, because an echo is a second shot rather than something the
+## first one does: it must fire whether or not the first is still flying, and a split child or a
+## retargeted shot, which never pass through `spawn`, must not echo at all.
+##
+## The timer pauses with the game. The echo is held against the container the shot was fired into,
+## and dropped if that container has left the tree or its floor has been released by the time it is
+## due — the same rule a held explosion keeps, for the same reason.
+static func _schedule_echo(
+	spawner: Node,
+	config: ProjectileConfig,
+	direction: Vector2,
+	origin: Vector2,
+	team: Teams.Id,
+	attributed_to: Node,
+) -> void:
+	var container := _resolve_container(spawner)
+	if container == null:
+		return
+
+	var echo := config.spawn_copy()
+	echo.echo_delay = 0.0
+	echo.damage *= config.echo_damage_scale
+	echo.trail_color.a *= ECHO_TRAIL_ALPHA
+
+	var home: WeakRef = weakref(container)
+	var credit: WeakRef = weakref(attributed_to) if attributed_to != null else null
+	var timer := container.get_tree().create_timer(config.echo_delay, false, true)
+	timer.timeout.connect(func() -> void:
+		var target := home.get_ref() as Node
+		if target == null or not target.is_inside_tree():
+			return
+		var session := FloorSession.owning(target)
+		if session != null and not session.is_open():
+			return
+		var shooter: Node = credit.get_ref() as Node if credit != null else null
+		spawn_configured(target, echo, direction, origin, team, shooter)
+	)
+
+
+## How many player projectiles are alive, pending ones included. For the cap and for the checks
+## that hold it.
+static func live_player_count() -> int:
+	_prune_live_player()
+	return _live_player.size()
+
+
+## Retires player shots until one more fits under `CombatCaps.max_player_projectiles`.
+##
+## The oldest shot that does not pierce goes first: it has had the longest to find something, and a
+## shot that stops at its first hit is worth the least of anything in flight. A piercing shot is
+## still carrying damage through a pack, so it is spent only when every shot in the air pierces.
+## Retired quietly, without an expiry: an expiry is what a returning or retargeting shot answers,
+## and answering the cap with a new shot would be the cap feeding itself.
+static func _make_room_for_player_shot() -> void:
+	_prune_live_player()
+	var limit := maxi(CombatCaps.active().max_player_projectiles, 1)
+	while _live_player.size() >= limit:
+		var victim := 0
+		for index: int in _live_player.size():
+			if _live_player[index].config == null or _live_player[index].config.pierce_count <= 0:
+				victim = index
+				break
+		_live_player[victim].retire()
+		_live_player.remove_at(victim)
+
+
+static func _prune_live_player() -> void:
+	var kept: Array[Projectile] = []
+	for projectile: Projectile in _live_player:
+		if is_instance_valid(projectile) and not projectile.is_spent():
+			kept.append(projectile)
+	_live_player = kept
 
 
 ## Prefers the registered container, falling back to the current scene so a test

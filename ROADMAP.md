@@ -21,6 +21,9 @@
 | FIX-8 Thin early floors | **Done.** Four combat rooms each on the Help Desk and Development (RM-9), at difficulty 2 and 3. Distinct combat rooms per floor rose from 3.4 to about 4.5, and repeated rooms per floor fell from 2.6 to about 1.5. Rides on the same `content_version` 6 bump as FIX-3. |
 | FIX-9 Minimap shop and boss | **Done.** A visited shop is item blue and a visited boss room is danger red with a dark notch, so it does not rely on red against the treasure room's amber. |
 | ENG-12 Comment hygiene and changelog | **Done.** Eighteen comments that narrated history now say what the code does. [CHANGELOG.md](CHANGELOG.md) is written for playtesters. |
+| ENG-10 Combat caps | **Done.** A `CombatCaps` resource (`data/settings/combat_caps.tres`) sets six ceilings, each enforced where the thing is created: 160 live player shots (the oldest shot that does not pierce is retired to make room), 3 generations of splitting, 8 children per impact, 4 drones, 32 player hazard patches, and 32 explosions per frame (the excess lands on the next frame instead of being dropped). Every cap sits above what the strongest legal build reaches. A new check fires that build into a closed room and measures it: 45 live shots at most and 10 explosions in a frame. Status stacks were already capped per effect. Profiling the hosted Web build is still to do. |
+| SYS-1 Weapon modifiers | **Done.** Items gain `weapon_set`, `weapon_add` and `weapon_scale`, which `WeaponModifierStack` applies to the robot's weapon and to its drones' weapons. `WeaponConfig` gains `lateral_offset`, `alternate_rear`, `fire_mode` (`AUTO` or `CHARGE`), `charge_seconds`, `charge_max_scale` and `charge_radius_scale`. Fire rate stays on `fire_rate_scale` and the diminishing-returns curve, so `shots_per_second` is refused. `CampaignValidator` rejects unknown or refused fields, and weapon modifiers on an item with a shot interval. No shipped item uses these fields yet, so play is unchanged. A charge item (ITM-5) will also need an on-screen charge indicator. |
+| SYS-2 Projectile behaviours | **Done**, both halves. Every row of the table in [SYS-2](#sys-2-projectile-behaviour-extensions) is now a `ProjectileConfig` field, neutral at its default. Three differ from the original proposal: orbits count whole turns (`orbit_turns`) rather than seconds, so the shot is released along the aimed line; the aura deals a fraction of the shot's damage (`aura_damage_scale`), like blasts and chains, rather than a flat amount; and the pause and the speed and damage ramps each have their own timing field. Trail hazards are a new `HazardPatch` node. Each behaviour is fired, and combined with an existing one, in the new ProjectileBehaviours suite. No shipped item uses these fields yet, so seeds and the content fingerprint are unchanged. |
 
 This plan comes from reading the code and data, not from playing the game. Every finding cites the file that shows it. Every proposal is sized, lists its dependencies, and states the evidence that should count as "done". The six-floor campaign already works, so the plan builds on it without restructuring it.
 
@@ -435,7 +438,7 @@ The repair cadence is already per floor (`FloorConfig.repair_every_clears`), so 
 - `lateral_offset`, for parallel shots
 - `alternate_rear`, which fires backwards every other shot
 - `fire_mode` (`AUTO` or `CHARGE`)
-- `charge_seconds` and `charge_max_scale`
+- `charge_seconds`, `charge_max_scale`, and `charge_radius_scale` (added in implementation, for ITM-5's larger shot)
 
 ### SYS-2: Projectile behaviour extensions
 
@@ -443,18 +446,18 @@ Add each as a `ProjectileConfig` field so items stay pure data:
 
 | Field(s) | Behaviour | Spec §11 name |
 | --- | --- | --- |
-| `speed_over_life`, `damage_over_life` (curve or end multiplier) | Accelerate or decelerate | Accelerate / Decelerate |
-| `orbit_seconds`, `orbit_radius` | Orbits the owner, then releases | Orbit |
-| `trail_hazard_interval`, `trail_hazard_effect` | Drops small player-owned hazard patches | Leave hazards |
+| `speed_over_life`, `damage_over_life` (end multipliers, reached over `over_life_seconds`) | Accelerate or decelerate | Accelerate / Decelerate |
+| `orbit_turns`, `orbit_radius` | Orbits the owner, then releases | Orbit |
+| `trail_hazard_interval`, `trail_hazard_effect`, `trail_hazard_radius`, `trail_hazard_seconds` | Drops small player-owned hazard patches | Leave hazards |
 | `split_on_kill_count` | A killing shot continues as N copies | Duplicate on kill |
 | `split_depth` | Split children may split again (capped by ENG-10) | — |
-| `pause_and_retarget_seconds` | Stops mid-flight, re-aims at the nearest enemy | — |
+| `pause_and_retarget_seconds`, `pause_after_seconds` | Stops mid-flight, re-aims at the nearest enemy | — |
 | `radius_over_distance` | Grows as it travels | — |
 | `expire_retarget_shot` | On expiry, fires one shot at the nearest enemy | — |
 | `crit_chance`, `crit_scale` | Critical hits | Critical hits (processor) |
-| `echo_delay`, `echo_damage_scale` | Fires a delayed copy (reuses `echo_rivet`) | — |
+| `echo_delay`, `echo_damage_scale` | Fires a delayed copy of the shot with a fainter trail. It does not reuse `echo_rivet`, which is the Lagging Replica's red, hostile shot. | — |
 | `bonus_vs_status` | Extra damage against a target with any status | — |
-| `aura_tick_damage`, `aura_radius` | Damages everything it passes near | Plasma orb |
+| `aura_damage_scale`, `aura_radius` | Damages everything it passes near | Plasma orb |
 
 Use the existing `EventBus.projectile_expired` for expiry hooks. Every new field needs a composition test alongside the existing ricochet-plus-fork cases in `test_combat` and `test_items`.
 
