@@ -74,7 +74,7 @@ func _ready() -> void:
 ## The room whose footprint contains `point`, or null when no room does — a shot fired in a test
 ## arena that has no rooms in it, or by something standing in the corridor between two.
 ##
-## Footprints tile the floor's grid exactly (see `FloorController._instantiate_rooms`), and
+## Footprints tile the floor's grid exactly (see `FloorBuilder.build_rooms`), and
 ## `Rect2.has_point` takes its top-left edge and not its bottom-right, so a point on the seam
 ## between two rooms belongs to exactly one of them.
 static func containing(from: Node, point: Vector2) -> Room:

@@ -28,6 +28,7 @@ var _entered_during_descent: Array[int] = []
 const FLOOR_SCENE := preload("res://scenes/floors/floor.tscn")
 const PLAYER_SCENE := preload("res://scenes/player/player.tscn")
 const ROOM_SCENE := preload("res://scenes/rooms/room.tscn")
+const DOOR_SCENE := preload("res://scenes/rooms/door.tscn")
 
 func run() -> void:
 	_config = load(FLOOR_CONFIG_PATH) as FloorConfig
@@ -39,6 +40,7 @@ func run() -> void:
 	_test_invariants_across_seeds()
 	_test_room_geometry_matches_the_grid()
 	_test_templates_keep_doorways_clear()
+	await _test_a_shared_door_seals_both_rooms_and_sounds_only_when_it_moves()
 	_test_layout_rejects_overlap()
 	_test_generator_refuses_impossible_configs()
 	_test_forced_enemies_never_exceed_their_spawn_points()
@@ -1827,9 +1829,44 @@ func _first_enemy_under(node: Node) -> Node:
 	return null
 
 
+## `FloorDoors` on its own. A door joins two rooms, so sealing either one closes it — that is what
+## keeps a player from walking back out of a fight through the neighbour's side. And the door sound
+## is announced only when a door actually moves, so walking back into a cleared room is silent.
+func _test_a_shared_door_seals_both_rooms_and_sounds_only_when_it_moves() -> void:
+	var holder := Node2D.new()
+	add_child(holder)
+	var shared: Door = DOOR_SCENE.instantiate()
+	var own: Door = DOOR_SCENE.instantiate()
+	holder.add_child(shared)
+	holder.add_child(own)
+	shared.setup(Vector2i(8, 32))
+	own.setup(Vector2i(8, 32))
+
+	var doors := FloorDoors.new()
+	doors.add(shared, [1, 2] as Array[int])
+	doors.add(own, [2, 3] as Array[int])
+	var announced: Array[bool] = []
+	var listen := func(locked: bool) -> void: announced.append(locked)
+	EventBus.doors_changed.connect(listen)
+
+	doors.set_locked(1, true)
+	check(shared.is_locked() and not own.is_locked(), "sealing a room closes the door it shares")
+	check(doors.of_room(2).has(shared), "and that door is listed under the neighbour too")
+	doors.set_locked(1, true)
+	check(announced == [true], "sealing it again moves nothing and says nothing")
+	doors.set_locked(2, false)
+	check(not shared.is_locked() and announced == [true, false], "opening the neighbour opens it, once")
+	var in_build_order: Array[Door] = [shared, own]
+	check(doors.all() == in_build_order, "every door is listed once, in build order")
+	check(doors.of_room(9).is_empty(), "a room with no doors has none")
+
+	EventBus.doors_changed.disconnect(listen)
+	holder.queue_free()
+	await advance_physics(1)
+
+
 func _first_door(floor_node: FloorController) -> Door:
-	for doors: Array in floor_node._doors_by_room.values():
-		for door: Door in doors:
-			if is_instance_valid(door):
-				return door
+	for door: Door in floor_node.get_doors().all():
+		if is_instance_valid(door):
+			return door
 	return null

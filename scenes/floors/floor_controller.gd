@@ -43,8 +43,6 @@ signal boss_encountered(
 	display_name: String, defeat_banner: String, phase_banners: Array[String], is_final: bool
 )
 
-const ROOM_SCENE := preload("res://scenes/rooms/room.tscn")
-const DOOR_SCENE := preload("res://scenes/rooms/door.tscn")
 const SHOP_ROOM_SCENE := preload("res://scenes/shop/shop_room.tscn")
 const SESSION_SCENE := preload("res://scenes/floors/floor_session.tscn")
 const TROPHY_SCENE := preload("res://scenes/pickups/trophy.tscn")
@@ -63,11 +61,6 @@ const BOSS_REWARD_SPACING := 128.0
 ## How far below the top of the screen a room's outer wall sits. The remaining space at the
 ## bottom is the HUD strip, so the HUD never covers playable floor.
 const ROOM_TOP_MARGIN := 4
-
-## Which tile row of the shop room carries its sign. The second row from the top: above the stands
-## and the two lines their tags are allowed to wrap onto, and below nothing — a shop room's own
-## scenery is four corner blocks, and none of them is in the middle of this row.
-const SHOP_SIGN_ROW := 1
 
 ## Where an item drops relative to the reward point, so it does not land underneath the
 ## scrap that drops alongside it.
@@ -97,7 +90,8 @@ var floor_index := -1
 var visited: Dictionary[int, bool] = {}
 
 var _rooms: Dictionary[int, Room] = {}
-var _doors_by_room: Dictionary[int, Array] = {}
+## This floor's doors by room. Replaced with each floor, like the rooms themselves.
+var _doors := FloorDoors.new()
 var _cleared: Dictionary[int, bool] = {}
 var _player: Player
 
@@ -290,7 +284,7 @@ func _open_session(generated: FloorLayout, seed_value: int) -> void:
 	if _boss_encounter != null:
 		RunManager.record_floor_boss(_boss_encounter.id)
 
-	# Taken before the rooms are built, because `_instantiate_rooms` is what has to know, and
+	# Taken before the rooms are built, because `_build_floor` is what has to know, and
 	# emptied in the same breath: this describes the floor being opened right now, and a descent
 	# out of it must not arrive on the next floor carrying the last one's cleared rooms.
 	var resumed_cleared := _resume_cleared
@@ -308,8 +302,7 @@ func _open_session(generated: FloorLayout, seed_value: int) -> void:
 	for id: int in resumed_visited:
 		visited[id] = true
 
-	_instantiate_rooms(resumed_shop)
-	_instantiate_doors()
+	_build_floor(resumed_shop)
 	_restore_boss_reward(resumed_reward)
 	_place_player_in_start_room()
 
@@ -439,6 +432,11 @@ func _claim_boss(entry: BossEncounter) -> BossEncounter:
 	return entry
 
 
+## This floor's doors by room. A new set after every boundary.
+func get_doors() -> FloorDoors:
+	return _doors
+
+
 func get_room(id: int) -> Room:
 	return _rooms.get(id)
 
@@ -462,89 +460,20 @@ func get_view_rect_for(room: Room) -> Rect2i:
 	)
 
 
-## `resumed_shop` is the shelf a resumed run left in this floor's shop, or null for a floor being
-## opened for the first time. Threaded down from `_open_session` rather than read off a field,
-## because the shop is stocked in the middle of this loop and a field would have to stay set across
-## it — which is one more thing that has to be cleared at exactly the right moment.
-func _instantiate_rooms(resumed_shop: ShopStock = null) -> void:
-	for plan: RoomPlan in layout.rooms:
-		var room: Room = ROOM_SCENE.instantiate()
-		# Grid cell to world: the room's interior origin sits one wall inside its cell.
-		room.position = Vector2(plan.cell * Room.OUTER_SIZE + Vector2i.ONE * Room.WALL_THICKNESS)
-		_session.rooms.add_child(room)
-
-		room.build(plan, config.theme)
-		if plan.type == RoomTemplate.Type.COMBAT:
-			# A room a resumed run had already fought through is built empty. `populate` still draws
-			# from the encounter stream for it — see `Room.populate` — so the rooms after it in this
-			# loop get the same enemies they got the first time, and the floor stays the floor its
-			# seed describes rather than a different one that merely starts the same.
-			room.populate(config, _encounter_rng, is_room_cleared(plan.id))
-		elif plan.type == RoomTemplate.Type.SHOP:
-			_stock_shop(room, resumed_shop)
-		room.set_active(false)
-		room.player_entered.connect(_on_player_entered_room)
-		room.get_room_combat().cleared.connect(_on_room_cleared.bind(plan.id))
-		_rooms[plan.id] = room
-
-
-## Builds the shop's stands. Stocked at floor build time rather than on entry, so the
-## items it holds are drawn from the pool before any room reward can take them — a shop
-## whose stock depended on when the player happened to walk in would be a shop that got
-## worse the longer they explored.
-##
-## The shop is handed one number from this floor's shop stream and seeds itself from it, rather
-## than sharing a generator: the room it stands in is instantiated among nine others, and a shop
-## reading from the stream the rooms are populated from would restock itself every time an enemy
-## placement changed.
-## `resumed_shop` is a shelf to put back rather than to draw. Handed straight to `stock`, which is
-## what decides between the two — see `ShopRoom.stock` and `ShopStock` for why a resumed shop must
-## not draw: its items were taken out of the run's pool the first time this floor was built, and
-## drawing again would spend two more that the player never sees.
-func _stock_shop(room: Room, resumed_shop: ShopStock = null) -> void:
-	var positions := room.get_shop_positions()
-	if config.shop == null or positions.is_empty():
-		return
-	var shop: ShopRoom = SHOP_ROOM_SCENE.instantiate()
-	room.add_child(shop)
-	shop.stock(config.shop, config.get_items(), positions, _shop_rng.randi(), resumed_shop)
-	# The sign, above the stands and clear of their tags. Placed from here because the shop knows
-	# where its stands are and nothing else, while the room knows where its walls are — see
-	# `ShopRoom.place_sign` for why a shop says which key buys twice, in two different voices.
-	shop.place_sign(room.get_row_rect(SHOP_SIGN_ROW).get_center())
-	_shop = shop
-
-
-## One door per link, filling the passage between two rooms. Each link is visited once — the
-## adjacency is symmetric, so iterating every room's doors would build each door twice.
-func _instantiate_doors() -> void:
-	for plan: RoomPlan in layout.rooms:
-		for direction: Vector2i in plan.doors:
-			var neighbour_id: int = plan.doors[direction]
-			if neighbour_id < plan.id:
-				continue
-
-			var horizontal := direction.x != 0
-			var passage := (
-				Vector2i(Room.WALL_THICKNESS * 2, Room.DOOR_WIDTH) if horizontal
-				else Vector2i(Room.DOOR_WIDTH, Room.WALL_THICKNESS * 2)
-			)
-
-			var door: Door = DOOR_SCENE.instantiate()
-			_session.doors.add_child(door)
-			door.global_position = _door_centre(plan, direction)
-			door.setup(passage)
-
-			for id: int in [plan.id, neighbour_id]:
-				if not _doors_by_room.has(id):
-					_doors_by_room[id] = []
-				_doors_by_room[id].append(door)
-
-
-## The midpoint of the shared boundary between a room's cell and its neighbour's.
-func _door_centre(plan: RoomPlan, direction: Vector2i) -> Vector2:
-	var outer_centre := Vector2(plan.cell * Room.OUTER_SIZE) + Vector2(Room.OUTER_SIZE) * 0.5
-	return outer_centre + Vector2(direction) * Vector2(Room.OUTER_SIZE) * 0.5
+## Puts this floor's rooms, doors and shop into the session — see `FloorBuilder`, which does the
+## building. `resumed_shop` is the shelf a resumed run left in this floor's shop, or null for a floor
+## being opened for the first time. Threaded down from `_open_session` rather than read off a field,
+## because a field would have to stay set across the build — one more thing that has to be cleared
+## at exactly the right moment.
+func _build_floor(resumed_shop: ShopStock = null) -> void:
+	var builder := FloorBuilder.new()
+	builder.build_rooms(
+		_session, layout, config, _encounter_rng, _shop_rng, _cleared, resumed_shop,
+		_on_player_entered_room, _on_room_cleared,
+	)
+	_rooms = builder.rooms
+	_shop = builder.shop
+	_doors = builder.build_doors(_session, layout)
 
 
 func _place_player_in_start_room() -> void:
@@ -602,9 +531,9 @@ func _enter_room(id: int) -> void:
 		_spawn_boss(room)
 
 	if _needs_clearing(id):
-		_set_doors_locked(id, true)
+		_doors.set_locked(id, true)
 	else:
-		_set_doors_locked(id, false)
+		_doors.set_locked(id, false)
 		_award_first_visit(id)
 
 	EventBus.room_entered.emit(room.plan.type, room.plan.id)
@@ -700,7 +629,7 @@ func _add_boss(room: Room, generation: int) -> void:
 ## the player first, the loss wins.
 func _on_boss_defeated(_boss_node: Node, room: Room) -> void:
 	_cleared[room.plan.id] = true
-	_set_doors_locked(room.plan.id, false)
+	_doors.set_locked(room.plan.id, false)
 
 	# The last floor pays out in a trophy instead, and takes nothing out of the item pool to do it.
 	# A choice of three is a decision about the rest of the run, and on this floor there is no rest
@@ -960,7 +889,7 @@ func _release_session() -> void:
 	_trophy = null
 
 	_rooms.clear()
-	_doors_by_room.clear()
+	_doors = FloorDoors.new()
 	_cleared.clear()
 	visited.clear()
 	layout = null
@@ -994,7 +923,7 @@ func _boss_reward_positions(room: Room) -> Array[Vector2]:
 
 func _on_room_cleared(id: int) -> void:
 	_cleared[id] = true
-	_set_doors_locked(id, false)
+	_doors.set_locked(id, false)
 	_clears += 1
 
 	var room := _rooms[id]
@@ -1030,20 +959,3 @@ func _award_first_visit(id: int) -> void:
 		_session.loot.spawn_treasure(room.get_reward_position())
 	else:
 		_session.loot.spawn_room_reward(room.get_reward_position(), true)
-
-
-## Only reports a change when a door actually moved, so re-entering a cleared room does not
-## replay the door sound every time.
-func _set_doors_locked(id: int, locked: bool) -> void:
-	var changed := false
-	for door: Door in _doors_by_room.get(id, []):
-		if door.is_locked() == locked:
-			continue
-		if locked:
-			door.lock()
-		else:
-			door.unlock()
-		changed = true
-
-	if changed:
-		EventBus.doors_changed.emit(locked)

@@ -708,7 +708,7 @@ func _add_enemy_in(room: Room, at: Vector2) -> Enemy:
 	return enemy
 
 
-## One room on the floor's grid, positioned by cell exactly as `FloorController._instantiate_rooms`
+## One room on the floor's grid, positioned by cell exactly as `FloorBuilder.build_rooms`
 ## does, with a single door facing `door`. The neighbour id is not read by anything the room builds
 ## — `Room` asks the plan only which sides are open — so it is set to a number that is not this
 ## room's own and left at that.

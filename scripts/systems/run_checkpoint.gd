@@ -268,7 +268,7 @@ static func from_dict(data: Dictionary) -> RunCheckpoint:
 	checkpoint.floor_clears = RunStats.read_int(data, "floor_clears")
 
 	# Absent in every checkpoint written before the shelf was carried. Those read back as a shop with
-	# nothing recorded, which is what they were: `FloorController._stock_shop` stocks a shop the
+	# nothing recorded, which is what they were: `FloorBuilder` stocks a shop the
 	# saved run has nothing to say about, exactly as it did when the file was written.
 	var raw_shop: Variant = data.get("floor_shop")
 	checkpoint.floor_shop = ShopStock.from_dict(
