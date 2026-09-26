@@ -129,44 +129,35 @@ var _session: FloorSession
 ## and a token has to outlive what it invalidates.
 var _generation := 0
 
-## Generates and builds the floor. Returns false if generation failed, so the caller can
-## report it rather than presenting an empty world.
-## Floor-local progress a resumed run is bringing back with it, consumed by the next `build` and
-## then forgotten. A field rather than an argument because it applies to exactly one floor — the
-## one being resumed onto — and a descent from it must open the next floor untouched. Cleared in
-## `_open_session` for that reason, not here.
-var _resume_cleared: Array[int] = []
-var _resume_visited: Array[int] = []
-var _resume_clears := 0
-
-## The shelf the resumed run left in this floor's shop, consumed by the same `build` and forgotten
-## the same way. Null rather than an empty stock for "there is nothing saved here", because an empty
-## `ShopStock` is a real answer — a floor whose shop has no stands — and the two must not be
-## confused: one stocks the shop from the pool and the other deliberately does not.
-var _resume_shop: ShopStock = null
-
-## The boss's offer the resumed run left standing unclaimed, by item id, and empty for every
-## checkpoint that was not taken in that window. Consumed by the same `build`.
-var _resume_boss_reward: Array[StringName] = []
+## What a resumed run had already done on the floor the next `build` opens, or null for a floor
+## being opened fresh. Consumed by that `build` and then forgotten: it applies to exactly one floor —
+## the one being resumed onto — and a descent from it must open the next floor untouched.
+var _resume: FloorProgress = null
 
 
 ## Tells the next `build` how much of the floor it is about to open was already done, so a run
-## resumed from a mid-floor save comes back to the rooms it had cleared rather than to a floor that
-## has forgotten them. See `RunCheckpoint.floor_cleared_room_ids`.
+## resumed from a save comes back to the rooms it had cleared, the shelf it left in the shop, and a
+## boss's prize it left unclaimed, rather than to a floor that has forgotten them. See
+## `RunCheckpoint.floor_progress` for reading one out of a save.
 ##
-## `shop` is that floor's shelf, and it is carried by every checkpoint rather than only by a
-## mid-floor one — see `ShopStock` for why a shop is not floor *progress* even though it is
-## floor-local. `boss_reward` is the offer left standing over a dead boss, which is the one piece of
-## floor state whose loss is not merely unfair but final — see `get_pending_boss_reward_ids`.
-func resume_floor_progress(
-	cleared: Array[int], visited: Array[int], clears: int, shop: ShopStock = null,
-	boss_reward: Array[StringName] = []
-) -> void:
-	_resume_cleared = cleared.duplicate()
-	_resume_visited = visited.duplicate()
-	_resume_clears = clears
-	_resume_shop = shop
-	_resume_boss_reward = boss_reward.duplicate()
+## The shop is carried by every checkpoint rather than only by a mid-floor one — see `ShopStock` for
+## why a shop is not floor *progress* even though it is floor-local. The boss's offer is the one piece
+## of floor state whose loss is not merely unfair but final — see `get_pending_boss_reward_ids`.
+func resume_floor_progress(progress: FloorProgress) -> void:
+	_resume = progress
+
+
+## How far the run has got through this floor, as a save would record it. Null while no floor is open.
+func capture_progress() -> FloorProgress:
+	if _loop == null:
+		return null
+	var progress := FloorProgress.new()
+	progress.cleared_room_ids = _loop.cleared_room_ids()
+	progress.visited_room_ids = _loop.visited_room_ids()
+	progress.clears = _loop.clears
+	progress.shop = ShopStock.of(_shop)
+	progress.boss_reward_ids = get_pending_boss_reward_ids()
+	return progress
 
 
 ## Writes a checkpoint of the run exactly where it stands, including this floor's progress.
@@ -181,10 +172,7 @@ func resume_floor_progress(
 func save_run_now() -> bool:
 	if _player == null or not is_instance_valid(_player) or campaign == null or _loop == null:
 		return false
-	return RunManager.checkpoint_here(
-		campaign, config, _player, ShopStock.of(_shop), get_pending_boss_reward_ids(),
-		_loop.cleared_room_ids(), _loop.visited_room_ids(), _loop.clears
-	)
+	return RunManager.checkpoint_here(campaign, config, _player, capture_progress())
 
 
 func build(player: Player, seed_value: int) -> bool:
@@ -242,31 +230,20 @@ func _open_session(generated: FloorLayout, seed_value: int) -> void:
 	if _boss_encounter != null:
 		RunManager.record_floor_boss(_boss_encounter.id)
 
-	# Taken before the rooms are built, because `_build_floor` is what has to know, and
-	# emptied in the same breath: this describes the floor being opened right now, and a descent
-	# out of it must not arrive on the next floor carrying the last one's cleared rooms.
-	var resumed_cleared := _resume_cleared
-	var resumed_visited := _resume_visited
-	var resumed_clears := _resume_clears
-	var resumed_shop := _resume_shop
-	var resumed_reward := _resume_boss_reward
-	_resume_cleared = []
-	_resume_visited = []
-	_resume_clears = 0
-	_resume_shop = null
-	_resume_boss_reward = []
+	# Taken before the rooms are built, because building them is what has to know, and dropped in the
+	# same breath: this describes the floor being opened right now, and a descent out of it must not
+	# arrive on the next floor carrying the last one's cleared rooms.
+	var progress := _resume if _resume != null else FloorProgress.new()
+	_resume = null
 
 	_loop = RoomLoop.new()
 	_loop.name = "RoomLoop"
 	_session.add_child(_loop)
-	_loop.setup(
-		config, _player, _session.loot, get_view_rect_for,
-		resumed_cleared, resumed_visited, resumed_clears,
-	)
+	_loop.setup(config, _player, _session.loot, get_view_rect_for, progress)
 	_loop.room_entered.connect(room_entered.emit)
 
-	_build_floor(resumed_shop)
-	_open_arena(resumed_reward)
+	_build_floor(progress.shop)
+	_open_arena(progress.boss_reward_ids)
 	_loop.place_player_at_start(layout.get_start_room().id)
 
 	# The next floor starts loading now, while the player has this one to fight through. By the time
@@ -451,7 +428,7 @@ func _finish_floor() -> void:
 	if GameManager.is_run_over():
 		return
 
-	if campaign == null or campaign.is_terminal(floor_index):
+	if is_final_floor():
 		GameManager.win_run.call_deferred()
 		return
 

@@ -316,15 +316,17 @@ func checkpoint_floor(
 ## the guard is shared rather than written twice. Returns whether a checkpoint was written: a run
 ## that has already ended cannot be saved, and the menu says so rather than claiming otherwise.
 func checkpoint_here(
-	campaign: RunDefinition, floor_config: FloorConfig, player: Player, shop: ShopStock,
-	boss_reward: Array[StringName], cleared_rooms: Array[int], visited_rooms: Array[int],
-	clears: int
+	campaign: RunDefinition, floor_config: FloorConfig, player: Player, progress: FloorProgress
 ) -> bool:
 	if not _can_checkpoint(campaign, floor_config, player):
 		return false
 
-	var checkpoint := _capture(campaign, floor_config, player, shop, boss_reward)
-	checkpoint.record_floor_progress(cleared_rooms, visited_rooms, clears)
+	var checkpoint := _capture(
+		campaign, floor_config, player, progress.shop, progress.boss_reward_ids
+	)
+	checkpoint.record_floor_progress(
+		progress.cleared_room_ids, progress.visited_room_ids, progress.clears
+	)
 	SaveManager.store_checkpoint(checkpoint)
 	return true
 

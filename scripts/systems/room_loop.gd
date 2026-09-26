@@ -51,25 +51,23 @@ var _view_for := Callable()
 
 
 ## Readies the loop for a floor before its rooms are built, carrying over what a resumed run had
-## already done here: the rooms it cleared and visited, and how many combat clears it had counted.
-## The rooms need the cleared set while they are built, which is why it arrives first.
+## already done here (`progress`): the rooms it cleared and visited, and how many combat clears it
+## had counted. The rooms need the cleared set while they are built, which is why it arrives first.
 func setup(
 	config: FloorConfig,
 	player: Player,
 	loot: LootSpawner,
 	view_for: Callable,
-	cleared_ids: Array[int],
-	visited_ids: Array[int],
-	clear_count: int,
+	progress: FloorProgress,
 ) -> void:
 	_config = config
 	_player = player
 	_loot = loot
 	_view_for = view_for
-	clears = clear_count
-	for id: int in cleared_ids:
+	clears = progress.clears
+	for id: int in progress.cleared_room_ids:
 		_cleared[id] = true
-	for id: int in visited_ids:
+	for id: int in progress.visited_room_ids:
 		visited[id] = true
 
 

@@ -646,7 +646,7 @@ func _test_fifth_boundary_resumes_the_finale() -> void:
 	await advance_physics(2)
 	RunManager.restore_run(checkpoint, CAMPAIGN)
 	floor_node = _new_floor(arena, 5)
-	floor_node.resume_floor_progress([], [], 0, checkpoint.floor_shop)
+	floor_node.resume_floor_progress(checkpoint.floor_progress())
 	check(floor_node.build(player, RunManager.floor_seed), "the serialized finale resumes")
 	check(floor_node.get_content_fingerprint() == fingerprint, "resume reproduces the same final floor")
 	floor_node.queue_free()

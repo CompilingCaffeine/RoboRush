@@ -214,6 +214,19 @@ func record_floor_progress(cleared: Array[int], visited: Array[int], clears: int
 	floor_clears = clears
 
 
+## The floor progress this checkpoint carries, for the floor it names to be resumed onto — see
+## `FloorController.resume_floor_progress`. A boundary checkpoint's has no rooms and no clears, only
+## the shop's shelf, because a floor stocks its shop before the player has taken a step on it.
+func floor_progress() -> FloorProgress:
+	var progress := FloorProgress.new()
+	progress.cleared_room_ids = floor_cleared_room_ids.duplicate()
+	progress.visited_room_ids = floor_visited_room_ids.duplicate()
+	progress.clears = floor_clears
+	progress.shop = floor_shop
+	progress.boss_reward_ids = floor_boss_reward_ids.duplicate()
+	return progress
+
+
 func to_dict() -> Dictionary:
 	return {
 		"campaign_id": String(campaign_id),

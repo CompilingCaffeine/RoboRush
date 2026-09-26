@@ -274,13 +274,7 @@ func _test_a_run_saved_over_the_trophy_comes_back_to_it() -> void:
 	_floor.campaign = _campaign
 	_floor.config = _campaign.load_floor(index)
 	_arena.add_child(_floor)
-	_floor.resume_floor_progress(
-		checkpoint.floor_cleared_room_ids,
-		checkpoint.floor_visited_room_ids,
-		checkpoint.floor_clears,
-		checkpoint.floor_shop,
-		checkpoint.floor_boss_reward_ids,
-	)
+	_floor.resume_floor_progress(checkpoint.floor_progress())
 	check(_floor.build(_player, RunManager.floor_seed), "the saved finale resumes")
 	await advance_physics(2)
 

@@ -141,7 +141,7 @@ func _test_every_boundary_can_resume_to_executive_systems() -> void:
 		var resumed_floor := CAMPAIGN.load_floor_by_id(checkpoint.floor_id)
 		player.restore_build(checkpoint.resolve_items(resumed_floor), checkpoint.integrity)
 		floor_node = _new_floor(arena, checkpoint.floor_number - 1)
-		floor_node.resume_floor_progress([], [], 0, checkpoint.floor_shop)
+		floor_node.resume_floor_progress(checkpoint.floor_progress())
 		check(
 			floor_node.build(player, RunManager.floor_seed),
 			"resume after floor %d builds" % (checkpoint.floor_number - 1),

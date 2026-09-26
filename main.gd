@@ -112,13 +112,7 @@ func _ready() -> void:
 	# than the pause menu; the shop's shelf is not, because a floor stocks its shop before the player
 	# has taken a step on it (see `ShopStock`).
 	if checkpoint != null:
-		_floor.resume_floor_progress(
-			checkpoint.floor_cleared_room_ids,
-			checkpoint.floor_visited_room_ids,
-			checkpoint.floor_clears,
-			checkpoint.floor_shop,
-			checkpoint.floor_boss_reward_ids,
-		)
+		_floor.resume_floor_progress(checkpoint.floor_progress())
 	if not _floor.build(_player, floor_seed):
 		# Generation failing is a content bug, not something to hide from the player behind a
 		# blank screen (spec section 31.10 forbids placeholder error messages reaching them).
