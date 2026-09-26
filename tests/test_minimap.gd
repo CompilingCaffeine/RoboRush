@@ -31,6 +31,7 @@ func run() -> void:
 	await _test_the_frame_hugs_what_is_drawn()
 	await _test_the_frame_still_hugs_after_walking_into_a_room()
 	await _test_revealing_the_floor_grows_the_frame_to_it()
+	await _test_visited_rooms_say_what_they_are()
 
 
 # --- Checks -------------------------------------------------------------------
@@ -196,6 +197,53 @@ func _is_pinned_to_the_top_right_corner() -> bool:
 		is_equal_approx(_map.position.x + _map.size.x, viewport.x - Minimap.MARGIN)
 		and is_equal_approx(_map.position.y, Minimap.MARGIN)
 	)
+
+## Roadmap FIX-9: a visited shop or boss room was drawn the same grey as a combat room, so a player
+## coming back with scrap, or coming back for the prize, had to remember where it was. Each of the
+## five room types a floor is made of now has its own colour once visited, and none of them before.
+##
+## Visits are recorded straight onto the room loop rather than walked: entering the boss room wakes
+## the boss, and this is a check on the map, not on the fight.
+func _test_visited_rooms_say_what_they_are() -> void:
+	if not await _build(SEEDS[0]):
+		return
+
+	var by_type: Dictionary[RoomTemplate.Type, RoomPlan] = {}
+	for room: RoomPlan in _floor.layout.rooms:
+		by_type[room.type] = room
+	var shop: RoomPlan = by_type.get(RoomTemplate.Type.SHOP)
+	var boss: RoomPlan = by_type.get(RoomTemplate.Type.BOSS)
+	check(shop != null and boss != null, "the floor has a shop and a boss room")
+	if shop == null or boss == null:
+		await _teardown()
+		return
+
+	check(
+		_map._colour_for(shop) == Minimap.UNKNOWN_COLOR
+		and _map._colour_for(boss) == Minimap.UNKNOWN_COLOR,
+		"an unvisited shop and boss room give nothing away",
+	)
+
+	var colours: Dictionary[Color, RoomTemplate.Type] = {}
+	for type: RoomTemplate.Type in by_type:
+		_floor.get_room_loop().visited[by_type[type].id] = true
+		colours[_map._colour_for(by_type[type])] = type
+	check(
+		colours.size() == by_type.size(),
+		"each of the %d room types on the floor has its own colour once visited (%d colours)"
+		% [by_type.size(), colours.size()],
+	)
+	check(
+		not colours.has(Minimap.UNKNOWN_COLOR) and not colours.has(Minimap.CURRENT_COLOR),
+		"and none of them is the unexplored fill or the current-room outline",
+	)
+	check(
+		_map._colour_for(shop) == Minimap.SHOP_COLOR
+		and _map._colour_for(boss) == Minimap.BOSS_COLOR,
+		"the shop and the boss room are the shop and boss colours",
+	)
+
+	await _teardown()
 
 
 # --- Fixtures -----------------------------------------------------------------
