@@ -7,20 +7,17 @@
 [ext_resource type="Script" path="res://scripts/components/status_effect_controller.gd" id="99_status"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_part"]
-; Matches the 32x32 sprite's 28-pixel-wide chassis. Grew with the sprite in milestone 6 —
-; a boss that looks bigger than its hitbox is a boss whose shots the player swears they hit.
 radius = 14.0
+metadata/design_notes = "radius: Matches the 32x32 sprite's 28-pixel-wide chassis. Grew with the sprite in milestone 6 — a boss that looks bigger than its hitbox is a boss whose shots the player swears they hit."
 
 [node name="BossPart" type="CharacterBody2D"]
 collision_layer = 4
 collision_mask = 1
 motion_mode = 1
 script = ExtResource("1_part")
-; Matched to the collision circle above, so the ring that hurts to stand in is the ring the
-; player can see they are standing in. The Scrap King is the largest body in the game and the
-; slowest to reposition, so walking into it is a mistake with time to make — a full point.
 contact_damage = 1.0
 contact_radius = 14.0
+metadata/design_notes = "contact_damage: Matched to the collision circle above, so the ring that hurts to stand in is the ring the player can see they are standing in. The Scrap King is the largest body in the game and the slowest to reposition, so walking into it is a mistake with time to make — a full point."
 
 [node name="Shape" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_part")
@@ -41,11 +38,7 @@ target_path = NodePath("../Sprite")
 
 [node name="Status" type="Node2D" parent="."]
 unique_name_in_owner = true
-; Resistant, not immune. A boss that shrugged control effects off entirely would make
-; Cold Cache dead weight in exactly the fight the player bought it for; at 0.65 a freeze
-; that lasts 0.8s on an enemy lasts 0.28s here — a real opening, and not a stunlock.
-; Burn is deliberately not resisted: this part forwards every hit to the controller, so
-; damage over time reaches the real pool the same way a rivet does.
 script = ExtResource("99_status")
 indicator_radius = 18.0
 control_resistance = 0.65
+metadata/design_notes = "Resistant, not immune. A boss that shrugged control effects off entirely would make Cold Cache dead weight in exactly the fight the player bought it for; at 0.65 a freeze that lasts 0.8s on an enemy lasts 0.28s here — a real opening, and not a stunlock. Burn is deliberately not resisted: this part forwards every hit to the controller, so damage over time reaches the real pool the same way a rivet does."

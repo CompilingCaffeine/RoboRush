@@ -9,13 +9,10 @@ id = &"dev_cable_trench"
 type = 1
 obstacles = Array[Rect2i]([Rect2i(2, 4, 4, 1), Rect2i(20, 4, 4, 1), Rect2i(2, 7, 4, 1), Rect2i(20, 7, 4, 1)])
 enemy_spawns = Array[Vector2i]([Vector2i(13, 2), Vector2i(13, 9), Vector2i(4, 6), Vector2i(22, 6)])
-; The Null Pointer's signature room. The trench between the cable runs is the one place on
-; the floor where standing still is genuinely tempting — it is the safe channel through the
-; obstacles — so it is the right room to introduce the enemy whose whole argument is that
-; standing still is not safe.
 forced_enemies = Array[PackedScene]([ExtResource("2_null_pointer")])
 reward_spawn = Vector2i(13, 6)
 difficulty = 2
 floor_tags = Array[StringName]([&"development"])
 min_floor = 2
 max_floor = 2
+metadata/design_notes = "forced_enemies: The Null Pointer's signature room. The trench between the cable runs is the one place on the floor where standing still is genuinely tempting — it is the safe channel through the obstacles — so it is the right room to introduce the enemy whose whole argument is that standing still is not safe."

@@ -108,6 +108,7 @@ tools/release.sh --relock
 ## Project notes
 
 - Projectile behaviour is data-driven, so upgrades such as ricochet, splitting, homing, chaining, and explosions compose without item-pair-specific code.
+- Design rationale for data lives in `metadata/design_notes` on the resource, scene node, or sub-resource it explains (the inspector's Metadata section), not in `;` comments: the Godot editor deletes comments from `.tres` and `.tscn` files whenever it saves them. `tools/ci/check_design_notes.py` enforces this.
 - Procedural floor generation uses a connected room graph; treasure, shop, and boss rooms are dead ends so they never block progress.
 - Generated art, audio, music, and UI font assets are committed. Regenerate them only when changing source generators:
 

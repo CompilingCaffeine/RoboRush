@@ -8,7 +8,6 @@
 script = ExtResource("1_template")
 id = &"exec_quorum"
 type = 1
-; Two coordinated groups. Break either protection hub to open a side of the room.
 obstacles = Array[Rect2i]([Rect2i(12, 3, 2, 2), Rect2i(12, 8, 2, 1)])
 enemy_spawns = Array[Vector2i]([Vector2i(7, 4), Vector2i(19, 7), Vector2i(4, 8), Vector2i(9, 8), Vector2i(17, 3), Vector2i(22, 3)])
 forced_enemies = Array[PackedScene]([ExtResource("enemy_0"), ExtResource("enemy_1")])
@@ -18,3 +17,4 @@ difficulty = 3
 floor_tags = Array[StringName]([&"executive_systems"])
 min_floor = 5
 max_floor = 5
+metadata/design_notes = "obstacles: Two coordinated groups. Break either protection hub to open a side of the room."

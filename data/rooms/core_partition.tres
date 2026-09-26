@@ -18,7 +18,6 @@ b = Rect2i(20, 5, 2, 2)
 script = ExtResource("template")
 id = &"core_partition"
 type = 1
-; Three regions and two explicit routes. The centre Firewall must be approached, not sniped around.
 obstacles = Array[Rect2i]([])
 enemy_spawns = Array[Vector2i]([Vector2i(12, 2), Vector2i(4, 2), Vector2i(4, 9), Vector2i(12, 9), Vector2i(21, 2), Vector2i(21, 9), Vector2i(15, 8)])
 forced_enemies = Array[PackedScene]([ExtResource("enemy_0")])
@@ -29,3 +28,4 @@ difficulty = 3
 floor_tags = Array[StringName]([&"core_intelligence"])
 min_floor = 6
 max_floor = 6
+metadata/design_notes = "obstacles: Three regions and two explicit routes. The centre Firewall must be approached, not sniped around."

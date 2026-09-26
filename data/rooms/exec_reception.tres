@@ -12,7 +12,6 @@ b = Rect2i(21, 8, 2, 2)
 script = ExtResource("1_template")
 id = &"exec_reception"
 type = 0
-; A quiet arrival. The boardroom uses familiar machinery behind expensive panelling.
 obstacles = Array[Rect2i]([Rect2i(6, 3, 3, 1), Rect2i(17, 8, 3, 1)])
 enemy_spawns = Array[Vector2i]([])
 pad_links = Array[MigrationLink]([SubResource("link_0")])
@@ -21,3 +20,4 @@ difficulty = 0
 floor_tags = Array[StringName]([&"executive_systems"])
 min_floor = 5
 max_floor = 5
+metadata/design_notes = "obstacles: A quiet arrival. The boardroom uses familiar machinery behind expensive panelling."

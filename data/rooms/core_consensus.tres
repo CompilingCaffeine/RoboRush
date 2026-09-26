@@ -8,7 +8,6 @@
 script = ExtResource("template")
 id = &"core_consensus"
 type = 1
-; A protection hub and its replica occupy opposite safe ground while the centre heats.
 obstacles = Array[Rect2i]([Rect2i(12, 2, 2, 2), Rect2i(12, 8, 2, 2)])
 enemy_spawns = Array[Vector2i]([Vector2i(6, 3), Vector2i(20, 8), Vector2i(5, 9), Vector2i(9, 6), Vector2i(17, 5), Vector2i(21, 2), Vector2i(13, 6)])
 forced_enemies = Array[PackedScene]([ExtResource("enemy_0"), ExtResource("enemy_1")])
@@ -18,3 +17,4 @@ difficulty = 3
 floor_tags = Array[StringName]([&"core_intelligence"])
 min_floor = 6
 max_floor = 6
+metadata/design_notes = "obstacles: A protection hub and its replica occupy opposite safe ground while the centre heats."

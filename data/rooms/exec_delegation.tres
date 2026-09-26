@@ -14,7 +14,6 @@ b = Rect2i(14, 8, 2, 2)
 script = ExtResource("1_template")
 id = &"exec_delegation"
 type = 1
-; A shielded group across a duct, with a migration route that lands on cold ground.
 obstacles = Array[Rect2i]([])
 enemy_spawns = Array[Vector2i]([Vector2i(16, 5), Vector2i(19, 3), Vector2i(20, 8), Vector2i(5, 3), Vector2i(5, 9)])
 forced_enemies = Array[PackedScene]([ExtResource("enemy_0"), ExtResource("enemy_1")])
@@ -25,3 +24,4 @@ difficulty = 2
 floor_tags = Array[StringName]([&"executive_systems"])
 min_floor = 5
 max_floor = 5
+metadata/design_notes = "obstacles: A shielded group across a duct, with a migration route that lands on cold ground."

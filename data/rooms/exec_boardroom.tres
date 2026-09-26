@@ -17,7 +17,6 @@ b = Rect2i(22, 1, 2, 2)
 script = ExtResource("1_template")
 id = &"exec_boardroom"
 type = 6
-; The encounter supplies the hazards. An open arena preserves the gaps in its authored patterns.
 obstacles = Array[Rect2i]([])
 enemy_spawns = Array[Vector2i]([])
 pad_links = Array[MigrationLink]([SubResource("link_0"), SubResource("link_1")])
@@ -26,3 +25,4 @@ difficulty = 4
 floor_tags = Array[StringName]([&"executive_systems"])
 min_floor = 5
 max_floor = 5
+metadata/design_notes = "obstacles: The encounter supplies the hazards. An open arena preserves the gaps in its authored patterns."

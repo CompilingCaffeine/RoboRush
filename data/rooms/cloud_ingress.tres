@@ -12,24 +12,16 @@ b = Rect2i(21, 5, 2, 2)
 script = ExtResource("1_template")
 id = &"cloud_ingress"
 type = 0
-; The floor's first room, and the only place in the game where a new mechanic is
-; taught with nothing else happening. One link, both ends visible from either end,
-; no enemies, no hazard, no door shut behind the player.
-;
-; Every floor before this taught its idea in a combat room and hoped the player had
-; attention to spare for it. Floor 3's measurement is the argument for not doing that
-; again: its teaching room was 2.4 of the six combat rooms a run saw, which is a
-; tutorial that will not stop repeating itself, and the mechanic it taught had never
-; appeared in any of them. A start room cannot be over-drawn — there is exactly one
-; per floor — and cannot be skipped, so a lesson placed here is delivered once and
-; always.
 obstacles = Array[Rect2i]([Rect2i(7, 3, 2, 2), Rect2i(17, 7, 2, 2)])
 enemy_spawns = Array[Vector2i]([])
-; Deliberately the width of the room apart. A player's first pad should carry them far
-; enough that there is no question about whether anything happened.
 pad_links = Array[MigrationLink]([SubResource("Resource_link_0")])
 reward_spawn = Vector2i(13, 6)
 difficulty = 0
 floor_tags = Array[StringName]([&"cloud_ops"])
 min_floor = 4
 max_floor = 4
+metadata/design_notes = "obstacles: The floor's first room, and the only place in the game where a new mechanic is taught with nothing else happening. One link, both ends visible from either end, no enemies, no hazard, no door shut behind the player.
+
+Every floor before this taught its idea in a combat room and hoped the player had attention to spare for it. Floor 3's measurement is the argument for not doing that again: its teaching room was 2.4 of the six combat rooms a run saw, which is a tutorial that will not stop repeating itself, and the mechanic it taught had never appeared in any of them. A start room cannot be over-drawn — there is exactly one per floor — and cannot be skipped, so a lesson placed here is delivered once and always.
+
+pad_links: Deliberately the width of the room apart. A player's first pad should carry them far enough that there is no question about whether anything happened."

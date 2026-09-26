@@ -142,8 +142,6 @@ script = ExtResource("29_cloud")
 [node name="Leaderboard" type="Node" parent="."]
 script = ExtResource("34_leaderboard")
 
-; Last on purpose. It reaches into SaveManager to put it back in the state a cold launch starts
-; in, and reloading the save afterwards would hand every suite after it whatever is in the real
-; save file rather than the defaults the runner set up.
 [node name="Bootstrap" type="Node" parent="."]
 script = ExtResource("28_bootstrap")
+metadata/design_notes = "Last on purpose. It reaches into SaveManager to put it back in the state a cold launch starts in, and reloading the save afterwards would hand every suite after it whatever is in the real save file rather than the defaults the runner set up."

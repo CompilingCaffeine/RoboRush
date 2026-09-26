@@ -25,11 +25,8 @@ shape = SubResource("CircleShape2D_runner")
 [node name="Sprite" type="Sprite2D" parent="."]
 unique_name_in_owner = true
 texture = ExtResource("3_tex")
-; Borrowed silhouette, distinct tint: Memory Leech isn't in Development's roster, so there
-; is no collision. Violet rather than Compiler's cyan, so Development's two new enemies
-; read apart from each other too, not just from the returning cast. A dedicated "fast
-; mover" sprite is a later art pass, not this one.
 modulate = Color(0.68, 0.45, 0.95, 1)
+metadata/design_notes = "modulate: Borrowed silhouette, distinct tint: Memory Leech isn't in Development's roster, so there is no collision. Violet rather than Compiler's cyan, so Development's two new enemies read apart from each other too, not just from the returning cast. A dedicated \"fast mover\" sprite is a later art pass, not this one."
 
 [node name="Health" type="Node" parent="."]
 unique_name_in_owner = true

@@ -44,8 +44,5 @@ item_pool = ExtResource("91_pool")
 item_clear_indices = Array[int]([2, 5])
 shop = ExtResource("10_shop_cfg")
 treasure_grants_item = true
-; All three, matching floors 1 and 3. See floor 3's file for why Cascade Failure stopped being one
-; floor's private boss; the short version is that a hazard which telegraphs for 1.6 seconds on
-; ground nobody is standing on does not need nine rooms of setup, and a campaign whose third fight
-; is fixed has one fewer decision in it than it should.
 boss_pool = Array[BossEncounter]([ExtResource("92_king"), ExtResource("93_error"), ExtResource("94_cascade"), ExtResource("95_orchestrator")])
+metadata/design_notes = "boss_pool: All three, matching floors 1 and 3. See floor 3's file for why Cascade Failure stopped being one floor's private boss; the short version is that a hazard which telegraphs for 1.6 seconds on ground nobody is standing on does not need nine rooms of setup, and a campaign whose third fight is fixed has one fewer decision in it than it should."

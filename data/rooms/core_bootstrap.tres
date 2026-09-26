@@ -7,7 +7,6 @@
 script = ExtResource("template")
 id = &"core_bootstrap"
 type = 1
-; The finale begins with motion and clean sightlines before it starts recombining hazards.
 obstacles = Array[Rect2i]([Rect2i(8, 3, 2, 2), Rect2i(16, 7, 2, 2)])
 enemy_spawns = Array[Vector2i]([Vector2i(13, 3), Vector2i(5, 3), Vector2i(21, 8), Vector2i(7, 9), Vector2i(19, 2)])
 forced_enemies = Array[PackedScene]([ExtResource("enemy_0")])
@@ -16,3 +15,4 @@ difficulty = 1
 floor_tags = Array[StringName]([&"core_intelligence"])
 min_floor = 6
 max_floor = 6
+metadata/design_notes = "obstacles: The finale begins with motion and clean sightlines before it starts recombining hazards."

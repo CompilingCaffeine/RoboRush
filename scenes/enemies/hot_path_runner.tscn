@@ -1,14 +1,5 @@
 [gd_scene load_steps=9 format=3]
 
-; The Code Runner's rung above. Same components, same weapon, same shared `code_runner.tres` — the
-; trail is written in that resource as what changes, the way the Recursion family's elder rung is —
-; and its own sprite, which draws the trail as well as the body, because the patch on the floor is
-; the half of this enemy the player has to see coming.
-;
-; Untinted, unlike the Code Runner it extends. That scene borrows the Memory Leech's silhouette and
-; tints it violet; this one has a wedge of its own, pointed the way it strafes, with the compile
-; lane's amber behind it.
-
 [ext_resource type="Script" path="res://scenes/enemies/hot_path_runner.gd" id="1_runner"]
 [ext_resource type="Resource" path="res://data/enemies/code_runner.tres" id="2_config"]
 [ext_resource type="Texture2D" path="res://art/enemies/hot_path_runner.png" id="3_tex"]
@@ -27,6 +18,9 @@ collision_mask = 1
 motion_mode = 1
 script = ExtResource("1_runner")
 config = ExtResource("2_config")
+metadata/design_notes = "The Code Runner's rung above. Same components, same weapon, same shared `code_runner.tres` — the trail is written in that resource as what changes, the way the Recursion family's elder rung is — and its own sprite, which draws the trail as well as the body, because the patch on the floor is the half of this enemy the player has to see coming.
+
+Untinted, unlike the Code Runner it extends. That scene borrows the Memory Leech's silhouette and tints it violet; this one has a wedge of its own, pointed the way it strafes, with the compile lane's amber behind it."
 
 [node name="Shape" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_runner")

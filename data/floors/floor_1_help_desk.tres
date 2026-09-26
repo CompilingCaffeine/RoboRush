@@ -41,9 +41,5 @@ item_pool = ExtResource("90_pool")
 item_clear_indices = Array[int]([2, 5])
 shop = ExtResource("23_shop_cfg")
 treasure_grants_item = true
-; Every boss in the game, so the first floor's fight is a draw rather than a fixture. Cascade
-; Failure is here on the argument in floor 3's file: its hazards telegraph for 1.6 seconds on empty
-; ground, which is a thing a player can read the first time they see it, and the alternative was a
-; campaign whose last fight never changed. This arena has no zones of its own, so the boss's vents
-; are the only heated ground in the room — the cleanest possible first reading of the ramp.
 boss_pool = Array[BossEncounter]([ExtResource("92_king"), ExtResource("93_error"), ExtResource("94_cascade"), ExtResource("95_orchestrator")])
+metadata/design_notes = "boss_pool: Every boss in the game, so the first floor's fight is a draw rather than a fixture. Cascade Failure is here on the argument in floor 3's file: its hazards telegraph for 1.6 seconds on empty ground, which is a thing a player can read the first time they see it, and the alternative was a campaign whose last fight never changed. This arena has no zones of its own, so the boss's vents are the only heated ground in the room — the cleanest possible first reading of the ramp."

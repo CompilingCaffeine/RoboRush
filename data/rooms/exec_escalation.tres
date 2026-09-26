@@ -14,7 +14,6 @@ b = Rect2i(19, 5, 2, 2)
 script = ExtResource("1_template")
 id = &"exec_escalation"
 type = 1
-; A Compiler calls the route; a Leech makes staying put costly. Cross the cold centre to change sides.
 obstacles = Array[Rect2i]([])
 enemy_spawns = Array[Vector2i]([Vector2i(13, 2), Vector2i(13, 9), Vector2i(4, 3), Vector2i(4, 8), Vector2i(21, 3), Vector2i(21, 8)])
 forced_enemies = Array[PackedScene]([ExtResource("enemy_0"), ExtResource("enemy_1")])
@@ -26,3 +25,4 @@ difficulty = 3
 floor_tags = Array[StringName]([&"executive_systems"])
 min_floor = 5
 max_floor = 5
+metadata/design_notes = "obstacles: A Compiler calls the route; a Leech makes staying put costly. Cross the cold centre to change sides."

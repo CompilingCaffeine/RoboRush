@@ -7,7 +7,6 @@
 script = ExtResource("1_template")
 id = &"exec_review_lane"
 type = 1
-; Compile lanes flush the player from the ends of a boardroom table; its sides stay open.
 obstacles = Array[Rect2i]([Rect2i(10, 4, 6, 1), Rect2i(10, 7, 6, 1)])
 enemy_spawns = Array[Vector2i]([Vector2i(5, 3), Vector2i(21, 8), Vector2i(5, 9), Vector2i(21, 2), Vector2i(13, 2)])
 forced_enemies = Array[PackedScene]([ExtResource("enemy_0")])
@@ -17,3 +16,4 @@ difficulty = 2
 floor_tags = Array[StringName]([&"executive_systems"])
 min_floor = 5
 max_floor = 5
+metadata/design_notes = "obstacles: Compile lanes flush the player from the ends of a boardroom table; its sides stay open."

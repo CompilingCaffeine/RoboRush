@@ -7,7 +7,6 @@
 script = ExtResource("1_template")
 id = &"exec_briefing"
 type = 1
-; Priority target: one Load Balancer shelters a small squad. Clear sightlines and no floor hazard.
 obstacles = Array[Rect2i]([Rect2i(8, 3, 2, 1), Rect2i(16, 8, 2, 1)])
 enemy_spawns = Array[Vector2i]([Vector2i(13, 3), Vector2i(10, 6), Vector2i(16, 6), Vector2i(13, 9)])
 forced_enemies = Array[PackedScene]([ExtResource("enemy_0")])
@@ -16,3 +15,4 @@ difficulty = 1
 floor_tags = Array[StringName]([&"executive_systems"])
 min_floor = 5
 max_floor = 5
+metadata/design_notes = "obstacles: Priority target: one Load Balancer shelters a small squad. Clear sightlines and no floor hazard."

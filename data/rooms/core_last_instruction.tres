@@ -21,11 +21,6 @@ b = Rect2i(21, 2, 2, 2)
 script = ExtResource("template")
 id = &"core_last_instruction"
 type = 1
-; Mastery: coordinated pressure, lanes, remote targeting, heat, ducts, and two escape routes — and
-; the one room in the campaign that hands the player their own fire back. The Lagging Replica is
-; authored here rather than drawn, because it is the last combat room before Core Intelligence and
-; the question it asks (is your own aggression worth what it costs you) is the question the boss
-; behind this door spends five masks asking.
 obstacles = Array[Rect2i]([])
 enemy_spawns = Array[Vector2i]([Vector2i(6, 5), Vector2i(19, 5), Vector2i(11, 2), Vector2i(5, 9), Vector2i(21, 9), Vector2i(9, 3), Vector2i(17, 8), Vector2i(15, 9)])
 forced_enemies = Array[PackedScene]([ExtResource("enemy_0"), ExtResource("enemy_1"), ExtResource("enemy_2"), ExtResource("enemy_3")])
@@ -37,3 +32,4 @@ difficulty = 4
 floor_tags = Array[StringName]([&"core_intelligence"])
 min_floor = 6
 max_floor = 6
+metadata/design_notes = "obstacles: Mastery: coordinated pressure, lanes, remote targeting, heat, ducts, and two escape routes — and the one room in the campaign that hands the player their own fire back. The Lagging Replica is authored here rather than drawn, because it is the last combat room before Core Intelligence and the question it asks (is your own aggression worth what it costs you) is the question the boss behind this door spends five masks asking."

@@ -6,8 +6,6 @@
 [resource]
 script = ExtResource("1_spawn")
 scene = ExtResource("2_scene")
-; The mild opener, at the same weight the Data Center gave it and for the same reason: this floor's
-; own number, so nothing here can reweight it on floors 1 to 3. Kept because a roster needs something
-; gentle for a difficulty-one room to draw, and `cloud_intake_hall` forces one of its three points.
 weight = 0.7
 min_difficulty = 1
+metadata/design_notes = "weight: The mild opener, at the same weight the Data Center gave it and for the same reason: this floor's own number, so nothing here can reweight it on floors 1 to 3. Kept because a roster needs something gentle for a difficulty-one room to draw, and `cloud_intake_hall` forces one of its three points."

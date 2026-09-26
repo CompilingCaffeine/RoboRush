@@ -22,16 +22,12 @@ shape = SubResource("CircleShape2D_body")
 
 [node name="Trail" type="Line2D" parent="."]
 unique_name_in_owner = true
-; The route it is about to walk, which is the route the player just walked. Points are rewritten
-; from the script every frame — they are a recording of a moving target and there is nothing to
-; author here — and the width and colour come from the config for the same reason Deadlock's
-; tether does: the one place the enemy is tuned should be the one place it is tuned.
-;
-; Behind the sprite, like Deadlock's tether and Firewall Node's beams, so the body stays readable
-; as the thing to shoot rather than being crossed out by its own telegraph.
 z_index = -1
 antialiased = false
 points = PackedVector2Array()
+metadata/design_notes = "z_index: The route it is about to walk, which is the route the player just walked. Points are rewritten from the script every frame — they are a recording of a moving target and there is nothing to author here — and the width and colour come from the config for the same reason Deadlock's tether does: the one place the enemy is tuned should be the one place it is tuned.
+
+Behind the sprite, like Deadlock's tether and Firewall Node's beams, so the body stays readable as the thing to shoot rather than being crossed out by its own telegraph."
 
 [node name="Sprite" type="Sprite2D" parent="."]
 unique_name_in_owner = true
