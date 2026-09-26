@@ -576,7 +576,10 @@ func _test_the_floor_shrinks_as_the_fight_goes() -> void:
 		last == _config.live_plates_by_phase[2],
 		"and lights %d (%d)" % [_config.live_plates_by_phase[2], last],
 	)
-	check(degraded < nominal and last < degraded, "the floor only ever shrinks (%d, %d, %d)" % [nominal, degraded, last])
+	check(
+		degraded < nominal and last < degraded,
+		"the floor only ever shrinks (%d, %d, %d)" % [nominal, degraded, last],
+	)
 	await _close()
 
 

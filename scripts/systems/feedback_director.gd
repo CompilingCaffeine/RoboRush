@@ -103,7 +103,7 @@ func setup(camera: ShakeCamera) -> void:
 	_shake = camera
 
 
-func _on_shot_fired(team: int, muzzle: Vector2, _direction: Vector2) -> void:
+func _on_shot_fired(team: int, _muzzle: Vector2, _direction: Vector2) -> void:
 	# Enemy shots are announced by their telegraph and their projectile, and one
 	# firing sound per enemy per second would bury the player's own weapon.
 	if team != Teams.Id.PLAYER:

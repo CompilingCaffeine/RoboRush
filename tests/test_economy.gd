@@ -14,6 +14,8 @@ extends TestCase
 ## keep passing all the way to the floor it was written to catch.
 
 const CAMPAIGN_PATH := "res://data/runs/main_campaign.tres"
+const PLAYER_CONFIG_PATH := "res://data/player/player_config.tres"
+const BLASTER_PATH := "res://data/weapons/rivet_blaster.tres"
 const FLOOR_SCENE := preload("res://scenes/floors/floor.tscn")
 
 ## The gameplan asks for at least ten thousand. Each run draws a full campaign's worth of offers,
@@ -159,7 +161,7 @@ func _test_corrupted_firmware_always_costs_the_player() -> void:
 	for item: ItemConfig in _pool:
 		if item.max_integrity_delta < 0.0:
 			worst += item.max_integrity_delta
-	var player_config := load("res://data/player/player_config.tres") as PlayerConfig
+	var player_config := load(PLAYER_CONFIG_PATH) as PlayerConfig
 	if require(player_config, "the player config loads"):
 		var health := HealthComponent.new()
 		health.set_max_health(player_config.max_integrity + worst)
@@ -196,7 +198,7 @@ func _test_a_shot_leaves_where_off_by_one_points_it() -> void:
 	add_child(arena)
 	await advance_physics(1)
 
-	var weapon := load("res://data/weapons/rivet_blaster.tres") as WeaponConfig
+	var weapon := load(BLASTER_PATH) as WeaponConfig
 	var stack := ProjectileModifierStack.from_items([item] as Array[ItemConfig])
 
 	var straight := ProjectileFactory.spawn(
@@ -493,7 +495,7 @@ func _test_the_worst_legal_build_stays_inside_its_caps() -> void:
 		for _copy: int in maxi(item.max_stacks, 1):
 			inventory.add(item)
 
-	var player_config := load("res://data/player/player_config.tres") as PlayerConfig
+	var player_config := load(PLAYER_CONFIG_PATH) as PlayerConfig
 	if not require(player_config, "the player config loads, to know what integrity starts at"):
 		inventory.queue_free()
 		return
@@ -536,7 +538,7 @@ func _test_the_worst_legal_build_stays_inside_its_caps() -> void:
 
 	# One trigger pull: the shot itself, each split generation, and one shot per drone.
 	var stack := inventory.build_modifier_stack()
-	var shot := (load("res://data/weapons/rivet_blaster.tres") as WeaponConfig).projectile.spawn_copy()
+	var shot := (load(BLASTER_PATH) as WeaponConfig).projectile.spawn_copy()
 	stack.apply(shot, 15)
 	var per_shot := (1 + shot.split_count) * (1 + inventory.get_drone_count())
 	check(

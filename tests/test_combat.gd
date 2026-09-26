@@ -20,6 +20,7 @@ const WALL_BLOCK_SCENE := preload("res://scenes/rooms/wall_block.tscn")
 const ROOM_SCENE := preload("res://scenes/rooms/room.tscn")
 const PLAYER_SCENE := preload("res://scenes/player/player.tscn")
 const COMBAT_TEMPLATE_PATH := "res://data/rooms/combat_open.tres"
+const RETURN_PROTOCOL_PATH := "res://data/items/return_protocol.tres"
 
 
 func run() -> void:
@@ -998,7 +999,7 @@ func _test_return_protocol_turns_around_inside_a_room() -> void:
 
 	# Return Protocol's entire implementation, read from the shipped item so the numbers under
 	# test are the ones that ship.
-	var item := load("res://data/items/return_protocol.tres") as ItemConfig
+	var item := load(RETURN_PROTOCOL_PATH) as ItemConfig
 	if not require(item, "return_protocol.tres loads"):
 		await _teardown(arena)
 		return
@@ -1035,7 +1036,7 @@ func _test_return_protocol_turns_around_inside_a_room() -> void:
 ## outbound leg is capped by distance and `lifetime` is left alone.
 func _test_return_protocol_leaves_ordinary_range_alone() -> void:
 	var rivet := load(RIVET_PATH) as ProjectileConfig
-	var item := load("res://data/items/return_protocol.tres") as ItemConfig
+	var item := load(RETURN_PROTOCOL_PATH) as ItemConfig
 	if not (require(rivet, "rivet.tres loads") and require(item, "the item loads")):
 		return
 

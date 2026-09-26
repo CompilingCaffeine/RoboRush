@@ -27,6 +27,7 @@ var _entered_during_descent: Array[int] = []
 
 const FLOOR_SCENE := preload("res://scenes/floors/floor.tscn")
 const PLAYER_SCENE := preload("res://scenes/player/player.tscn")
+const ROOM_SCENE := preload("res://scenes/rooms/room.tscn")
 
 func run() -> void:
 	_config = load(FLOOR_CONFIG_PATH) as FloorConfig
@@ -1120,7 +1121,7 @@ func _test_a_room_wears_its_floors_theme() -> void:
 	var plan := RoomPlan.new(0, Vector2i.ZERO, RoomTemplate.Type.COMBAT)
 	plan.template = template
 
-	var room: Room = load("res://scenes/rooms/room.tscn").instantiate()
+	var room: Room = ROOM_SCENE.instantiate()
 	add_child(room)
 	room.build(plan, second.theme)
 	await advance_physics(1)
@@ -1151,7 +1152,7 @@ func _test_a_room_wears_its_floors_theme() -> void:
 
 	# And a room built without one keeps what its scene was authored with, which is what every
 	# test arena in the suite relies on.
-	var bare: Room = load("res://scenes/rooms/room.tscn").instantiate()
+	var bare: Room = ROOM_SCENE.instantiate()
 	add_child(bare)
 	bare.build(plan)
 	await advance_physics(1)

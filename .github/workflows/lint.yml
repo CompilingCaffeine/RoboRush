@@ -1,0 +1,38 @@
+# Static checks: GDScript lint, design notes, script UIDs, Python and shell tooling.
+#
+# Its own workflow rather than a step in Web CI, because it needs no engine: it answers in well under
+# a minute, where the web build takes about five, and a lint failure should not wait behind an export.
+# Like Web CI it holds no credentials and can run on pull requests from anywhere.
+
+name: Lint
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out the commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the pinned linters
+        # Pinned for the reason the engine is: a linter release that adds a rule turns every open
+        # pull request red at once, for a change none of them made. Upgrade deliberately, here and
+        # in the header of tools/ci/lint.sh together.
+        run: python3 -m pip install --quiet gdtoolkit==4.5.0 ruff==0.15.8 shellcheck-py==0.11.0.1
+
+      - name: Lint
+        run: tools/ci/lint.sh

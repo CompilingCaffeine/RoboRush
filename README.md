@@ -61,11 +61,25 @@ godot --headless --fixed-fps 60 res://tests/test_runner.tscn
 
 `--fixed-fps 60` is required: the tests assert on physics frames, and the fixed rate keeps the suite fast and deterministic.
 
-Focused campaign checks are also available:
+To run only some suites while working on them, name them after `--`:
+
+```bash
+godot --headless --fixed-fps 60 res://tests/test_runner.tscn -- --suite=Items,Floor
+```
+
+Focused campaign checks and the six-floor performance probe are also available:
 
 ```bash
 godot --headless --fixed-fps 60 res://tests/executive_runner.tscn
 godot --headless --fixed-fps 60 res://tests/finale_runner.tscn
+godot --headless --fixed-fps 60 res://tests/profile_executive.tscn
+```
+
+Static checks (GDScript lint, design notes, script UIDs, and the Python and shell tooling) need no engine and run on every pull request:
+
+```bash
+python3 -m pip install gdtoolkit==4.5.0 ruff==0.15.8 shellcheck-py==0.11.0.1
+tools/ci/lint.sh
 ```
 
 ## Build

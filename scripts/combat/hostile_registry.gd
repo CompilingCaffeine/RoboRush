@@ -54,8 +54,9 @@ class Entry extends RefCounted:
 static var _known: Dictionary[int, Entry] = {}
 
 ## Handed back for a team nothing has registered under, so callers can walk the result without a null
-## check and without this allocating an empty array per query.
-static var EMPTY: Array = []
+## check and without this allocating an empty array per query. A constant, so Godot makes it read-only:
+## a caller that appended to it would otherwise hand its junk to every later query for an empty team.
+const EMPTY: Array = []
 
 ## The awake bodies of each team, as `Teams.Id` -> `Array[Entry]`. An array rather than a set because
 ## it is walked far more often than it is written, and a handful of entries walk faster than any

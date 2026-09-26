@@ -45,19 +45,19 @@ func player_id() -> String:
 ## `success` false means the question could not be answered, which is emphatically not the same
 ## answer as "no" — treating an unreachable network as an empty cloud is how a first upload
 ## overwrites a save that was there all along. Callers must check `success` before `present`.
-func exists(path: String) -> Dictionary:
+func exists(_path: String) -> Dictionary:
 	var result := _unsupported("exists")
 	result["present"] = false
 	return result
 
 
 ## Fetches the remote copy of `path` into the local file at `path`, replacing it.
-func download(path: String) -> Dictionary:
+func download(_path: String) -> Dictionary:
 	return _unsupported("download")
 
 
 ## Sends the local file at `path` to the remote copy of `path`.
-func upload(path: String) -> Dictionary:
+func upload(_path: String) -> Dictionary:
 	return _unsupported("upload")
 
 

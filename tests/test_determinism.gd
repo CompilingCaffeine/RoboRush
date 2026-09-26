@@ -509,12 +509,11 @@ func _test_the_manifest_names_every_floor_and_the_content_it_will_build() -> voi
 			"and floor %d" % (index + 1),
 		)
 
+	var first := RunManifest.fingerprint(campaign, 4242)
+	var second := RunManifest.fingerprint(campaign, 4242)
+	check(first == second, "a campaign fingerprints the same way twice")
 	check(
-		RunManifest.fingerprint(campaign, 4242) == RunManifest.fingerprint(campaign, 4242),
-		"a campaign fingerprints the same way twice",
-	)
-	check(
-		RunManifest.fingerprint(campaign, 4242) != RunManifest.fingerprint(campaign, 4243),
+		first != RunManifest.fingerprint(campaign, 4243),
 		"and differently for another run seed",
 	)
 

@@ -84,7 +84,7 @@ def main():
         raise SystemExit(
             "smoke_web: playwright is not installed.\n"
             "  python3 -m pip install playwright && python3 -m playwright install chromium"
-        )
+        ) from None
 
     server, url = serve(options.directory)
     print("smoke_web: serving %s at %s" % (options.directory, url))

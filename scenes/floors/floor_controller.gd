@@ -854,8 +854,9 @@ func _on_boss_reward_taken(_item: ItemConfig) -> void:
 ## Winning the run and advancing to the next floor are the same event from the boss's point of
 ## view — "this floor is done" — so both call sites funnel through here rather than deciding for
 ## themselves. There are two ways in and only two, and both are the player choosing to leave: a
-## stand emptied of its item, and a trophy picked up off the floor. Being the last floor the *campaign* lists is what makes a floor the run's last one;
-## it used to be having no `next_floor`, which was the same fact restated once per floor.
+## stand emptied of its item, and a trophy picked up off the floor. Being the last floor the
+## *campaign* lists is what makes a floor the run's last one; it used to be having no
+## `next_floor`, which was the same fact restated once per floor.
 func _finish_floor() -> void:
 	# The loss wins the race. A hazard committed before the boss died is allowed to kill the player
 	# while the reward stands unclaimed — that is the feature, not a defect — but a run that has

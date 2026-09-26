@@ -677,7 +677,10 @@ func _test_sixth_reward_is_the_only_victory() -> void:
 	var unique: Dictionary[StringName, bool] = {}
 	for id: StringName in RunManager.fought_boss_ids:
 		unique[id] = true
-	check(unique.size() == 6 and unique.has(&"core_intelligence"), "victory includes six distinct bosses and the finale")
+	check(
+		unique.size() == 6 and unique.has(&"core_intelligence"),
+		"victory includes six distinct bosses and the finale",
+	)
 	floor_node.queue_free()
 	arena.queue_free()
 	GameManager.start_run()
