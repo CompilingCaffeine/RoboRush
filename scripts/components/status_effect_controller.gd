@@ -230,6 +230,11 @@ func has_effect(id: StringName) -> bool:
 	return _active.has(id)
 
 
+## Whether anything at all is active. What a shot's `bonus_vs_status` asks.
+func has_any_effect() -> bool:
+	return not _active.is_empty()
+
+
 func get_stacks(id: StringName) -> int:
 	return int(_active[id]["stacks"]) if _active.has(id) else 0
 

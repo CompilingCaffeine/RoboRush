@@ -1,4 +1,4 @@
-[gd_scene load_steps=37 format=3]
+[gd_scene load_steps=40 format=3]
 
 [ext_resource type="Script" path="res://tests/test_runner.gd" id="1_runner"]
 [ext_resource type="Script" path="res://tests/test_player_movement.gd" id="2_movement"]
@@ -12,6 +12,9 @@
 [ext_resource type="Script" path="res://tests/test_trophy.gd" id="33_trophy"]
 [ext_resource type="Script" path="res://tests/test_economy.gd" id="20_economy"]
 [ext_resource type="Script" path="res://tests/test_items.gd" id="6_items"]
+[ext_resource type="Script" path="res://tests/test_combat_caps.gd" id="35_caps"]
+[ext_resource type="Script" path="res://tests/test_weapon_modifiers.gd" id="36_weapon_mods"]
+[ext_resource type="Script" path="res://tests/test_projectile_behaviours.gd" id="37_behaviours"]
 [ext_resource type="Script" path="res://tests/test_enemies.gd" id="7_enemies"]
 [ext_resource type="Script" path="res://tests/test_run.gd" id="8_run"]
 [ext_resource type="Script" path="res://tests/test_shop.gd" id="9_shop"]
@@ -63,6 +66,15 @@ script = ExtResource("20_economy")
 
 [node name="Items" type="Node" parent="."]
 script = ExtResource("6_items")
+
+[node name="CombatCaps" type="Node" parent="."]
+script = ExtResource("35_caps")
+
+[node name="WeaponModifiers" type="Node" parent="."]
+script = ExtResource("36_weapon_mods")
+
+[node name="ProjectileBehaviours" type="Node" parent="."]
+script = ExtResource("37_behaviours")
 
 [node name="Enemies" type="Node" parent="."]
 script = ExtResource("7_enemies")

@@ -60,6 +60,15 @@ var _still_seconds := 0.0
 ## True until the first shot after entering a room, which is what Cache Warmer multiplies.
 var _room_opening_shot := true
 
+## The weapon as the scene ships it, before any item changed its pattern. Items are applied to a
+## copy of this on every pickup rather than to whatever the weapon holds now, for the reason every
+## other aggregate is recomputed from the whole inventory: nothing can then outlive the item that
+## granted it. See `WeaponModifierStack`.
+var _base_weapon: WeaponConfig
+
+## The held items' weapon modifiers, handed to the drones so their weapons change with the robot's.
+var _weapon_modifiers: WeaponModifierStack
+
 func _ready() -> void:
 	assert(config != null, "Player.config is unset: assign a PlayerConfig resource.")
 	collision_layer = Teams.body_layer(Teams.Id.PLAYER)
@@ -69,6 +78,7 @@ func _ready() -> void:
 	_motion.setup(config)
 	_dash.setup(config)
 	_weapon.setup(_weapon.config, Teams.Id.PLAYER)
+	_base_weapon = _weapon.config
 
 	# Integrity comes from PlayerConfig rather than the component's own default, so
 	# all player tuning stays in one resource.
@@ -128,15 +138,14 @@ func _physics_process(delta: float) -> void:
 
 	_step_conditional_fire_rate(delta)
 	_weapon.step(delta)
-	if _input.is_firing() and _can_fire_while_moving():
-		# Cache Warmer rides the weapon's existing damage multiplier rather than adding a field
-		# beside it: raised for the attempt and put back after, so a shot the cooldown refuses does
-		# not spend the room's opening bonus.
-		var restore := _weapon.damage_multiplier
-		_weapon.damage_multiplier = restore * opening_shot_damage_scale()
-		if _weapon.try_fire(global_position, _input.aim_direction):
-			_room_opening_shot = false
-		_weapon.damage_multiplier = restore
+	# Cache Warmer rides the weapon's existing damage multiplier rather than adding a field beside
+	# it: raised for the attempt and put back after, so a shot the cooldown refuses does not spend
+	# the room's opening bonus.
+	var restore := _weapon.damage_multiplier
+	_weapon.damage_multiplier = restore * opening_shot_damage_scale()
+	if _work_trigger():
+		_room_opening_shot = false
+	_weapon.damage_multiplier = restore
 
 	if _input.has_interact_request():
 		_input.consume_interact_request()
@@ -182,6 +191,22 @@ func get_health_component() -> HealthComponent:
 	return _health
 
 
+## Hands the weapon this frame's trigger: held, or not. Returns whether a shot left.
+##
+## Asked every frame rather than only while firing, because a charging weapon fires on the release,
+## which is a frame the trigger is *not* held. An ordinary weapon ignores the release.
+##
+## Blocking I/O forbids firing on the move and forbids charging on it too: a charge carried through a
+## dash and let go the frame the robot stops would be a shot fired on the move, one frame late.
+func _work_trigger() -> bool:
+	if not _can_fire_while_moving():
+		_weapon.cancel_charge()
+		return false
+	if _input.is_firing():
+		return _weapon.hold_trigger(global_position, _input.aim_direction)
+	return _weapon.release_trigger(global_position, _input.aim_direction)
+
+
 ## Blocking I/O. False only while that item is held and the robot is actually moving.
 ##
 ## Measured against real velocity rather than against input, so a robot shoved by knockback
@@ -217,6 +242,8 @@ func is_dead() -> bool:
 ## The one-shot parts of an item — the heal, the dash charge, the accent — are applied by
 ## the handler below, because they are events rather than state.
 func _apply_item_stats() -> void:
+	_weapon_modifiers = _items.build_weapon_modifier_stack()
+	_weapon.config = _weapon_modifiers.apply(_base_weapon)
 	_weapon.modifiers = _items.build_modifier_stack()
 	_weapon.fire_rate_multiplier = _items.get_fire_rate_multiplier()
 	# The run's integrity penalty is subtracted last, after the base and the items, which is what
@@ -307,12 +334,12 @@ func get_shield_charges() -> int:
 	return _shields_left
 
 
-## Rebuilds the drone escort to match the inventory, and re-hands every drone the things
-## that make its shots the player's shots — the modifier stack, the shared shot counter,
-## and the fire rate. Re-handed on every item change rather than only on creation, because
-## picking up Cooling Fan after a drone must speed the drone up too.
+## Rebuilds the drone escort to match the inventory, up to `CombatCaps.max_drones`, and re-hands
+## every drone the things that make its shots the player's shots — the modifier stack, the shared
+## shot counter, and the fire rate. Re-handed on every item change rather than only on creation,
+## because picking up Cooling Fan after a drone must speed the drone up too.
 func _sync_drones() -> void:
-	var wanted := _items.get_drone_count()
+	var wanted := mini(_items.get_drone_count(), CombatCaps.active().max_drones)
 	while _drones.size() > wanted:
 		var retired: PlayerDrone = _drones.pop_back()
 		retired.queue_free()
@@ -324,7 +351,7 @@ func _sync_drones() -> void:
 	for index: int in _drones.size():
 		_drones[index].set_orbit_phase(index, _drones.size())
 		_drones[index].adopt(
-			_weapon.modifiers, _weapon.shots, _weapon.fire_rate_multiplier, self
+			_weapon.modifiers, _weapon.shots, _weapon.fire_rate_multiplier, self, _weapon_modifiers
 		)
 
 
@@ -437,8 +464,11 @@ func _on_dash_ended() -> void:
 ## shots on the EventBus: one trigger pull should be one firing sound, not three.
 func _on_shot_fired(muzzle: Vector2, direction: Vector2) -> void:
 	_visuals.play_muzzle_flash()
+	# The direction the robot was asked to fire and the charge it fired with, rather than the shot
+	# that left: a drone turns round for a rear shot on its own count, and a direction the robot had
+	# already turned round would be turned back.
 	for drone: PlayerDrone in _drones:
-		drone.fire(direction)
+		drone.fire(_weapon.get_last_request(), _weapon.get_last_charge())
 	EventBus.shot_fired.emit(Teams.Id.PLAYER, muzzle, direction)
 
 

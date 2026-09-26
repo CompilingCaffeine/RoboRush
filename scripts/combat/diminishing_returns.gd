@@ -45,7 +45,13 @@ extends RefCounted
 ##   - `speed`, `radius`, `split_spread_degrees` — one authored item each, and none of them is
 ##     damage. Chip Speed stacks five times to 1.76x projectile speed, which is a feel change.
 ##   - `chain_damage_scale`, `split_damage_scale` — fractions *of* a damage number this curve has
-##     already softened. Softening them again would be applying the knee twice to one hit.
+##     already softened. Softening them again would be applying the knee twice to one hit. The
+##     same goes for `echo_damage_scale` and `aura_damage_scale`.
+##   - `damage_over_life`, `crit_scale`, `bonus_vs_status` — each pays only in a state: late in a
+##     shot's flight, on the hits a chance allows, against a target already under a status. The
+##     condition is the price, as Cache Warmer's opening shot is.
+##   - `charge_max_scale` — paid for in shots not fired. A second of charge at four times the
+##     damage is the same damage per second as four ordinary shots in that second.
 ##
 ## The list is short on purpose. A softened aggregate is one the player cannot fully reason about,
 ## so every one of them is a cost, and the two here are the two worth paying for.

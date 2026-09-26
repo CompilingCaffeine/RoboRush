@@ -13,9 +13,11 @@ extends Resource
 ## already knows what to do. Ricochet Driver plus Fork Bomb then produces "bounces
 ## once, then splits" with no code aware that those two items can co-occur.
 ##
-## Every field below is read by `projectile.gd` except `status_effects`, which waits on
-## the StatusEffectController from spec section 14. Items reach these fields by name
-## through `ProjectileModifierStack`, so no field here knows which item adjusts it.
+## Every field below is read by `projectile.gd`, except the echo pair, which `ProjectileFactory`
+## reads because an echo is a second shot rather than something the first one does. Items reach
+## these fields by name through `ProjectileModifierStack`, so no field here knows which item adjusts
+## it. The Flight and Hits groups are roadmap SYS-2: no shipped item uses them yet, and every one of
+## them is neutral at its default, so a shot that names none of them flies exactly as it always has.
 
 @export_group("Core")
 
@@ -60,11 +62,22 @@ extends Resource
 ## Children spawned when the projectile is consumed. Fork Bomb adds two.
 @export var split_count: int = 0
 
+## Generations of splitting this shot may go through. One — the default, and every shipped item —
+## is a parent that splits into children that do not. Two lets the children split once more, and so
+## on, bounded by `CombatCaps.max_split_depth` whatever an item adds. A child carries one less.
+@export var split_depth: int = 1
+
 ## Child damage as a fraction of the parent's. Fork Bomb uses 0.6.
 @export var split_damage_scale: float = 0.6
 
 ## Total arc the children are fanned across, centred on the parent's last direction.
 @export var split_spread_degrees: float = 70.0
+
+## Copies a shot continues as when its hit kills what it struck. The copies fly on from the kill in a
+## narrow fan, with what the shot had left, and do not duplicate again: a killing shot through a
+## pack of weak enemies would otherwise double at every one of them. Capped per kill by
+## `CombatCaps.max_children_per_impact`.
+@export var split_on_kill_count: int = 0
 
 ## Turn rate toward the nearest enemy, in radians per second. Magnetic Guidance adds to
 ## it. Zero disables homing entirely, including the per-frame search for a target.
@@ -123,6 +136,85 @@ extends Resource
 ## `ProjectileModifierStack` puts on field names and for the same reason: a typo that
 ## silently does nothing is the failure mode a string-keyed design is most exposed to.
 @export var status_effects: Array[StringName] = []
+
+@export_group("Flight")
+
+## Speed multiplier the shot reaches by the end of its ramp, from 1.0 at launch. Above one
+## accelerates, below one slows it, and zero brings it to a halt where it hangs until it expires.
+@export var speed_over_life: float = 1.0
+
+## Damage multiplier reached along the same ramp. A shot that hits harder the further it has flown
+## is this above one.
+@export var damage_over_life: float = 1.0
+
+## Seconds the two ramps above take to arrive. Zero spreads them over the whole lifetime; a short
+## ramp with a long lifetime is a shot that slows to a stop early and then waits as a mine.
+@export var over_life_seconds: float = 0.0
+
+## Radius multiplier the shot reaches after `Projectile.GROWTH_DISTANCE` pixels of travel, growing
+## linearly and holding there. Measured in distance rather than time, so a slow shot grows slowly.
+@export var radius_over_distance: float = 1.0
+
+## Whole turns the shot circles its shooter at `orbit_radius` before flying out, straight away from
+## it. Turns rather than seconds, so a faster shot orbits faster rather than further, and a whole
+## number of turns releases it along the line the player aimed. It does not age, hit walls or run
+## out of lifetime while it circles: the orbit is a wind-up, not part of its flight.
+@export var orbit_turns: float = 0.0
+
+@export var orbit_radius: float = 22.0
+
+## Seconds the shot stops for, once, `pause_after_seconds` into its flight, before re-aiming at the
+## nearest enemy in its room and carrying on. Zero never pauses. With nothing to aim at it carries on
+## the way it was going.
+@export var pause_and_retarget_seconds: float = 0.0
+
+@export var pause_after_seconds: float = 0.2
+
+## Whether a shot that expires without having hit anything fires one new shot at the nearest enemy
+## in its room. The new shot is this one again, fresh, and does not do it a second time. Expiring
+## means running out of lifetime; a shot that dies on a wall has not expired, and a returning shot
+## expires only after its return.
+@export var expire_retarget_shot: bool = false
+
+## Seconds after a weapon fires this shot that a copy of it follows from the same muzzle, the same
+## way. Zero fires no echo. Only a shot a weapon fired echoes — a split child or a copy does not —
+## and an echo does not echo.
+@export var echo_delay: float = 0.0
+
+## The echo's damage as a fraction of the shot's.
+@export var echo_damage_scale: float = 0.5
+
+@export_group("Hits")
+
+## Chance from 0.0 to 1.0 that a direct hit is critical, for `crit_scale` times its damage and the
+## critical damage-number style. Rolled per hit; blasts and chains from a critical hit are not
+## raised, because they are what the shot sets off rather than the hit itself.
+@export var crit_chance: float = 0.0
+
+@export var crit_scale: float = 2.0
+
+## Extra damage, as a fraction, on a direct hit against a target already carrying any status. Read
+## before this shot applies its own, so a shot never pays itself the bonus.
+@export var bonus_vs_status: float = 0.0
+
+## Fraction of the shot's damage dealt to every enemy within `aura_radius` of it, every
+## `Projectile.AURA_TICK_SECONDS` while it flies. A fraction rather than a flat number, like the
+## blast and the chain, so an aura grows with the build carrying it. Zero on either disables it.
+@export var aura_damage_scale: float = 0.0
+
+@export var aura_radius: float = 0.0
+
+## Seconds between the hazard patches the shot leaves behind it, each applying
+## `trail_hazard_effect` to enemies standing in it. Zero, or no effect, leaves nothing.
+@export var trail_hazard_interval: float = 0.0
+
+## The status id each patch applies, from `StatusEffectController.DEFINITIONS`.
+@export var trail_hazard_effect: StringName = &""
+
+@export var trail_hazard_radius: float = 8.0
+
+## Seconds each patch lasts.
+@export var trail_hazard_seconds: float = 1.5
 
 @export_group("Presentation")
 

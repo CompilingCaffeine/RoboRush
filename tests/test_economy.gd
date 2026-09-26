@@ -583,15 +583,48 @@ func _test_the_worst_legal_build_stays_inside_its_caps() -> void:
 		],
 	)
 
-	# One trigger pull: the shot itself, each split generation, and one shot per drone.
-	var stack := inventory.build_modifier_stack()
-	var shot := (load(BLASTER_PATH) as WeaponConfig).projectile.spawn_copy()
-	stack.apply(shot, 15)
-	var per_shot := (1 + shot.split_count) * (1 + inventory.get_drone_count())
+	# One trigger pull: every projectile of the volley, its echo, each generation of its splits, and
+	# the same again from every drone. Copies on a kill and a missed shot's retarget are not here:
+	# how many of those there are depends on what is in the room, which is what the runtime caps are
+	# for — `test_combat_caps` fires this build to measure them instead.
+	var caps := CombatCaps.active()
+	var blaster := load(BLASTER_PATH) as WeaponConfig
+	var weapon := inventory.build_weapon_modifier_stack().apply(blaster)
+	var shot := weapon.projectile.spawn_copy()
+	inventory.build_modifier_stack().apply(shot, 15)
+	var children := mini(shot.split_count, caps.max_children_per_impact)
+	var generations := mini(shot.split_depth, caps.max_split_depth)
+	var per_volley := 0
+	for generation: int in generations + 1:
+		per_volley += int(pow(children, generation))
+	var per_shot := (
+		maxi(weapon.projectiles_per_shot, 1)
+		* (2 if shot.echo_delay > 0.0 else 1)
+		* per_volley
+		* (1 + mini(inventory.get_drone_count(), caps.max_drones))
+	)
 	check(
 		per_shot <= MAX_PROJECTILES_PER_SHOT,
 		"one shot puts at most %d projectiles in the air (%d)"
 			% [MAX_PROJECTILES_PER_SHOT, per_shot],
+	)
+
+	# Roadmap ENG-10: the runtime caps are a safety net under the pool, not a limit on it. If the
+	# worst legal build reaches one, the cap has become part of how an item plays, which is exactly
+	# the hard ceiling `DiminishingReturns` was written to avoid.
+	check(
+		inventory.get_drone_count() <= caps.max_drones,
+		"the worst build's %d drones fit under the cap of %d"
+			% [inventory.get_drone_count(), caps.max_drones],
+	)
+	check(
+		shot.split_count <= caps.max_children_per_impact,
+		"its %d-way split fits under the cap of %d"
+			% [shot.split_count, caps.max_children_per_impact],
+	)
+	check(
+		shot.split_depth <= caps.max_split_depth and shot.split_on_kill_count <= caps.max_children_per_impact,
+		"and its split depth and copies on a kill fit under theirs",
 	)
 
 	inventory.queue_free()
