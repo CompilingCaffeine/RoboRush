@@ -25,6 +25,14 @@ const ARM_DELAY := 0.12
 var _elapsed := 0.0
 var _base_y := 0.0
 
+## Whether a body has touched this pickup without collecting it: it arrived before the pickup
+## armed, or `apply_to` declined it. `body_entered` fires once per arrival, so a body that never
+## leaves never asks again — a robot standing on a repair cell it did not need, then hit, would
+## not be repaired until it stepped off and back on. While this is set the pickup asks the bodies
+## overlapping it every physics frame instead. It stays clear for every pickup that is simply
+## walked over, so the common case pays nothing.
+var _awaiting_retry := false
+
 
 func _ready() -> void:
 	assert(config != null, "Pickup.config is unset: assign a PickupConfig resource.")
@@ -43,13 +51,34 @@ func _process(delta: float) -> void:
 	_sprite.position.y = _base_y + sin(_elapsed * TAU * BOB_HZ) * BOB_HEIGHT
 
 
-func _on_body_entered(body: Node2D) -> void:
-	if _elapsed < ARM_DELAY:
+func _physics_process(_delta: float) -> void:
+	if not _awaiting_retry:
 		return
-	if not config.apply_to(body):
-		# Declined — a repair cell on a robot at full integrity stays on the floor for later
-		# rather than being wasted.
+	var bodies := get_overlapping_bodies()
+	if bodies.is_empty():
+		# Everything that was refused has walked away. The next arrival is a fresh
+		# `body_entered`, so there is nothing left to poll for.
+		_awaiting_retry = false
 		return
+	for body: Node2D in bodies:
+		if _try_collect(body):
+			return
 
+
+func _on_body_entered(body: Node2D) -> void:
+	_try_collect(body)
+
+
+## Collects this pickup for `body` if it can. Returns whether it did.
+func _try_collect(body: Node2D) -> bool:
+	if _elapsed < ARM_DELAY or not config.apply_to(body):
+		# Not yet armed, or declined — a repair cell on a robot at full integrity stays on the
+		# floor for later rather than being wasted. Either way the answer may change while the
+		# body stands here, so keep asking.
+		_awaiting_retry = true
+		return false
+
+	_awaiting_retry = false
 	EventBus.pickup_collected.emit(config.kind, config.amount, global_position)
 	queue_free()
+	return true
