@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="FloorConfig" load_steps=25 format=3]
+[gd_resource type="Resource" script_class="FloorConfig" load_steps=29 format=3]
 
 [ext_resource type="Script" path="res://scripts/resources/floor_config.gd" id="1_floor"]
 [ext_resource type="Resource" path="res://data/rooms/start_bay.tres" id="2_start"]
@@ -9,6 +9,10 @@
 [ext_resource type="Resource" path="res://data/rooms/treasure_vault.tres" id="7_treasure"]
 [ext_resource type="Resource" path="res://data/rooms/shop_bay.tres" id="8_shop"]
 [ext_resource type="Resource" path="res://data/rooms/boss_arena.tres" id="9_boss_room"]
+[ext_resource type="Resource" path="res://data/rooms/dev_sprint_board.tres" id="dev_sprint_board_room"]
+[ext_resource type="Resource" path="res://data/rooms/dev_code_freeze.tres" id="dev_code_freeze_room"]
+[ext_resource type="Resource" path="res://data/rooms/dev_merge_window.tres" id="dev_merge_window_room"]
+[ext_resource type="Resource" path="res://data/rooms/dev_standup.tres" id="dev_standup_room"]
 [ext_resource type="Resource" path="res://data/settings/shop_config.tres" id="10_shop_cfg"]
 [ext_resource type="Resource" path="res://data/spawns/ticket_bot.tres" id="11_ticket_bot"]
 [ext_resource type="Resource" path="res://data/spawns/pop_up_drone.tres" id="12_pop_up_drone"]
@@ -35,7 +39,7 @@ theme = ExtResource("40_theme")
 floor_tags = Array[StringName]([&"development"])
 room_count = 10
 start_templates = Array[RoomTemplate]([ExtResource("2_start")])
-combat_templates = Array[RoomTemplate]([ExtResource("3_server_row"), ExtResource("4_cubicles"), ExtResource("5_cable_trench"), ExtResource("6_server_ring")])
+combat_templates = Array[RoomTemplate]([ExtResource("3_server_row"), ExtResource("4_cubicles"), ExtResource("5_cable_trench"), ExtResource("6_server_ring"), ExtResource("dev_sprint_board_room"), ExtResource("dev_code_freeze_room"), ExtResource("dev_merge_window_room"), ExtResource("dev_standup_room")])
 treasure_templates = Array[RoomTemplate]([ExtResource("7_treasure")])
 shop_templates = Array[RoomTemplate]([ExtResource("8_shop")])
 boss_templates = Array[RoomTemplate]([ExtResource("9_boss_room")])

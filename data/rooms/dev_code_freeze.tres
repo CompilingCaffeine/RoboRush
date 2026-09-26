@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="1_template"]
+
+[resource]
+script = ExtResource("1_template")
+id = &"dev_code_freeze"
+type = 1
+obstacles = Array[Rect2i]([Rect2i(3, 2, 2, 2), Rect2i(6, 2, 2, 2), Rect2i(18, 2, 2, 2), Rect2i(21, 2, 2, 2), Rect2i(3, 5, 2, 2), Rect2i(6, 5, 2, 2), Rect2i(18, 5, 2, 2), Rect2i(21, 5, 2, 2), Rect2i(3, 8, 2, 2), Rect2i(6, 8, 2, 2), Rect2i(18, 8, 2, 2), Rect2i(21, 8, 2, 2)])
+enemy_spawns = Array[Vector2i]([Vector2i(13, 3), Vector2i(5, 4), Vector2i(20, 7), Vector2i(13, 9)])
+reward_spawn = Vector2i(13, 6)
+difficulty = 2
+floor_tags = Array[StringName]([&"development"])
+min_floor = 2
+max_floor = 2
+metadata/design_notes = "A code freeze: two tight grids of blocks, one each side, with single-tile gaps between them. A gap is sixteen pixels against a robot ten across, so it is passable and nothing more, and a fight that drifts into a grid is a fight at walking pace. The open floor between the grids is where the player wants to be and where two of the enemies start."

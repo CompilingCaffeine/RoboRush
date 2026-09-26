@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="RoomTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/room_template.gd" id="1_template"]
+
+[resource]
+script = ExtResource("1_template")
+id = &"help_break_room"
+type = 1
+obstacles = Array[Rect2i]([Rect2i(12, 2, 2, 8), Rect2i(8, 5, 4, 2), Rect2i(14, 5, 4, 2)])
+enemy_spawns = Array[Vector2i]([Vector2i(5, 3), Vector2i(20, 3), Vector2i(5, 9), Vector2i(20, 9)])
+reward_spawn = Vector2i(10, 4)
+difficulty = 3
+floor_tags = Array[StringName]([&"help_desk"])
+min_floor = 1
+max_floor = 2
+metadata/design_notes = "A break room around one big table, shaped like a plus: four approaches to the middle and an enemy in each quarter. The table blocks every line through the middle of the room, so a player next to it can see one or two of the four while the others come round it. Difficulty 3, beside combat_ring, for the approach to the boss."

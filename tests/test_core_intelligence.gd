@@ -24,7 +24,10 @@ func run() -> void:
 func _test_content_and_distribution() -> void:
 	check(CAMPAIGN.size() == 6, "the shipped campaign has all six floors")
 	check(CAMPAIGN.require_complete, "the shipped campaign treats missing content as fatal")
-	check(CAMPAIGN.content_version == 6, "rarity-weighted offers move checkpoints to content version 6")
+	check(
+		CAMPAIGN.content_version == 6,
+		"rarity-weighted offers and the new early rooms move checkpoints to content version 6",
+	)
 	var report := CampaignValidator.validate(CAMPAIGN)
 	check(report.is_valid(), "the completed campaign validates:\n%s" % report.describe())
 	check(report.warnings.is_empty(), "the completed campaign has no provisional warnings")

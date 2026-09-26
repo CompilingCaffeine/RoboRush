@@ -45,4 +45,4 @@ metadata/design_notes = "content_version: Bumped to 2 when every floor's boss po
 
 And to 3 for Cloud Operations, which is a larger change to what a seed means than the last one: a run is four floors instead of three, so victory has moved, and every floor now draws its boss from four rather than three. Version 5 completes the campaign with Core Intelligence and moves victory to the authored finale. Earlier checkpoints must not resume into a run with a different ending.
 
-Version 6 weights item offers by rarity (roadmap FIX-3; see data/pools/*_drop_table.tres): the same seed now draws different items from the same pool."
+Version 6 weights item offers by rarity (roadmap FIX-3; see data/pools/*_drop_table.tres) and adds four combat rooms each to the Help Desk and Development (FIX-8): the same seed now builds different floors and draws different items from the same pool."
