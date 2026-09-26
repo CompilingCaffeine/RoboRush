@@ -4,6 +4,16 @@
 - **Baseline:** `1c450d8` on `main` (2026-09-19). Six floors, six bosses, 16 enemies, 54 items, 52 room templates, and 35 test files.
 - **Authority:** [robo_rush_build_spec.md](robo_rush_build_spec.md) is still the design authority. Where this plan departs from it, the entry says so. The post-boss hazard contract in [SIX_FLOOR_SCALING_GAMEPLAN.md](SIX_FLOOR_SCALING_GAMEPLAN.md) still holds.
 
+## Progress
+
+| Item | Status |
+| --- | --- |
+| FIX-1 Scrap Magnet | **Done.** Items are no longer pulled. The suspected repair-cell gap was real and is fixed too: a pickup touched without being collected now keeps asking while the robot stands on it. Covered by two new item checks. |
+| FIX-5 / ENG-3 Design notes | **Done.** Confirmed that a re-save dropped all 51 comment lines from `floor_3_data_center.tres`. All 104 files now use `metadata/design_notes`, which survives re-saving. `tools/ci/check_design_notes.py` guards against new comments. |
+| ENG-4 Static analysis | **Done.** gdlint, ruff, shellcheck, the design-notes check, and a script-UID check run through `tools/ci/lint.sh` and the Lint workflow. The linters' real findings are fixed, and two missing `.uid` files are committed. |
+| ENG-1 Split FloorController | **Started.** The boss-reward policy is now `BossRewardDraw`, and its output matches `main` seed for seed. Still to extract: `FloorTransition`, `RoomEntryDirector`, and `ShopStocker`. |
+| ENG-5 CI shape | **Partly done.** Lint is its own fast workflow. The test runner accepts `-- --suite=Name`. `profile_executive` works again: it had been failing on `main` since the campaign started ending on a trophy. A nightly job is still to do. |
+
 This plan comes from reading the code and data, not from playing the game. Every finding cites the file that shows it. Every proposal is sized, lists its dependencies, and states the evidence that should count as "done". The six-floor campaign already works, so the plan builds on it without restructuring it.
 
 ## Contents
