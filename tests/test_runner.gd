@@ -11,6 +11,14 @@ extends Node
 ## `SUITE_TIMEOUT_SECONDS` trips partway through and reports a healthy suite as a hang. That is
 ## why omitting the flag is a broken run rather than a slow one, and why the watchdog says so.
 ##
+## To run some suites and not others while working on them, name them after `--`:
+##
+##     godot --headless --fixed-fps 60 res://tests/test_runner.tscn -- --suite=Items,Floor
+##
+## Names are the suite nodes' names as the report prints them, compared without regard to case. A
+## filtered run says so on its PASS line, so it cannot be mistaken for the whole suite passing, and a
+## filter that matches nothing is a failure rather than a vacuous pass.
+##
 ## Exits 0 only if at least one suite ran, every suite ran at least one check, and no
 ## check failed. The "at least one check" rule is deliberate: a suite that crashes
 ## before asserting anything must be a failure, not a silent pass.
@@ -85,9 +93,14 @@ func _ready() -> void:
 	_start_frames = Engine.get_physics_frames()
 	var suites: Array[TestCase] = []
 	var failures: PackedStringArray = []
+	var wanted := _requested_suites()
+	var skipped := 0
 
 	for child: Node in get_children():
 		if child is TestCase:
+			if not wanted.is_empty() and child.name.to_lower() not in wanted:
+				skipped += 1
+				continue
 			suites.append(child as TestCase)
 			continue
 		# A suite whose script fails to compile is attached to its node as nothing at all,
@@ -97,6 +110,11 @@ func _ready() -> void:
 		failures.append("%s did not load as a TestCase (compile error in its script?)" % child.name)
 
 	if suites.is_empty():
+		if not wanted.is_empty():
+			printerr("FAIL  --suite=%s matched no suite." % ",".join(wanted))
+			_finished = true
+			get_tree().quit(1)
+			return
 		printerr("FAIL  test_runner has no TestCase children.")
 		get_tree().quit(1)
 		return
@@ -143,7 +161,10 @@ func _ready() -> void:
 	var frames := Engine.get_physics_frames() - _start_frames
 	_finished = true
 	if failures.is_empty():
-		print("PASS  %d suites, %d checks in %.1fs" % [suites.size(), total_checks, elapsed])
+		print("PASS  %d suites, %d checks in %.1fs%s" % [
+			suites.size(), total_checks, elapsed,
+			" (%d suites filtered out by --suite)" % skipped if skipped > 0 else "",
+		])
 		_warn_if_paced(elapsed, frames)
 		get_tree().quit(0)
 		return
@@ -153,6 +174,17 @@ func _ready() -> void:
 		printerr("  - %s" % failure)
 	_warn_if_paced(elapsed, frames)
 	get_tree().quit(1)
+
+
+## Lower-cased suite names from `--suite=A,B` after the `--` separator. Empty means every suite.
+func _requested_suites() -> PackedStringArray:
+	var names := PackedStringArray()
+	for argument: String in OS.get_cmdline_user_args():
+		if not argument.begins_with("--suite="):
+			continue
+		for name: String in argument.trim_prefix("--suite=").split(",", false):
+			names.append(name.strip_edges().to_lower())
+	return names
 
 
 ## The watchdog. See SUITE_TIMEOUT_SECONDS for why it lives here and not after the await.
