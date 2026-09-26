@@ -102,6 +102,13 @@ func _physics_process(delta: float) -> void:
 	if _is_dead:
 		return
 
+	_input.mouse_aim = SaveManager.settings.mouse_aim
+	if _input.mouse_aim:
+		# Through the camera and the viewport's 3x stretch into world space, which is the one part
+		# of mouse aim the input component cannot do for itself. See `PlayerInput.point_at`.
+		_input.point_at(
+			get_viewport().get_mouse_position(), get_global_mouse_position() - global_position
+		)
 	_input.poll(delta)
 
 	_dash.step(delta)

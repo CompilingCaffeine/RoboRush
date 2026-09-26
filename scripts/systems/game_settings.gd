@@ -1,11 +1,11 @@
 class_name GameSettings
 extends RefCounted
-## The eight player-facing settings from spec section 21, as plain data.
+## The player-facing settings, as plain data.
 ##
-## Exactly the eight the spec lists — screen shake, flash intensity, CRT filter, damage
-## numbers, master volume, music volume, effects volume, fullscreen — and nothing else. A
-## settings screen is a promise that every switch on it does something, so a switch is added
-## here only once something reads it.
+## The eight spec section 21 lists — screen shake, flash intensity, CRT filter, damage numbers,
+## master volume, music volume, effects volume, fullscreen — and mouse aim, which spec section 5's
+## controls imply and roadmap FIX-7 added. A settings screen is a promise that every switch on it
+## does something, so a switch is added here only once something reads it.
 ##
 ## Deliberately not a Resource. Settings are saved as JSON (spec section 24) rather than as a
 ## `.tres`, because the save file is versioned and hand-inspectable and a Resource is neither.
@@ -50,6 +50,12 @@ var crt_enabled: bool = false
 
 var damage_numbers: bool = true
 
+## Aim with the mouse and fire with its left button (`PlayerInput.mouse_aim`). On by default: in a
+## browser the mouse is the first thing a player reaches for, and a pointer nobody moves takes no
+## aim, so a player on the arrows or a gamepad loses nothing. Off is for a player whose trackpad
+## fires the cannon every time a palm brushes it.
+var mouse_aim: bool = true
+
 
 ## Converts a 0..1 slider to a bus volume in decibels, with the bottom of the slider being
 ## actual silence rather than a very quiet sound.
@@ -69,6 +75,7 @@ func to_dict() -> Dictionary:
 		"flash_intensity": flash_intensity,
 		"crt_enabled": crt_enabled,
 		"damage_numbers": damage_numbers,
+		"mouse_aim": mouse_aim,
 	}
 
 
@@ -86,6 +93,7 @@ static func from_dict(data: Dictionary) -> GameSettings:
 	settings.fullscreen = _read_bool(data, "fullscreen", settings.fullscreen)
 	settings.crt_enabled = _read_bool(data, "crt_enabled", settings.crt_enabled)
 	settings.damage_numbers = _read_bool(data, "damage_numbers", settings.damage_numbers)
+	settings.mouse_aim = _read_bool(data, "mouse_aim", settings.mouse_aim)
 	return settings
 
 

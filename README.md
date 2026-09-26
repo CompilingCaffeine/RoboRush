@@ -41,6 +41,7 @@ godot --headless --import
 | --- | --- | --- |
 | Move | `WASD` | Left stick |
 | Aim and fire | Arrow keys | Right stick |
+| Fire at the pointer | Hold left mouse | — |
 | Dash | `Space` | A / cross |
 | Buy / take reward | `E` | X / square |
 | View run statistics | Hold `Tab` | Hold L1 / LB |
@@ -48,7 +49,7 @@ godot --headless --import
 | Restart | `R` | Y / triangle |
 | Toggle debug overlay | `F1` | — |
 
-Holding an arrow key aims and fires in that direction. Movement and firing are independent, so you can move and shoot in different directions. The game shows its controls on first launch and from the title and pause menus.
+Holding an arrow key aims and fires in that direction. Movement and firing are independent, so you can move and shoot in different directions. With **Mouse aim** on (the default; see Settings), the robot also aims at the mouse pointer when it moves, and holding the left button fires towards it. Whichever you used last, the arrows, the stick or the mouse, sets the aim. The game shows its controls on first launch and from the title and pause menus.
 
 ## Test
 

@@ -22,8 +22,16 @@ extends Node
 ## quantising it to the eight directions a keyboard can express would be a pointless
 ## downgrade.
 ##
+## The mouse is the third way to aim, while `mouse_aim` is on: the cannon follows the pointer
+## once the pointer moves, and holding the left button fires towards it. The pointer is the
+## only direction that is not also a trigger, so it is the only one with a fire button. The
+## stick and the arrows win whenever they are in use, and the pointer takes the aim back the
+## next time it moves or fires — whichever the player touched last is what they are aiming with.
+##
 ## The component touches nothing outside the Input singleton — no viewport, no camera,
-## no tree — so it can be driven directly from a test.
+## no tree — so it can be driven directly from a test. Where the pointer is in the world is
+## the viewport's and the camera's business, so `Player` works it out and hands it over
+## (`point_at`).
 
 ## Arrow actions and the direction each one means, in a fixed order.
 const SHOOT_DIRECTIONS: Dictionary[StringName, Vector2] = {
@@ -36,6 +44,11 @@ const SHOOT_DIRECTIONS: Dictionary[StringName, Vector2] = {
 ## Right stick deflection required before it takes over from the arrow keys.
 const STICK_TAKEOVER := 0.25
 
+## How close to the robot, in world pixels, the pointer can be before it stops giving a
+## direction. Inside this the robot's own sprite is under the pointer, and a direction taken
+## from a pixel or two of offset swings wildly as the robot moves. The aim stays where it was.
+const POINTER_DEADZONE := 6.0
+
 ## Normalised movement intent. Zero when no direction is held.
 var move_vector := Vector2.ZERO
 
@@ -45,6 +58,10 @@ var shoot_vector := Vector2.ZERO
 ## Normalised aim direction. Never zero: it holds the last direction shot so the cannon
 ## stays where the player left it instead of snapping back to a default angle.
 var aim_direction := Vector2.RIGHT
+
+## Whether the mouse aims and fires. The player's setting (`GameSettings.mouse_aim`), set by
+## `Player` before each poll. Off, the pointer and its button are ignored entirely.
+var mouse_aim := false
 
 var _config: PlayerConfig
 var _dash_buffer_left := 0.0
@@ -59,6 +76,15 @@ var _held_shoot_actions: Array[StringName] = []
 ## Last poll's pressed state per arrow, used to detect the rising edge.
 var _previously_held: Dictionary[StringName, bool] = {}
 
+## The pointer relative to the robot, in world pixels, and where it was on screen. See `point_at`.
+var _pointer_offset := Vector2.ZERO
+var _pointer_screen := Vector2.ZERO
+var _has_pointer := false
+
+## Whether the pointer is what the player is aiming with: it moved or fired more recently than
+## the arrows or the stick were used.
+var _pointer_has_aim := false
+
 
 func setup(config: PlayerConfig) -> void:
 	_config = config
@@ -72,9 +98,15 @@ func poll(delta: float) -> void:
 
 	_track_held_arrows()
 	shoot_vector = _resolve_shoot_vector()
+	if not shoot_vector.is_zero_approx():
+		_pointer_has_aim = false
+	else:
+		shoot_vector = _resolve_pointer_shot()
 
 	if not shoot_vector.is_zero_approx():
 		aim_direction = shoot_vector.normalized()
+	elif _pointer_has_aim and _pointer_offset.length() >= POINTER_DEADZONE:
+		aim_direction = _pointer_offset.normalized()
 
 	_dash_buffer_left = maxf(_dash_buffer_left - delta, 0.0)
 	if Input.is_action_just_pressed("dash"):
@@ -85,8 +117,24 @@ func poll(delta: float) -> void:
 		_interact_buffer_left = _config.dash_input_buffer
 
 
-## Firing is exactly "a shoot direction is held". There is no separate fire button, so
-## releasing every arrow stops the weapon on the next frame.
+## Where the pointer is, for mouse aim: `offset` is the pointer relative to the robot in world
+## pixels, and `screen_position` is where it is on screen. Set before each poll while `mouse_aim`
+## is on.
+##
+## The screen position is only used to tell whether the mouse moved. The offset alone cannot say:
+## it changes whenever the robot moves or the camera pans, with the mouse sitting still on the
+## desk. A pointer that has not moved since the first sample has not taken the aim, so a mouse
+## nobody is touching never turns the cannon away from where the arrows left it.
+func point_at(screen_position: Vector2, offset: Vector2) -> void:
+	if _has_pointer and not screen_position.is_equal_approx(_pointer_screen):
+		_pointer_has_aim = true
+	_pointer_screen = screen_position
+	_pointer_offset = offset
+	_has_pointer = true
+
+
+## Firing is exactly "a shoot direction is held" — an arrow, the stick, or the pointer's button
+## with mouse aim on. Releasing it stops the weapon on the next frame.
 func is_firing() -> bool:
 	return not shoot_vector.is_zero_approx()
 
@@ -120,6 +168,8 @@ func clear() -> void:
 	shoot_vector = Vector2.ZERO
 	_held_shoot_actions.clear()
 	_previously_held.clear()
+	_pointer_has_aim = false
+	_has_pointer = false
 	_dash_buffer_left = 0.0
 	_interact_buffer_left = 0.0
 
@@ -161,6 +211,21 @@ func _resolve_shoot_vector() -> Vector2:
 	var vertical := _newest_held(&"shoot_up", &"shoot_down")
 	# Vector2.ZERO.normalized() is ZERO, so "nothing held" needs no special case.
 	return (horizontal + vertical).normalized()
+
+
+## Towards the pointer while its button is held, with mouse aim on; zero otherwise. A pointer
+## resting on the robot fires the way the cannon already faces rather than not at all: the player
+## asked to shoot, and the press should not be lost to where the cursor happened to be.
+func _resolve_pointer_shot() -> Vector2:
+	if not mouse_aim:
+		_pointer_has_aim = false
+		return Vector2.ZERO
+	if not Input.is_action_pressed(&"shoot_pointer"):
+		return Vector2.ZERO
+	_pointer_has_aim = true
+	if _pointer_offset.length() < POINTER_DEADZONE:
+		return aim_direction
+	return _pointer_offset.normalized()
 
 
 ## Returns whichever of two opposing arrows was pressed most recently and is still held,
