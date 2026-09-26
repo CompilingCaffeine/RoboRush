@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="FloorConfig" load_steps=28 format=3]
+[gd_resource type="Resource" script_class="FloorConfig" load_steps=30 format=3]
 
 [ext_resource type="Script" path="res://scripts/resources/floor_config.gd" id="floor"]
 [ext_resource type="Resource" path="res://data/floors/core_intelligence_theme.tres" id="theme"]
@@ -15,6 +15,8 @@
 [ext_resource type="Resource" path="res://data/rooms/core_chamber.tres" id="boss_room"]
 [ext_resource type="Resource" path="res://data/settings/shop_config.tres" id="shop"]
 [ext_resource type="Resource" path="res://data/pools/run_item_pool.tres" id="pool"]
+[ext_resource type="Resource" path="res://data/pools/clear_drop_table.tres" id="clear_drops"]
+[ext_resource type="Resource" path="res://data/pools/treasure_drop_table.tres" id="treasure_drops"]
 [ext_resource type="Resource" path="res://data/bosses/core_intelligence_encounter.tres" id="boss"]
 [ext_resource type="Resource" path="res://data/spawns/core_intelligence/code_runner.tres" id="runner"]
 [ext_resource type="Resource" path="res://data/spawns/core_intelligence/hot_path_runner.tres" id="hot_runner"]
@@ -45,6 +47,8 @@ enemy_spawns = Array[EnemySpawn]([ExtResource("runner"), ExtResource("hot_runner
 clear_scrap_range = Vector2i(1, 2)
 enemy_scrap_range = Vector2i(0, 2)
 item_pool = ExtResource("pool")
+clear_drops = ExtResource("clear_drops")
+treasure_drops = ExtResource("treasure_drops")
 item_clear_indices = Array[int]([2, 5])
 shop = ExtResource("shop")
 treasure_grants_item = true

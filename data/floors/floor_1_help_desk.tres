@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="FloorConfig" load_steps=20 format=3]
+[gd_resource type="Resource" script_class="FloorConfig" load_steps=22 format=3]
 
 [ext_resource type="Script" path="res://scripts/resources/floor_config.gd" id="1_floor"]
 [ext_resource type="Resource" path="res://data/rooms/start_bay.tres" id="2_start"]
@@ -16,6 +16,8 @@
 [ext_resource type="Resource" path="res://data/spawns/firewall_node.tres" id="8_firewall_node"]
 [ext_resource type="Resource" path="res://data/floors/help_desk_theme.tres" id="26_theme"]
 [ext_resource type="Resource" path="res://data/pools/run_item_pool.tres" id="90_pool"]
+[ext_resource type="Resource" path="res://data/pools/clear_drop_table.tres" id="91_clear_drops"]
+[ext_resource type="Resource" path="res://data/pools/treasure_drop_table.tres" id="92_treasure_drops"]
 [ext_resource type="Resource" path="res://data/bosses/scrap_king_encounter.tres" id="92_king"]
 [ext_resource type="Resource" path="res://data/bosses/runtime_error_encounter.tres" id="93_error"]
 [ext_resource type="Resource" path="res://data/bosses/cascade_failure_encounter.tres" id="94_cascade"]
@@ -38,6 +40,8 @@ enemy_spawns = Array[EnemySpawn]([ExtResource("8_ticket_bot"), ExtResource("8_po
 clear_scrap_range = Vector2i(1, 3)
 enemy_scrap_range = Vector2i(0, 2)
 item_pool = ExtResource("90_pool")
+clear_drops = ExtResource("91_clear_drops")
+treasure_drops = ExtResource("92_treasure_drops")
 item_clear_indices = Array[int]([2, 5])
 shop = ExtResource("23_shop_cfg")
 treasure_grants_item = true

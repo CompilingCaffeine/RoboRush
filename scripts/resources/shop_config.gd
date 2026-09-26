@@ -24,6 +24,10 @@ extends Resource
 @export var reroll_base_price: int = 4
 @export var reroll_price_step: int = 2
 
+## How often each rarity is stocked (see `DropTable`). Shared like the prices, and for the same
+## reason: what a shop tends to sell is something a player learns.
+@export var drops: DropTable
+
 ## How many of a shop's stands sell items. The rest become the heal and reroll stands, in
 ## that order, so a template with three stand positions gets two items and a heal.
 @export var item_stand_count: int = 2

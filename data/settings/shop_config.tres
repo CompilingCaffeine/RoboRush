@@ -1,6 +1,7 @@
-[gd_resource type="Resource" script_class="ShopConfig" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="ShopConfig" load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/resources/shop_config.gd" id="1_shop"]
+[ext_resource type="Resource" path="res://data/pools/shop_drop_table.tres" id="2_drops"]
 
 [resource]
 script = ExtResource("1_shop")
@@ -10,3 +11,4 @@ heal_amount = 1.0
 reroll_base_price = 4
 reroll_price_step = 2
 item_stand_count = 2
+drops = ExtResource("2_drops")

@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="DropTable" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/drop_table.gd" id="1_table"]
+
+[resource]
+script = ExtResource("1_table")
+rarity_weights = Array[int]([20, 35, 28, 2, 15])
+metadata/design_notes = "Treasure rooms: percentages of common, uncommon, rare, prototype, corrupted. The vault is the reward for exploring a dead end, so it leans rarer than a combat clear: rare 28% against 9%. Corrupted is 15% here too; see clear_drop_table.tres for why."

@@ -201,17 +201,34 @@ static func _fingerprint_of(config: FloorConfig, floor_id: StringName, seed_valu
 		value = RunRng.fold_int(value, roundi(spawn.weight * 1000.0))
 		value = RunRng.fold_int(value, spawn.min_difficulty)
 
+	# Rarity too, now that it decides how often an item is offered: moving an item to another tier
+	# changes which item a seed's drops land on without changing the list.
 	for item: ItemConfig in config.get_items():
 		if item != null:
 			value = RunRng.fold_text(value, item.id)
+			value = RunRng.fold_int(value, item.rarity)
 
+	value = _fold_table(value, config.clear_drops)
+	value = _fold_table(value, config.treasure_drops)
 	if config.shop != null:
 		value = RunRng.fold_int(value, config.shop.item_stand_count)
+		value = _fold_table(value, config.shop.drops)
 	if config.theme != null:
 		value = RunRng.fold_text(value, config.theme.explore_music)
 		value = RunRng.fold_text(value, config.theme.boss_music)
 
 	return _hex(RunRng.seal(value))
+
+
+## A drop table's weights, or a marker for none. The marker is not a weight a real table could
+## spell, so "no table" and "a table of zeroes" fingerprint differently.
+static func _fold_table(value: int, table: DropTable) -> int:
+	if table == null:
+		return RunRng.fold_int(value, -1)
+	value = RunRng.fold_int(value, table.rarity_weights.size())
+	for weight: int in table.rarity_weights:
+		value = RunRng.fold_int(value, weight)
+	return value
 
 
 static func _hex(value: int) -> String:

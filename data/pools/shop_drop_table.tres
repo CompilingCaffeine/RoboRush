@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="DropTable" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/drop_table.gd" id="1_table"]
+
+[resource]
+script = ExtResource("1_table")
+rarity_weights = Array[int]([30, 30, 23, 2, 15])
+metadata/design_notes = "Shop stands: percentages of common, uncommon, rare, prototype, corrupted. Between a clear and a vault, because price already scales with rarity (shop_config.tres) and a shelf of nothing but 32-scrap rares is a shelf the player cannot use. A corrupted offer the player should refuse is part of what makes a shop a decision, so 15% as elsewhere."

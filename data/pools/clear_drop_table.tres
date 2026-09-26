@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="DropTable" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/drop_table.gd" id="1_table"]
+
+[resource]
+script = ExtResource("1_table")
+rarity_weights = Array[int]([45, 30, 9, 1, 15])
+metadata/design_notes = "Combat clears: percentages of common, uncommon, rare, prototype, corrupted. The most frequent free item, so it leans common. Rare was about 37% of every offer when draws were uniform (18 of the 48 unique items are rare); here it is 9%, and the rares go to the boss, the treasure room and the shop instead. Corrupted stays at 15%, close to its old uniform share of about 17%: hindrances remain free drops by the owner's decision (roadmap Q2), and this table is not the place to change that quietly. As a run spends its commons, a tier with nothing left is skipped and later clears lean rarer on their own."

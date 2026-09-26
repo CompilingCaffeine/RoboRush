@@ -80,9 +80,10 @@ func spawn_room_reward(position: Vector2, include_repair_cell: bool) -> void:
 
 ## Drops the contents of a treasure room: the floor's item, plus scrap. The repair cell that
 ## stood in for the item in milestone 3 is gone — a treasure room whose payout is an item and
-## a handful of scrap is worth the detour on its own.
+## a handful of scrap is worth the detour on its own. Drawn from the floor's treasure table, which
+## leans rarer than a combat clear's: the vault is the reward for exploring a dead end.
 func spawn_treasure(position: Vector2) -> ItemConfig:
-	var item := spawn_item(position)
+	var item := _drop_item(position, _config.treasure_drops)
 	if item == null:
 		# Pool exhausted. Better a repair cell than an empty vault the player walked to.
 		_spawn(REPAIR_CELL_CONFIG, position)
@@ -90,10 +91,14 @@ func spawn_treasure(position: Vector2) -> ItemConfig:
 	return item
 
 
-## Draws one item from the floor's pool and drops it. Returns null when the pool has nothing
-## left to offer this run.
+## Draws one item for a combat clear from the floor's pool and drops it. Returns null when the
+## pool has nothing left to offer this run.
 func spawn_item(position: Vector2) -> ItemConfig:
-	var item := RunManager.draw_item(_config.get_items(), _rng)
+	return _drop_item(position, _config.clear_drops)
+
+
+func _drop_item(position: Vector2, table: DropTable) -> ItemConfig:
+	var item := RunManager.draw_item(_config.get_items(), _rng, table)
 	if item == null:
 		return null
 	_spawn(PickupConfig.for_item(item), position, false)
