@@ -1,0 +1,6 @@
+# Ruff configuration for the Python tooling under tools/, run by tools/ci/lint.sh.
+line-length = 120
+
+[lint]
+# Pyflakes and pycodestyle errors, plus bugbear for the mistakes that run without failing.
+select = ["E", "F", "W", "B"]

@@ -154,7 +154,7 @@ var floor_shop := ShopStock.new()
 var floor_boss_reward_ids: Array[StringName] = []
 
 ## The floor's own clear counter, which decides when the next repair cell and the next item drop
-## are due (`FloorController._clears`). Carried for the same reason as the ids: restarting it at
+## are due (`RoomLoop.clears`). Carried for the same reason as the ids: restarting it at
 ## zero would restart the reward cadence with it, so a resumed floor would hand out its early
 ## drops a second time.
 var floor_clears: int = 0
@@ -214,6 +214,19 @@ func record_floor_progress(cleared: Array[int], visited: Array[int], clears: int
 	floor_clears = clears
 
 
+## The floor progress this checkpoint carries, for the floor it names to be resumed onto — see
+## `FloorController.resume_floor_progress`. A boundary checkpoint's has no rooms and no clears, only
+## the shop's shelf, because a floor stocks its shop before the player has taken a step on it.
+func floor_progress() -> FloorProgress:
+	var progress := FloorProgress.new()
+	progress.cleared_room_ids = floor_cleared_room_ids.duplicate()
+	progress.visited_room_ids = floor_visited_room_ids.duplicate()
+	progress.clears = floor_clears
+	progress.shop = floor_shop
+	progress.boss_reward_ids = floor_boss_reward_ids.duplicate()
+	return progress
+
+
 func to_dict() -> Dictionary:
 	return {
 		"campaign_id": String(campaign_id),
@@ -268,7 +281,7 @@ static func from_dict(data: Dictionary) -> RunCheckpoint:
 	checkpoint.floor_clears = RunStats.read_int(data, "floor_clears")
 
 	# Absent in every checkpoint written before the shelf was carried. Those read back as a shop with
-	# nothing recorded, which is what they were: `FloorController._stock_shop` stocks a shop the
+	# nothing recorded, which is what they were: `FloorBuilder` stocks a shop the
 	# saved run has nothing to say about, exactly as it did when the file was written.
 	var raw_shop: Variant = data.get("floor_shop")
 	checkpoint.floor_shop = ShopStock.from_dict(

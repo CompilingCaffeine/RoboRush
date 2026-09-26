@@ -234,9 +234,9 @@ func _test_the_whole_chain_leaves_nothing_behind() -> void:
 			"and owns the only projectile container (%d do)" % _containers_under(floor_node),
 		)
 		check(
-			floor_node._rooms.size() == floor_node.config.room_count,
+			floor_node.get_room_loop().rooms.size() == floor_node.config.room_count,
 			"and has %d rooms, not two floors' worth (%d)"
-				% [floor_node.config.room_count, floor_node._rooms.size()],
+				% [floor_node.config.room_count, floor_node.get_room_loop().rooms.size()],
 		)
 		check(
 			floor_node.get_session().generation == number,
@@ -507,12 +507,10 @@ func _descend(floor_node: FloorController) -> void:
 		fail("floor %d has no boss room to descend from" % floor_node.config.floor_number)
 		return
 
-	var stand_in := Node.new()
-	floor_node._on_boss_defeated(stand_in, boss_room)
-	stand_in.free()
+	floor_node.get_boss_arena().resolve_defeat()
 	await advance_physics(1)
 
-	floor_node._on_boss_reward_taken(floor_node.config.get_items()[0])
+	floor_node.get_boss_arena().claim_reward(floor_node.config.get_items()[0])
 	# The rebuild is deferred, and so is the physics flush that follows it. One frame is not enough.
 	await advance_physics(4)
 

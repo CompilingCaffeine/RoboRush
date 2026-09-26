@@ -43,6 +43,7 @@ func run() -> void:
 	_test_the_validator_counts_the_reward_budget()
 	_test_the_validator_reports_an_incomplete_campaign()
 	_test_the_last_boss_cannot_be_fought_early()
+	_test_the_boss_draw_is_a_pure_policy()
 	await _test_direct_start_and_arrival_agree_on_a_floor()
 	_clean_up()
 
@@ -244,6 +245,16 @@ func _test_the_validator_catches_content_faults() -> void:
 			"a floor promising an item on a clear it never reaches",
 		)
 
+	var no_repairs := _write_floor("content_no_repairs", &"beta", 2, func(config: FloorConfig) -> void:
+		config.repair_every_clears = 0
+	)
+	if not no_repairs.is_empty():
+		_expect_error(
+			_campaign([[&"alpha", first], [&"beta", no_repairs]]),
+			"drops a repair cell every 0 clears",
+			"a floor whose repair cadence would divide by zero on its first clear",
+		)
+
 	var bad_track := _write_floor("content_track", &"beta", 2, func(config: FloorConfig) -> void:
 		var theme := config.theme.duplicate() as FloorTheme
 		theme.explore_music = &"__no_such_track"
@@ -398,6 +409,55 @@ func _test_the_validator_reports_an_incomplete_campaign() -> void:
 	)
 
 
+## `BossEncounterDraw` on its own. The floor suites reach it only through a built floor; this holds
+## the contract the floor relies on — the draw records nothing, a re-opened floor takes its own boss
+## back without spending a number from the stream, and an exhausted pool repeats rather than leaving
+## a sealed arena empty.
+func _test_the_boss_draw_is_a_pure_policy() -> void:
+	var source := load(FLOOR_CONFIG_PATH) as FloorConfig
+	if not require(source and source.boss_pool.size() >= 2, "floor 1 supplies a pool to draw from"):
+		return
+	var first_boss := source.boss_pool[0]
+	var second_boss := source.boss_pool[1]
+	var pool: Array[BossEncounter] = [first_boss, second_boss]
+	var none_fought: Array[StringName] = []
+
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 77
+	var again := RandomNumberGenerator.new()
+	again.seed = 77
+	var drawn := BossEncounterDraw.draw(pool, none_fought, &"", rng)
+	check(drawn in pool, "a fresh floor draws from its pool")
+	check(drawn == BossEncounterDraw.draw(pool, none_fought, &"", again), "and the same stream draws the same boss")
+	check(none_fought.is_empty(), "without crediting the run: that is the floor's to record")
+
+	var first_fought: Array[StringName] = [first_boss.id]
+	var never_repeats := true
+	for seed_value: int in 20:
+		rng.seed = seed_value
+		never_repeats = never_repeats and BossEncounterDraw.draw(pool, first_fought, &"", rng) == second_boss
+	check(never_repeats, "a boss the run has fought is never drawn while another is left")
+
+	var both_fought: Array[StringName] = [first_boss.id, second_boss.id]
+	rng.seed = 5
+	var state_before := rng.state
+	check(
+		BossEncounterDraw.draw(pool, both_fought, first_boss.id, rng) == first_boss,
+		"a re-opened floor takes back the boss it already drew",
+	)
+	check(rng.state == state_before, "without spending a number from the stream")
+
+	check(
+		BossEncounterDraw.draw(pool, both_fought, &"", rng, "'policy check'") in pool,
+		"an exhausted pool repeats a boss rather than leaving the arena empty",
+	)
+	var empty: Array[BossEncounter] = []
+	check(
+		BossEncounterDraw.draw(empty, none_fought, &"", rng, "'policy check'") == null,
+		"and an empty pool draws nothing",
+	)
+
+
 ## The campaign ends on one fight, and it is the last one. Both halves of that are refused when a
 ## finished campaign breaks them: a final floor that offers a choice of endings, and an earlier
 ## floor that can draw the ending.
@@ -511,13 +571,9 @@ func _test_direct_start_and_arrival_agree_on_a_floor() -> void:
 	):
 		var boss_room := _find_boss_room(floor_node)
 		if require(boss_room, "floor 1 has a boss room to fight through"):
-			# Freed rather than left to the collector: `Node` is not reference counted, and a
-			# stand-in boss dropped on the floor here is an object still alive at exit.
-			var stand_in := Node.new()
-			floor_node._on_boss_defeated(stand_in, boss_room)
-			stand_in.free()
+			floor_node.get_boss_arena().resolve_defeat()
 			await advance_physics(1)
-			floor_node._on_boss_reward_taken(campaign.load_floor(0).get_items()[0])
+			floor_node.get_boss_arena().claim_reward(campaign.load_floor(0).get_items()[0])
 			await advance_physics(2)
 
 			var derived := campaign.floor_seed_for(run_seed, 1)

@@ -9,19 +9,9 @@ id = &"orchestrator"
 scene = ExtResource("2_scene")
 display_name = "ORCHESTRATOR"
 defeat_banner = "NOWHERE LEFT TO PUT IT"
-; All three announced, unlike Cascade Failure, and for the opposite reason. That fight's middle phase
-; changes only *how much* — a number the player can already see on the bodies — so a banner would be
-; the game narrating something visible. Here every phase change takes ground away, and ground going
-; away is the one thing in this fight a player can lose to without understanding why.
-;
-; The first slot is the fight *starting* — `CombatHUD` shows `phase_banners[phase - 1]`, and every
-; boss opens on phase one. The other three leave it empty because their opening beat is a health
-; bar, which needs no words. This one is the only fight in the game where shooting the boss does
-; nothing for most of its length, and it is the only one that has to say so before it asks: a player
-; who empties a magazine into a sealed body and watches the bar sit still is a player who was told
-; nothing else and drew the only available conclusion.
-;
-; Two lines, and the order is the order they are needed in. Being on a plate is what keeps you
-; alive and comes first; the window is what makes progress and comes second, because a player who
-; has not survived a migration has no use for it yet.
 phase_banners = Array[String](["BE ON A PLATE WHEN IT LANDS  //  IT ONLY OPENS AFTER IT MOVES", "TWO PLATES DARK  //  LESS FLOOR TO LAND ON", "TWO PLATES LEFT  //  SHELTER OR DENY, NOT BOTH"])
+metadata/design_notes = "phase_banners: All three announced, unlike Cascade Failure, and for the opposite reason. That fight's middle phase changes only *how much* — a number the player can already see on the bodies — so a banner would be the game narrating something visible. Here every phase change takes ground away, and ground going away is the one thing in this fight a player can lose to without understanding why.
+
+The first slot is the fight *starting* — `CombatHUD` shows `phase_banners[phase - 1]`, and every boss opens on phase one. The other three leave it empty because their opening beat is a health bar, which needs no words. This one is the only fight in the game where shooting the boss does nothing for most of its length, and it is the only one that has to say so before it asks: a player who empties a magazine into a sealed body and watches the bar sit still is a player who was told nothing else and drew the only available conclusion.
+
+Two lines, and the order is the order they are needed in. Being on a plate is what keeps you alive and comes first; the window is what makes progress and comes second, because a player who has not survived a migration has no use for it yet."

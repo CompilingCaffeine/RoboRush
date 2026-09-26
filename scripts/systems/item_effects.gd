@@ -35,7 +35,8 @@ func _ready() -> void:
 ##
 ## Driven from here rather than from `Pickup`, so a pickup stays a dumb object that knows
 ## what it grants and nothing about who is carrying what. The pickups are found by group,
-## which means nothing has to keep a list of what is currently on the floor.
+## which means nothing has to keep a list of what is currently on the floor. Items are left
+## where they lie — see `PickupConfig.is_magnetic`.
 func _physics_process(delta: float) -> void:
 	if _inventory == null or _owner_body == null:
 		return
@@ -47,8 +48,8 @@ func _physics_process(delta: float) -> void:
 	var speed := _inventory.get_pickup_magnet_speed()
 	var centre := _owner_body.global_position
 	for node: Node in get_tree().get_nodes_in_group(Pickup.GROUP):
-		var pickup := node as Node2D
-		if pickup == null:
+		var pickup := node as Pickup
+		if pickup == null or not pickup.config.is_magnetic():
 			continue
 		var offset := centre - pickup.global_position
 		if offset.length() > radius:

@@ -1,0 +1,56 @@
+# gdlint (gdtoolkit 4) configuration, run by tools/ci/lint.sh.
+#
+# gdtoolkit's defaults, except where this project's established style deliberately differs. Each
+# departure says why, so loosening a rule further is a visible decision rather than drift.
+
+# Off: the project orders a script by reading order — each constant or signal sits beside the
+# doc comment that explains it — rather than by declaration kind.
+# Off: max-file-lines and max-returns. Long files are tracked as ROADMAP.md ENG-1, not by a
+# number that would have to be raised every time the suites grow; early-return guard clauses are
+# the house style for validation code.
+disable:
+- class-definitions-order
+- max-file-lines
+- max-returns
+
+# Prose is wrapped near 100 columns; code occasionally runs longer. 120 at Godot's default tab
+# width catches genuine outliers without a whole-codebase rewrap.
+max-line-length: 120
+tab-characters: 4
+
+# `ItemInventory` answers one aggregate question per item hook by design, so it has many small
+# public queries. Raised rather than disabled, so a class that grows far past it is still noticed.
+max-public-methods: 40
+
+# A leading underscore marks a signal as private to its class, as it does for functions.
+signal-name: _?[a-z][a-z0-9]*(_[a-z0-9]+)*
+
+class-load-variable-name: (([A-Z][a-z0-9]*)+|_?[a-z][a-z0-9]*(_[a-z0-9]+)*)
+class-name: ([A-Z][a-z0-9]*)+
+class-variable-name: _?[a-z][a-z0-9]*(_[a-z0-9]+)*
+comparison-with-itself: null
+constant-name: _?[A-Z][A-Z0-9]*(_[A-Z0-9]+)*
+duplicated-load: null
+enum-element-name: '[A-Z][A-Z0-9]*(_[A-Z0-9]+)*'
+enum-name: ([A-Z][a-z0-9]*)+
+excluded_directories: !!set
+  .git: null
+  .godot: null
+  addons: null
+  build: null
+expression-not-assigned: null
+function-argument-name: _?[a-z][a-z0-9]*(_[a-z0-9]+)*
+function-arguments-number: 10
+function-name: (_on_([A-Z][a-z0-9]*)+(_[a-z0-9]+)*|_?[a-z][a-z0-9]*(_[a-z0-9]+)*)
+function-preload-variable-name: ([A-Z][a-z0-9]*)+
+# A leading underscore marks a local as deliberately unused, which is Godot's own convention.
+function-variable-name: _?[a-z][a-z0-9]*(_[a-z0-9]+)*
+load-constant-name: (([A-Z][a-z0-9]*)+|_?[A-Z][A-Z0-9]*(_[A-Z0-9]+)*)
+loop-variable-name: _?[a-z][a-z0-9]*(_[a-z0-9]+)*
+mixed-tabs-and-spaces: null
+no-elif-return: null
+no-else-return: null
+sub-class-name: _?([A-Z][a-z0-9]*)+
+trailing-whitespace: null
+unnecessary-pass: null
+unused-argument: null

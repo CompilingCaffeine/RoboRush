@@ -96,7 +96,7 @@ func _test_the_shop_template_has_stands() -> void:
 ##
 ## Overlap is geometry, so it is checkable, and the three numbers that produce it live in three
 ## different files — the label's width in ShopStand, the stand tiles in a room template, and
-## FloorController.BOSS_REWARD_SPACING. This is the one place they are compared. It also measures the
+## BossArena.REWARD_SPACING. This is the one place they are compared. It also measures the
 ## real font against the real item pool, so an item named later than this test cannot quietly bring
 ## the overlap back: the twelfth name is the one that overflowed.
 func _test_stand_labels_cannot_overlap() -> void:
@@ -133,9 +133,9 @@ func _test_stand_labels_cannot_overlap() -> void:
 	for template: RoomTemplate in _floor_config.templates_for(RoomTemplate.Type.BOSS):
 		var centre := float(template.reward_spawn.x * Room.TILE_SIZE + Room.TILE_SIZE / 2)
 		var row: Array[float] = []
-		for index: int in FloorController.BOSS_REWARD_COUNT:
-			var offset := (float(index) - float(FloorController.BOSS_REWARD_COUNT - 1) * 0.5)
-			row.append(centre + offset * FloorController.BOSS_REWARD_SPACING)
+		for index: int in BossRewardDraw.COUNT:
+			var offset := (float(index) - float(BossRewardDraw.COUNT - 1) * 0.5)
+			row.append(centre + offset * BossArena.REWARD_SPACING)
 		_check_row_fits("%s reward" % template.id, row)
 
 

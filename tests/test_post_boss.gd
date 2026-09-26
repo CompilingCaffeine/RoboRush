@@ -262,7 +262,7 @@ func _test_a_post_boss_death_beats_the_reward() -> void:
 
 	# And now the claim that lost the race, driven directly because a paused tree will not deliver
 	# the interact the player would have pressed.
-	_floor._on_boss_reward_taken(_floor.config.get_items()[0])
+	_floor.get_boss_arena().claim_reward(_floor.config.get_items()[0])
 	await advance_physics(6)
 
 	check(
@@ -304,7 +304,7 @@ func _test_surviving_the_hazard_still_progresses() -> void:
 	check(not _player.is_dead(), "the player survives a lane that is not lethal")
 	check(GameManager.state == GameManager.State.RUN, "and the run is still running")
 
-	_floor._on_boss_reward_taken(_floor.config.get_items()[0])
+	_floor.get_boss_arena().claim_reward(_floor.config.get_items()[0])
 	await advance_physics(6)
 
 	check(
@@ -333,7 +333,7 @@ func _test_no_live_hazard_crosses_the_boundary() -> void:
 		"an unresolved lane and shot are live when the reward is taken",
 	)
 
-	_floor._on_boss_reward_taken(_floor.config.get_items()[0])
+	_floor.get_boss_arena().claim_reward(_floor.config.get_items()[0])
 	await advance_physics(6)
 
 	check(not is_instance_valid(lane), "the lane does not follow the player down the stairs")
@@ -398,12 +398,10 @@ func _open_boss_room(seed_value: int) -> bool:
 	return true
 
 
-## Kills the boss the way the floor hears about it, with a stand-in for the body — freed rather
-## than dropped, because `Node` is not reference counted.
+## Kills the boss the way the floor hears about it: through the arena, as though its last hit had
+## just landed.
 func _defeat_the_boss() -> void:
-	var stand_in := Node.new()
-	_floor._on_boss_defeated(stand_in, _boss_room())
-	stand_in.free()
+	_floor.get_boss_arena().resolve_defeat()
 
 
 ## An enemy shot sitting on the player: committed, stationary, and unable to expire before the

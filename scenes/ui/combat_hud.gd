@@ -177,7 +177,7 @@ func announce_floor(number: int) -> void:
 	# A floor begins with no boss on screen. The bar is normally already down — the defeat that
 	# ended the floor before took it down — but "normally" is exactly what left it up for the
 	# whole of Development the one time that floor's boss was spawned early (see
-	# `FloorController._on_player_entered_room`). The bar belongs to a fight in progress, and
+	# `RoomLoop._on_player_entered_room`). The bar belongs to a fight in progress, and
 	# the two moments a floor begins are the two moments there cannot be one.
 	_hide_boss_bar()
 	_show_banner("LEVEL %d" % number, BANNER_CLEAR)

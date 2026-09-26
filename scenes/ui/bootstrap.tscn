@@ -17,9 +17,8 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-; The menu's backdrop, exactly. The handover between the two scenes should look like the same
-; screen changing its mind, not like a second program starting.
 color = Color(0.043137, 0.05098, 0.070588, 1)
+metadata/design_notes = "color: The menu's backdrop, exactly. The handover between the two scenes should look like the same screen changing its mind, not like a second program starting."
 
 [node name="Title" type="Label" parent="."]
 anchor_right = 1.0

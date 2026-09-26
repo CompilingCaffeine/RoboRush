@@ -1,15 +1,5 @@
 [gd_scene load_steps=7 format=3]
 
-; The elder rung of the Recursion family. Same components, same shared `recursion.tres`, and the
-; same 7-pixel circle below — `ElderRecursion._become_elder` grows the sprite and that circle
-; together at runtime from `RecursionConfig.elder_scale`, so the body the player shoots at is the
-; size it looks and neither number can be changed without the other.
-;
-; A second scene rather than a flag on the first, because the floor's roster spawns a `PackedScene`
-; and "which enemy may appear here" is the one question an `EnemySpawn` answers. What it is not is
-; a second *enemy*: the script is a subclass, the config is the same resource, and the children it
-; makes are `recursion.tscn` itself.
-
 [ext_resource type="Script" path="res://scenes/enemies/elder_recursion.gd" id="1_script"]
 [ext_resource type="Resource" path="res://data/enemies/recursion.tres" id="2_config"]
 [ext_resource type="Texture2D" path="res://art/enemies/elder_recursion.png" id="3_tex"]
@@ -26,6 +16,9 @@ collision_mask = 1
 motion_mode = 1
 script = ExtResource("1_script")
 config = ExtResource("2_config")
+metadata/design_notes = "The elder rung of the Recursion family. Same components, same shared `recursion.tres`, and the same 7-pixel circle below — `ElderRecursion._become_elder` grows the sprite and that circle together at runtime from `RecursionConfig.elder_scale`, so the body the player shoots at is the size it looks and neither number can be changed without the other.
+
+A second scene rather than a flag on the first, because the floor's roster spawns a `PackedScene` and \"which enemy may appear here\" is the one question an `EnemySpawn` answers. What it is not is a second *enemy*: the script is a subclass, the config is the same resource, and the children it makes are `recursion.tscn` itself."
 
 [node name="Shape" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_body")

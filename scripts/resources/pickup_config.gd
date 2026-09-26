@@ -39,6 +39,16 @@ static func for_item(source: ItemConfig) -> PickupConfig:
 	return config
 
 
+## Whether Scrap Magnet may drag this pickup toward the player.
+##
+## Everything except an item. Scrap and repair cells are the same reward whoever collects them and
+## wherever they are collected, so pulling them in only saves a walk. An item is a decision: it is
+## collected on contact, and several are pure costs the player would walk around. A magnet that
+## dragged one in would be making that decision for them.
+func is_magnetic() -> bool:
+	return kind != Kind.ITEM
+
+
 ## Applies the effect to whatever walked into it. Returns false if the pickup should stay on
 ## the floor — a repair cell on an undamaged robot is declined rather than wasted, which is
 ## what lets the player leave one behind and come back for it.

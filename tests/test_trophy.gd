@@ -66,7 +66,7 @@ func run() -> void:
 ## and no item has been struck off the run to put it there.
 ##
 ## The pool check is the half that is easy to lose: the three stands *spend* what they offer
-## (`FloorController._take_reward`), and a finale that drew a choice and then threw it away to put a
+## (`FloorController._draw_boss_reward`), and a finale that drew a choice and then threw it away to put a
 ## trophy up instead would look identical on screen while quietly consuming the last three uniques
 ## in the run.
 func _test_the_last_floor_stands_a_trophy_and_no_stands() -> void:
@@ -114,7 +114,7 @@ func _test_every_other_floor_still_offers_the_choice() -> void:
 		await advance_physics(2)
 
 		check(
-			_stands_in(arena).size() == FloorController.BOSS_REWARD_COUNT,
+			_stands_in(arena).size() == BossRewardDraw.COUNT,
 			"floor %d still offers its choice of three" % (index + 1),
 		)
 		check(_trophies_in(arena).is_empty(), "and no trophy" )
@@ -274,13 +274,7 @@ func _test_a_run_saved_over_the_trophy_comes_back_to_it() -> void:
 	_floor.campaign = _campaign
 	_floor.config = _campaign.load_floor(index)
 	_arena.add_child(_floor)
-	_floor.resume_floor_progress(
-		checkpoint.floor_cleared_room_ids,
-		checkpoint.floor_visited_room_ids,
-		checkpoint.floor_clears,
-		checkpoint.floor_shop,
-		checkpoint.floor_boss_reward_ids,
-	)
+	_floor.resume_floor_progress(checkpoint.floor_progress())
 	check(_floor.build(_player, RunManager.floor_seed), "the saved finale resumes")
 	await advance_physics(2)
 
@@ -490,16 +484,14 @@ func _close() -> void:
 	await advance_physics(2)
 
 
-## Kills the boss the way the floor hears about it, with a stand-in for the body — freed rather
-## than dropped, because `Node` is not reference counted.
+## Kills the boss the way the floor hears about it: through the arena, as though its last hit had
+## just landed.
 func _defeat_the_boss() -> void:
-	var stand_in := Node.new()
-	_floor._on_boss_defeated(stand_in, _boss_room())
-	stand_in.free()
+	_floor.get_boss_arena().resolve_defeat()
 
 
 func _boss_room() -> Room:
-	for room: Room in _floor._rooms.values():
+	for room: Room in _floor.get_room_loop().rooms.values():
 		if room.plan.type == RoomTemplate.Type.BOSS:
 			return room
 	return null

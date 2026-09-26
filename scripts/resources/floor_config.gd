@@ -104,9 +104,27 @@ extends Resource
 ## those are legible here and invisible in a modulo.
 @export var item_clear_indices: Array[int] = [2, 5]
 
+## How many combat clears between repair cells: 3 means the third, sixth and ninth clear each drop
+## one. The one number deciding how recoverable a bad run is — over a ten-room floor the difference
+## between 3 and 2 is an extra integrity point, which is a sixth of the player's whole pool.
+##
+## On the floor rather than a constant in the controller, so a later floor, or a difficulty tier,
+## can be kinder or harsher without code. Counted per floor, from the first clear on this floor.
+@export var repair_every_clears: int = 3
+
 ## Whether the treasure room hands over an item. Spec section 9 says a treasure room
 ## contains one; this exists so a floor built around a shop instead can say otherwise.
 @export var treasure_grants_item: bool = true
+
+
+## Whether the `clears`-th combat clear on this floor (counted from one) drops a repair cell.
+func clear_drops_repair(clears: int) -> bool:
+	return repair_every_clears > 0 and clears > 0 and clears % repair_every_clears == 0
+
+
+## Whether the `clears`-th combat clear on this floor (counted from one) drops an item.
+func clear_drops_item(clears: int) -> bool:
+	return clears in item_clear_indices
 
 
 ## Picks one enemy scene for a room of the given difficulty, or null when the roster has

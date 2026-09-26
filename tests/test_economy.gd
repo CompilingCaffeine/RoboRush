@@ -14,6 +14,8 @@ extends TestCase
 ## keep passing all the way to the floor it was written to catch.
 
 const CAMPAIGN_PATH := "res://data/runs/main_campaign.tres"
+const PLAYER_CONFIG_PATH := "res://data/player/player_config.tres"
+const BLASTER_PATH := "res://data/weapons/rivet_blaster.tres"
 const FLOOR_SCENE := preload("res://scenes/floors/floor.tscn")
 
 ## The gameplan asks for at least ten thousand. Each run draws a full campaign's worth of offers,
@@ -86,6 +88,7 @@ func run() -> void:
 	await _test_every_boss_reward_is_three_choices_with_something_worth_taking()
 	await _test_a_beneficial_choice_is_reserved_when_hindrances_dominate()
 	await _test_boss_rewards_differ_between_runs()
+	_test_the_boss_reward_policy_is_pure()
 	_test_stacking_follows_the_declared_policy()
 	_test_the_worst_legal_build_stays_inside_its_caps()
 	_test_tech_debt_is_bounded()
@@ -159,7 +162,7 @@ func _test_corrupted_firmware_always_costs_the_player() -> void:
 	for item: ItemConfig in _pool:
 		if item.max_integrity_delta < 0.0:
 			worst += item.max_integrity_delta
-	var player_config := load("res://data/player/player_config.tres") as PlayerConfig
+	var player_config := load(PLAYER_CONFIG_PATH) as PlayerConfig
 	if require(player_config, "the player config loads"):
 		var health := HealthComponent.new()
 		health.set_max_health(player_config.max_integrity + worst)
@@ -196,7 +199,7 @@ func _test_a_shot_leaves_where_off_by_one_points_it() -> void:
 	add_child(arena)
 	await advance_physics(1)
 
-	var weapon := load("res://data/weapons/rivet_blaster.tres") as WeaponConfig
+	var weapon := load(BLASTER_PATH) as WeaponConfig
 	var stack := ProjectileModifierStack.from_items([item] as Array[ItemConfig])
 
 	var straight := ProjectileFactory.spawn(
@@ -315,7 +318,7 @@ func _test_every_boss_reward_is_three_choices_with_something_worth_taking() -> v
 			floor_node._reward_rng.seed = offset * 7919 + spent
 
 			var reward := floor_node._draw_boss_reward()
-			if reward.size() != FloorController.BOSS_REWARD_COUNT:
+			if reward.size() != BossRewardDraw.COUNT:
 				short_offers += 1
 			var beneficial := 0
 			var ids: Dictionary[StringName, bool] = {}
@@ -441,6 +444,39 @@ func _test_boss_rewards_differ_between_runs() -> void:
 
 ## Duplicates and stacks, against the declared contract: a unique may be held once, a chip up to
 ## its own `max_stacks`, and the aggregates grow with the copies.
+## `BossRewardDraw` on its own, without a floor: the checks above reach it through a built floor and
+## so exercise it only as the floor happens to call it. This holds the contract the floor relies on —
+## that the policy spends nothing and is decided by its stream alone — and the two edges a campaign
+## rarely reaches: a pool whose uniques are all spent, and a pool with nothing in it.
+func _test_the_boss_reward_policy_is_pure() -> void:
+	var offered: Array[StringName] = []
+	var first_rng := RandomNumberGenerator.new()
+	first_rng.seed = 2024
+	var second_rng := RandomNumberGenerator.new()
+	second_rng.seed = 2024
+	var first := BossRewardDraw.draw(_pool, offered, first_rng)
+	var second := BossRewardDraw.draw(_pool, offered, second_rng)
+
+	check(first.size() == BossRewardDraw.COUNT, "a full pool fills every stand")
+	check(first == second, "the same stream draws the same offer")
+	check(offered.is_empty(), "and drawing spends nothing: striking items off is the floor's job")
+	check(
+		first.any(func(item: ItemConfig) -> bool: return not item.is_hindrance()),
+		"one of the three is worth taking",
+	)
+
+	var every_unique: Array[StringName] = []
+	for item: ItemConfig in _pool:
+		if not item.is_repeatable():
+			every_unique.append(item.id)
+	var spent := BossRewardDraw.draw(_pool, every_unique, first_rng)
+	check(spent.size() == BossRewardDraw.COUNT, "a run that has seen every unique is still offered three")
+	check(spent.all(func(item: ItemConfig) -> bool: return item.is_repeatable()), "and all three are chips")
+
+	var nothing: Array[ItemConfig] = []
+	check(BossRewardDraw.draw(nothing, offered, first_rng).is_empty(), "an empty pool offers nothing")
+
+
 func _test_stacking_follows_the_declared_policy() -> void:
 	var inventory := ItemInventory.new()
 	add_child(inventory)
@@ -493,7 +529,7 @@ func _test_the_worst_legal_build_stays_inside_its_caps() -> void:
 		for _copy: int in maxi(item.max_stacks, 1):
 			inventory.add(item)
 
-	var player_config := load("res://data/player/player_config.tres") as PlayerConfig
+	var player_config := load(PLAYER_CONFIG_PATH) as PlayerConfig
 	if not require(player_config, "the player config loads, to know what integrity starts at"):
 		inventory.queue_free()
 		return
@@ -536,7 +572,7 @@ func _test_the_worst_legal_build_stays_inside_its_caps() -> void:
 
 	# One trigger pull: the shot itself, each split generation, and one shot per drone.
 	var stack := inventory.build_modifier_stack()
-	var shot := (load("res://data/weapons/rivet_blaster.tres") as WeaponConfig).projectile.spawn_copy()
+	var shot := (load(BLASTER_PATH) as WeaponConfig).projectile.spawn_copy()
 	stack.apply(shot, 15)
 	var per_shot := (1 + shot.split_count) * (1 + inventory.get_drone_count())
 	check(

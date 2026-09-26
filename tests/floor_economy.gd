@@ -56,7 +56,7 @@ static func enemies_per_combat_room(config: FloorConfig) -> float:
 	return total / float(templates.size())
 
 
-## Scrap from clear rewards, including the boss room's. `FloorController._on_room_cleared` does
+## Scrap from clear rewards, including the boss room's. `RoomLoop.record_clear` does
 ## not ask what kind of room emitted the clear, so the boss arena pays one like any other — which
 ## is why this is combat rooms plus one and not combat rooms.
 static func from_clears(config: FloorConfig) -> float:

@@ -22,7 +22,6 @@ delay_seconds = 1.1
 arrive_radius = 4.0
 trail_color = Color(0.76, 0.85, 0.9, 0.22)
 trail_width = 1.0
-; The rung above, unused by the Stale Replica itself and read by every Lagging Replica built from
-; this same resource — one config for the family, the way the Recursion's is.
 echo_shot = ExtResource("2_echo")
 echo_min_interval = 0.45
+metadata/design_notes = "echo_shot: The rung above, unused by the Stale Replica itself and read by every Lagging Replica built from this same resource — one config for the family, the way the Recursion's is."

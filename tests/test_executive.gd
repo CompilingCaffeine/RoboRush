@@ -75,8 +75,17 @@ func _test_executive_patterns_and_committed_danger() -> void:
 	boss._player = player
 	check(boss.get_health() == boss.config.max_health, "Executive Override starts with its real pool")
 	check(boss.config.id == CAMPAIGN.load_floor(4).boss_pool[0].id, "boss credit and encounter identity agree")
-	var longest_lane := boss.config.lane_stagger_seconds + boss.config.lane_telegraph_seconds + boss.config.lane_strike_seconds
-	for phase: RuntimeError.Phase in [RuntimeError.Phase.SINGLE_LANE, RuntimeError.Phase.STAGGERED_LANES, RuntimeError.Phase.CHECKERBOARD]:
+	var longest_lane := (
+		boss.config.lane_stagger_seconds
+		+ boss.config.lane_telegraph_seconds
+		+ boss.config.lane_strike_seconds
+	)
+	var phases: Array[RuntimeError.Phase] = [
+		RuntimeError.Phase.SINGLE_LANE,
+		RuntimeError.Phase.STAGGERED_LANES,
+		RuntimeError.Phase.CHECKERBOARD,
+	]
+	for phase: RuntimeError.Phase in phases:
 		check(boss._interval_for(phase) > longest_lane, "phase %d resolves both lanes before another command" % phase)
 		check(boss._attacks_for(phase).size() >= 3, "phase %d has an authored advanced rotation" % phase)
 	check(boss.config.ring_gap >= 3 and boss.config.wall_gap >= 3, "the advanced patterns keep traversable gaps")
@@ -117,7 +126,8 @@ func _test_every_boundary_can_resume_to_executive_systems() -> void:
 	var checkpoints: Array[RunCheckpoint] = []
 	for boundary: int in 4:
 		await _descend(floor_node)
-		var checkpoint := RunCheckpoint.from_dict(JSON.parse_string(JSON.stringify(SaveManager.get_checkpoint().to_dict())))
+		var saved := JSON.stringify(SaveManager.get_checkpoint().to_dict())
+		var checkpoint := RunCheckpoint.from_dict(JSON.parse_string(saved))
 		check(checkpoint.validate(CAMPAIGN).is_empty(), "boundary %d serializes a valid mature build" % (boundary + 1))
 		check(checkpoint.item_ids.size() == items.size(), "boundary %d preserves every stack" % (boundary + 1))
 		checkpoints.append(checkpoint)
@@ -128,14 +138,21 @@ func _test_every_boundary_can_resume_to_executive_systems() -> void:
 	await advance_physics(2)
 	for checkpoint: RunCheckpoint in checkpoints:
 		RunManager.restore_run(checkpoint, CAMPAIGN)
-		player.restore_build(checkpoint.resolve_items(CAMPAIGN.load_floor_by_id(checkpoint.floor_id)), checkpoint.integrity)
+		var resumed_floor := CAMPAIGN.load_floor_by_id(checkpoint.floor_id)
+		player.restore_build(checkpoint.resolve_items(resumed_floor), checkpoint.integrity)
 		floor_node = _new_floor(arena, checkpoint.floor_number - 1)
-		floor_node.resume_floor_progress([], [], 0, checkpoint.floor_shop)
-		check(floor_node.build(player, RunManager.floor_seed), "resume after floor %d builds" % (checkpoint.floor_number - 1))
+		floor_node.resume_floor_progress(checkpoint.floor_progress())
+		check(
+			floor_node.build(player, RunManager.floor_seed),
+			"resume after floor %d builds" % (checkpoint.floor_number - 1),
+		)
 		await advance_physics(2)
 		while floor_node.floor_index < 4:
 			await _descend(floor_node)
-		check(floor_node.get_content_fingerprint() == fingerprint, "every resume reaches the same Executive Systems content")
+		check(
+			floor_node.get_content_fingerprint() == fingerprint,
+			"every resume reaches the same Executive Systems content",
+		)
 		check(ShopStock.of(floor_node._shop).to_dict() == final_shop, "the fifth shop is reproduced")
 		check(RunManager.fought_boss_ids == final_bosses, "the five encounters are reproduced")
 		check(RunManager.scrap == 57, "the carried purse survives all resumes")
@@ -173,11 +190,17 @@ func _test_maximum_build_fits_the_viewport() -> void:
 	summary._refresh()
 	await advance_physics(4)
 	var bar := hud.get_node("%ItemBar") as HBoxContainer
-	check(bar.get_child_count() == CombatHUD.VISIBLE_ITEM_TYPES + 1, "the HUD has a bounded icon row and an overflow count")
+	check(
+		bar.get_child_count() == CombatHUD.VISIBLE_ITEM_TYPES + 1,
+		"the HUD has a bounded icon row and an overflow count",
+	)
 	check(bar.get_global_rect().end.x < (hud.get_node("%TopLabel") as Label).get_global_rect().position.x,
 		"the maximum build does not overlap the floor/scrap readout")
-	check((summary.get_node("%BuildGrid") as GridContainer).get_child_count() == CAMPAIGN.load_floor(4).get_items().size(),
-		"the summary shows every item type exactly once")
+	var grid := summary.get_node("%BuildGrid") as GridContainer
+	check(
+		grid.get_child_count() == CAMPAIGN.load_floor(4).get_items().size(),
+		"the summary shows every item type exactly once",
+	)
 	var outside: PackedStringArray = []
 	_check_controls_inside(summary, Rect2(0, 0, 480, 270), outside)
 	check(outside.is_empty(), "the complete summary fits 480x270: %s" % ", ".join(outside))
@@ -212,12 +235,10 @@ func _new_floor(parent: Node, index: int) -> FloorController:
 func _descend(floor_node: FloorController) -> void:
 	for plan: RoomPlan in floor_node.layout.rooms:
 		if plan.type == RoomTemplate.Type.BOSS:
-			var stand_in := Node.new()
-			floor_node._on_boss_defeated(stand_in, floor_node.get_room(plan.id))
-			stand_in.free()
+			floor_node.get_boss_arena().resolve_defeat()
 			break
 	await advance_physics(1)
-	floor_node._on_boss_reward_taken(floor_node.config.get_items()[0])
+	floor_node.get_boss_arena().claim_reward(floor_node.config.get_items()[0])
 	await advance_physics(4)
 
 

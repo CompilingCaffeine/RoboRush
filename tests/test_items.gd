@@ -77,6 +77,8 @@ func run() -> void:
 	await _test_chain_lightning_jumps_twice()
 	await _test_volatile_kernel_detonates_on_a_kill()
 	await _test_scrap_magnet_pulls_nearby_pickups()
+	await _test_scrap_magnet_leaves_items_where_they_lie()
+	await _test_a_magnetised_repair_cell_is_collected_once_it_is_wanted()
 	await _test_scrap_scatter_avoids_geometry()
 	await _test_drop_point_inside_geometry_relocates()
 	await _test_debug_drone_fires_with_the_player()
@@ -1144,6 +1146,81 @@ func _test_scrap_magnet_pulls_nearby_pickups() -> void:
 	await _teardown(arena)
 
 
+## Reported: Scrap Magnet dragged *items* into the robot as readily as scrap, and an item is
+## collected on contact. A combat-clear drop of Tech Debt inside the magnet's reach was therefore
+## not a choice at all — the player who bought a magnet was made to take whatever landed near them.
+## Tech Debt is the case checked because it is a pure cost: the one item a player would most want
+## to walk around, and the one the magnet most needs to leave alone.
+func _test_scrap_magnet_leaves_items_where_they_lie() -> void:
+	var arena := _make_arena()
+	var player := _add_player(arena)
+	var magnet := _require_item(&"scrap_magnet")
+	var debt := _require_item(&"tech_debt")
+	if magnet == null or debt == null:
+		await _teardown(arena)
+		return
+
+	var effects := ItemEffects.new()
+	arena.add_child(effects)
+	effects.bind_player(player)
+	player.get_item_inventory().add(magnet)
+
+	var item := _add_pickup(arena, player.global_position + Vector2(40.0, 0.0), PickupConfig.for_item(debt))
+	var scrap := _add_pickup(arena, player.global_position + Vector2(0.0, 40.0))
+	var item_start := item.global_position
+	var scrap_before := scrap.global_position.distance_to(player.global_position)
+	await advance_physics(60)
+
+	check(
+		is_instance_valid(item) and item.global_position.distance_to(item_start) < 0.01,
+		"an item inside the magnet's reach stays put",
+	)
+	check(
+		player.get_item_inventory().count_of(debt.id) == 0,
+		"and is not collected for the player",
+	)
+	check(
+		not is_instance_valid(scrap) or scrap.global_position.distance_to(player.global_position) < scrap_before - 5.0,
+		"while scrap beside it is still pulled in",
+	)
+	await _teardown(arena)
+
+
+## A repair cell is declined by a robot at full integrity and left on the floor for later. With Scrap
+## Magnet held, "left on the floor" meant dragged underneath the robot and carried along with it —
+## and an Area2D reports a body entering once, so a cell already overlapping the robot never asked
+## again. The player could take a hit with a repair cell sitting under them and not be repaired.
+func _test_a_magnetised_repair_cell_is_collected_once_it_is_wanted() -> void:
+	var arena := _make_arena()
+	var player := _add_player(arena)
+	var magnet := _require_item(&"scrap_magnet")
+	if magnet == null:
+		await _teardown(arena)
+		return
+
+	var effects := ItemEffects.new()
+	arena.add_child(effects)
+	effects.bind_player(player)
+	player.get_item_inventory().add(magnet)
+
+	var cell := _add_pickup(
+		arena,
+		player.global_position + Vector2(30.0, 0.0),
+		load("res://data/pickups/repair_cell.tres") as PickupConfig,
+	)
+	await advance_physics(60)
+	check(is_instance_valid(cell), "a repair cell is declined by a robot at full integrity")
+
+	var health := player.get_health_component()
+	health.apply_damage(DamageInfo.new(1.0))
+	var damaged := health.current
+	await advance_physics(30)
+
+	check(not is_instance_valid(cell), "and taken the moment the robot needs it")
+	check_near(health.current, damaged + 1.0, "repairing the robot", 0.01)
+	await _teardown(arena)
+
+
 ## Reported: a kill near a corner could drop scrap that scattered into the wall it died
 ## against, which the player could never reach — not even with Scrap Magnet, since the pull is
 ## gated by the player's own distance and a player's body cannot stand inside a wall either.
@@ -1963,9 +2040,9 @@ func _test_legacy_runtime_cripples_the_dash_without_removing_it() -> void:
 # --- Fixtures -----------------------------------------------------------------
 
 
-func _add_pickup(arena: Node2D, at: Vector2) -> Pickup:
+func _add_pickup(arena: Node2D, at: Vector2, config: PickupConfig = null) -> Pickup:
 	var pickup: Pickup = PICKUP_SCENE.instantiate()
-	pickup.config = load("res://data/pickups/scrap.tres") as PickupConfig
+	pickup.config = config if config != null else load("res://data/pickups/scrap.tres") as PickupConfig
 	pickup.position = at
 	arena.add_child(pickup)
 	return pickup

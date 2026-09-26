@@ -1,17 +1,3 @@
-; The one place the interface's font, palette, and button states are defined.
-;
-; Registered as the project's default theme (see project.godot's gui/theme/custom), so every
-; Control in the game inherits it without being told to. Before this, each UI script called
-; add_theme_font_size_override on every label it built, which meant the look of the game was
-; spread across five scripts and a new screen was a copy-paste away from not matching.
-;
-; Spec section 21's motifs are the brief: monospace labels, status lights, pixelated windows.
-; The palette is the one already used by the HUD and the sprites, so the interface and the
-; game are the same machine.
-;
-; Focus is styled as loudly as hover, and deliberately so: the pause and settings screens are
-; driven by a gamepad's d-pad, and a focus ring that is merely a hint is a menu nobody can
-; navigate without a mouse (spec section 5's controller support).
 [gd_resource type="Theme" load_steps=6 format=3]
 
 [ext_resource type="FontFile" path="res://art/ui/font_6x8.fnt" id="1_font"]
@@ -73,3 +59,10 @@ Label/colors/font_color = Color(0.847059, 0.886275, 0.92549, 1)
 Label/font_sizes/font_size = 8
 Panel/styles/panel = SubResource("StyleBoxFlat_panel")
 PanelContainer/styles/panel = SubResource("StyleBoxFlat_panel")
+metadata/design_notes = "The one place the interface's font, palette, and button states are defined.
+
+Registered as the project's default theme (see project.godot's gui/theme/custom), so every Control in the game inherits it without being told to. Before this, each UI script called add_theme_font_size_override on every label it built, which meant the look of the game was spread across five scripts and a new screen was a copy-paste away from not matching.
+
+Spec section 21's motifs are the brief: monospace labels, status lights, pixelated windows. The palette is the one already used by the HUD and the sprites, so the interface and the game are the same machine.
+
+Focus is styled as loudly as hover, and deliberately so: the pause and settings screens are driven by a gamepad's d-pad, and a focus ring that is merely a hint is a menu nobody can navigate without a mouse (spec section 5's controller support)."

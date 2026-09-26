@@ -213,7 +213,10 @@ func _test_configs_load_as_their_own_types() -> void:
 		check(deadlock.acquire_seconds > 0.0, "the tether is harmless for a readable window first")
 		check(
 			deadlock.tether_range > deadlock.preferred_range,
-			"it holds station inside its own reach (%.0f held against %.0f reach), so the player has to *move* to break it rather than getting the break for free"
+			(
+				"it holds station inside its own reach (%.0f held against %.0f reach), so the player "
+				+ "has to *move* to break it rather than getting the break for free"
+			)
 				% [deadlock.preferred_range, deadlock.tether_range],
 		)
 		check(

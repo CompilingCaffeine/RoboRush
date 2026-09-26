@@ -7,10 +7,6 @@
 script = ExtResource("1_boss")
 id = &"core_intelligence"
 display_name = "Core Intelligence"
-; Five masks out of one pool, sixty integrity each. Nearly twice Executive Override's 156, and the
-; fight is longer than even that says: the first mask refunds three quarters of what it takes until
-; four terminals are down, and the fourth discards everything outside its landing window. The
-; inherited `phase_two_at`/`phase_three_at` ladder is deliberately absent — see the config script.
 max_health = 300.0
 shot = ExtResource("2_shot")
 runtime_mask_at = 0.8
@@ -52,3 +48,4 @@ sway_speed = 1.35
 vent_seconds = 1.7
 vent_size_tiles = Vector2i(4, 3)
 vent_count = 3
+metadata/design_notes = "max_health: Five masks out of one pool, sixty integrity each. Nearly twice Executive Override's 156, and the fight is longer than even that says: the first mask refunds three quarters of what it takes until four terminals are down, and the fourth discards everything outside its landing window. The inherited `phase_two_at`/`phase_three_at` ladder is deliberately absent — see the config script."

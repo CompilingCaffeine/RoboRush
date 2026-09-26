@@ -34,7 +34,7 @@ const INTERACT_ACTION := &"interact"
 const INTERACT_KEY_FALLBACK := "E"
 
 ## How wide a stand's label is allowed to be, and therefore the closest two stands may ever be
-## placed. Both the shop template's stand tiles and FloorController.BOSS_REWARD_SPACING are set from
+## placed. Both the shop template's stand tiles and BossArena.REWARD_SPACING are set from
 ## this, and tests/test_shop.gd measures the whole item pool against it.
 ##
 ## The number is what a 26-tile room can afford: three labels plus gutters plus a margin off each

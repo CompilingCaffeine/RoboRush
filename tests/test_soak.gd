@@ -160,7 +160,7 @@ func _descend(
 	floor_node: FloorController, seed_value: int, failures: PackedStringArray
 ) -> bool:
 	var boss_room: Room = null
-	for room: Room in floor_node._rooms.values():
+	for room: Room in floor_node.get_room_loop().rooms.values():
 		if room.plan.type == RoomTemplate.Type.BOSS:
 			boss_room = room
 			break
@@ -169,11 +169,7 @@ func _descend(
 			% [seed_value, floor_node.config.floor_number])
 		return false
 
-	# Freed rather than left to the collector: `Node` is not reference counted, and this runs five
-	# hundred times.
-	var stand_in := Node.new()
-	floor_node._on_boss_defeated(stand_in, boss_room)
-	stand_in.free()
+	floor_node.get_boss_arena().resolve_defeat()
 	await advance_physics(1)
 
 	var items := floor_node.config.get_items()
@@ -185,10 +181,10 @@ func _descend(
 	# The last floor's boss stands over a trophy rather than over three stands (see `Trophy`), so
 	# what is claimed here depends on which floor this is. Claiming the wrong one would descend a
 	# floor that has nothing on it to take.
-	if floor_node._trophy != null:
-		floor_node._trophy.claim()
+	if floor_node.get_boss_arena().get_trophy() != null:
+		floor_node.get_boss_arena().get_trophy().claim()
 	else:
-		floor_node._on_boss_reward_taken(items[0])
+		floor_node.get_boss_arena().claim_reward(items[0])
 	# The rebuild is deferred, and so is the physics flush that follows it.
 	await advance_physics(4)
 	return true

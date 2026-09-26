@@ -58,7 +58,7 @@ func player_id() -> String:
 ##
 ## Separate from posting because the id is what every other call takes, and resolving it once per
 ## session is one round trip instead of one per operation.
-func find_or_create(board_name: String) -> Dictionary:
+func find_or_create(_board_name: String) -> Dictionary:
 	var result := _unsupported("find_or_create")
 	result["id"] = ""
 	return result
@@ -72,7 +72,7 @@ func find_or_create(board_name: String) -> Dictionary:
 ##
 ## Answers `{success, message, rank, improved}`, where `rank` is the entry's place afterwards, or
 ## zero when the platform did not say, and `improved` is whether this score replaced the old one.
-func post(board_id: String, score_ms: int, metadata: Dictionary) -> Dictionary:
+func post(_board_id: String, _score_ms: int, _metadata: Dictionary) -> Dictionary:
 	var result := _unsupported("post")
 	result["rank"] = 0
 	result["improved"] = false
@@ -82,7 +82,7 @@ func post(board_id: String, score_ms: int, metadata: Dictionary) -> Dictionary:
 ## Reads `limit` entries from the top of the board. Answers `{success, message, entries}`, where
 ## each entry is `{rank, name, score_ms, is_you}` — see `WavedashLeaderboardBackend._read_entry`
 ## for how a platform response becomes that.
-func top(board_id: String, limit: int) -> Dictionary:
+func top(_board_id: String, _limit: int) -> Dictionary:
 	var result := _unsupported("top")
 	result["entries"] = []
 	return result
@@ -94,7 +94,7 @@ func top(board_id: String, limit: int) -> Dictionary:
 ## This is what makes a first launch on a new device correct: the board, not this device, is the
 ## authority on whether a time was ever posted, and a record that never left the machine it was set
 ## on is the one thing a leaderboard exists to prevent.
-func mine(board_id: String) -> Dictionary:
+func mine(_board_id: String) -> Dictionary:
 	var result := _unsupported("mine")
 	result["entries"] = []
 	return result

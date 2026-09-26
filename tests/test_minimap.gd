@@ -85,7 +85,7 @@ func _test_the_frame_still_hugs_after_walking_into_a_room() -> void:
 	var moved := false
 
 	for neighbour_id: int in start.doors.values():
-		_floor._enter_room(neighbour_id)
+		_floor.get_room_loop().enter(neighbour_id)
 		await advance_physics(1)
 		moved = true
 

@@ -9,7 +9,6 @@
 script = ExtResource("template")
 id = &"core_recursion_gate"
 type = 1
-; Timing threats return together, with a Compiler making the eventual escape route move.
 obstacles = Array[Rect2i]([Rect2i(7, 4, 3, 1), Rect2i(16, 7, 3, 1)])
 enemy_spawns = Array[Vector2i]([Vector2i(5, 2), Vector2i(21, 9), Vector2i(20, 2), Vector2i(6, 9), Vector2i(12, 3), Vector2i(14, 8), Vector2i(22, 5)])
 forced_enemies = Array[PackedScene]([ExtResource("enemy_0"), ExtResource("enemy_1"), ExtResource("enemy_2")])
@@ -19,3 +18,4 @@ difficulty = 3
 floor_tags = Array[StringName]([&"core_intelligence"])
 min_floor = 6
 max_floor = 6
+metadata/design_notes = "obstacles: Timing threats return together, with a Compiler making the eventual escape route move."

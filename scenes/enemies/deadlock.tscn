@@ -22,17 +22,14 @@ shape = SubResource("CircleShape2D_body")
 
 [node name="Tether" type="Line2D" parent="."]
 unique_name_in_owner = true
-; Width, colour, and points are all set from the script every frame — colour because it
-; carries the amber-then-red warning, points because the other end of this line is a moving
-; player. Authored here only so there is exactly one of them and nothing has to build it.
-;
-; Behind the sprite, like Firewall Node's beams, so the body stays readable as the thing to
-; shoot rather than being crossed out by its own attack.
 z_index = -1
 antialiased = false
 begin_cap_mode = 2
 end_cap_mode = 2
 points = PackedVector2Array()
+metadata/design_notes = "z_index: Width, colour, and points are all set from the script every frame — colour because it carries the amber-then-red warning, points because the other end of this line is a moving player. Authored here only so there is exactly one of them and nothing has to build it.
+
+Behind the sprite, like Firewall Node's beams, so the body stays readable as the thing to shoot rather than being crossed out by its own attack."
 
 [node name="Sprite" type="Sprite2D" parent="."]
 unique_name_in_owner = true

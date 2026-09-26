@@ -4,7 +4,7 @@ Robo Rush is a 2D top-down roguelite shooter built with Godot 4 and GDScript. Pl
 
 The complete campaign has six procedural floors. Each floor has a start room, combat rooms, a treasure vault, a shop, and a boss arena. The game supports keyboard and gamepad controls, persistent settings and records, deterministic seeded runs, desktop exports, and a browser build with Wavedash leaderboard support.
 
-For the original design requirements, see [robo_rush_build_spec.md](robo_rush_build_spec.md). The detailed six-floor plan is in [SIX_FLOOR_SCALING_GAMEPLAN.md](SIX_FLOOR_SCALING_GAMEPLAN.md).
+For the original design requirements, see [robo_rush_build_spec.md](robo_rush_build_spec.md). The detailed six-floor plan is in [SIX_FLOOR_SCALING_GAMEPLAN.md](SIX_FLOOR_SCALING_GAMEPLAN.md). Proposed fixes, feature upgrades, and new content are in [ROADMAP.md](ROADMAP.md).
 
 ## Run
 
@@ -61,11 +61,25 @@ godot --headless --fixed-fps 60 res://tests/test_runner.tscn
 
 `--fixed-fps 60` is required: the tests assert on physics frames, and the fixed rate keeps the suite fast and deterministic.
 
-Focused campaign checks are also available:
+To run only some suites while working on them, name them after `--`:
+
+```bash
+godot --headless --fixed-fps 60 res://tests/test_runner.tscn -- --suite=Items,Floor
+```
+
+Focused campaign checks and the six-floor performance probe are also available:
 
 ```bash
 godot --headless --fixed-fps 60 res://tests/executive_runner.tscn
 godot --headless --fixed-fps 60 res://tests/finale_runner.tscn
+godot --headless --fixed-fps 60 res://tests/profile_executive.tscn
+```
+
+Static checks (GDScript lint, design notes, script UIDs, and the Python and shell tooling) need no engine and run on every pull request:
+
+```bash
+python3 -m pip install gdtoolkit==4.5.0 ruff==0.15.8 shellcheck-py==0.11.0.1
+tools/ci/lint.sh
 ```
 
 ## Build
@@ -108,6 +122,7 @@ tools/release.sh --relock
 ## Project notes
 
 - Projectile behaviour is data-driven, so upgrades such as ricochet, splitting, homing, chaining, and explosions compose without item-pair-specific code.
+- Design rationale for data lives in `metadata/design_notes` on the resource, scene node, or sub-resource it explains (the inspector's Metadata section), not in `;` comments: the Godot editor deletes comments from `.tres` and `.tscn` files whenever it saves them. `tools/ci/check_design_notes.py` enforces this.
 - Procedural floor generation uses a connected room graph; treasure, shop, and boss rooms are dead ends so they never block progress.
 - Generated art, audio, music, and UI font assets are committed. Regenerate them only when changing source generators:
 

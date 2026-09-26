@@ -42,12 +42,13 @@ treasure_templates = Array[RoomTemplate]([ExtResource("treasure")])
 shop_templates = Array[RoomTemplate]([ExtResource("shop_room")])
 boss_templates = Array[RoomTemplate]([ExtResource("boss_room")])
 enemy_spawns = Array[EnemySpawn]([ExtResource("runner"), ExtResource("hot_runner"), ExtResource("compiler"), ExtResource("opt_compiler"), ExtResource("firewall"), ExtResource("redundant_firewall"), ExtResource("leech"), ExtResource("null"), ExtResource("deadlock"), ExtResource("recursion"), ExtResource("elder_recursion")])
-; Finale density rises, but its sixth shop should still ask the player to choose.
 clear_scrap_range = Vector2i(1, 2)
 enemy_scrap_range = Vector2i(0, 2)
 item_pool = ExtResource("pool")
 item_clear_indices = Array[int]([2, 5])
 shop = ExtResource("shop")
 treasure_grants_item = true
-; The run ends with one authored encounter. Earlier boss pools cannot consume it.
 boss_pool = Array[BossEncounter]([ExtResource("boss")])
+metadata/design_notes = "clear_scrap_range: Finale density rises, but its sixth shop should still ask the player to choose.
+
+boss_pool: The run ends with one authored encounter. Earlier boss pools cannot consume it."

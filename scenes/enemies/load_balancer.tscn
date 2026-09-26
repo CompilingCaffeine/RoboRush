@@ -1,9 +1,5 @@
 [gd_scene load_steps=7 format=3]
 
-; The Load Balancer. Nothing here is unusual for an enemy — the plate is not a node, because it is
-; an arc the script draws under the sprite (see `LoadBalancer._draw`), and a node would have to be
-; kept in step with the angle that already decides whether a hit lands.
-
 [ext_resource type="Script" path="res://scenes/enemies/load_balancer.gd" id="1_script"]
 [ext_resource type="Resource" path="res://data/enemies/load_balancer.tres" id="2_config"]
 [ext_resource type="Texture2D" path="res://art/enemies/load_balancer.png" id="3_tex"]
@@ -20,6 +16,7 @@ collision_mask = 1
 motion_mode = 1
 script = ExtResource("1_script")
 config = ExtResource("2_config")
+metadata/design_notes = "The Load Balancer. Nothing here is unusual for an enemy — the plate is not a node, because it is an arc the script draws under the sprite (see `LoadBalancer._draw`), and a node would have to be kept in step with the angle that already decides whether a hit lands."
 
 [node name="Shape" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_body")

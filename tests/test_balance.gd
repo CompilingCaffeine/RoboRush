@@ -598,10 +598,10 @@ func _test_the_pool_cannot_run_dry_before_the_boss_reward() -> void:
 		var left_for_the_boss := pool_size - reserved_before_boss
 
 		check(
-			left_for_the_boss >= FloorController.BOSS_REWARD_COUNT,
+			left_for_the_boss >= BossRewardDraw.COUNT,
 			"floor %d reserves at most %d of %d items before the boss, leaving %d for a reward "
 				% [index + 1, reserved_before_boss, pool_size, left_for_the_boss]
-				+ "that needs %d" % FloorController.BOSS_REWARD_COUNT,
+				+ "that needs %d" % BossRewardDraw.COUNT,
 		)
 		check(
 			left_for_the_boss > 0,

@@ -35,20 +35,20 @@ theme = ExtResource("theme")
 floor_tags = Array[StringName]([&"executive_systems"])
 room_count = 10
 start_templates = Array[RoomTemplate]([ExtResource("start")])
-; Four to seven enemies per room, with coordination forced at authored points.
-; Load Balancers never roll at random: doubling support is a deliberate quorum encounter.
 combat_templates = Array[RoomTemplate]([ExtResource("exec_briefing"), ExtResource("exec_review_lane"), ExtResource("exec_delegation"), ExtResource("exec_quorum"), ExtResource("exec_escalation"), ExtResource("exec_cost_centre"), ExtResource("exec_board_vote")])
 treasure_templates = Array[RoomTemplate]([ExtResource("treasure")])
 shop_templates = Array[RoomTemplate]([ExtResource("shop_room")])
 boss_templates = Array[RoomTemplate]([ExtResource("boss_room")])
 enemy_spawns = Array[EnemySpawn]([ExtResource("ticket_bot"), ExtResource("code_runner"), ExtResource("hot_runner"), ExtResource("compiler"), ExtResource("opt_compiler"), ExtResource("firewall_node"), ExtResource("redundant_firewall"), ExtResource("memory_leech"), ExtResource("null_pointer")])
-; Denser encounters do not require proportionally more money. Keep the fifth shop a choice.
 clear_scrap_range = Vector2i(1, 2)
 enemy_scrap_range = Vector2i(0, 2)
 item_pool = ExtResource("pool")
 item_clear_indices = Array[int]([2, 5])
 shop = ExtResource("shop")
 treasure_grants_item = true
-; An explicit advanced rematch, confined to mature builds. The earlier four bosses retain
-; their shuffled order; the fifth encounter has its own identity and a different pattern cycle.
 boss_pool = Array[BossEncounter]([ExtResource("boss")])
+metadata/design_notes = "combat_templates: Four to seven enemies per room, with coordination forced at authored points. Load Balancers never roll at random: doubling support is a deliberate quorum encounter.
+
+clear_scrap_range: Denser encounters do not require proportionally more money. Keep the fifth shop a choice.
+
+boss_pool: An explicit advanced rematch, confined to mature builds. The earlier four bosses retain their shuffled order; the fifth encounter has its own identity and a different pattern cycle."

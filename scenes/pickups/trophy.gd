@@ -16,7 +16,7 @@ extends Area2D
 ## end of the campaign inside the resource that describes scrap.
 ##
 ## The post-boss danger contract is untouched here, deliberately: see
-## `FloorController._on_boss_defeated`. Nothing is cleared and the player is granted no immunity,
+## `BossArena.resolve_defeat`. Nothing is cleared and the player is granted no immunity,
 ## so a shot the boss committed before it fell can still kill them on the walk over — and if it
 ## does, the loss wins and the trophy is not claimed. The last floor's prize is exactly as
 ## unclaimable as the five before it.

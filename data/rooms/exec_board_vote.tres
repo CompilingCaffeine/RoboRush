@@ -15,7 +15,6 @@ b = Rect2i(12, 5, 2, 2)
 script = ExtResource("1_template")
 id = &"exec_board_vote"
 type = 1
-; Mastery: break the shield hub while routing heat, a compile lane and two connected regions.
 obstacles = Array[Rect2i]([])
 enemy_spawns = Array[Vector2i]([Vector2i(18, 3), Vector2i(18, 9), Vector2i(5, 2), Vector2i(5, 9), Vector2i(14, 2), Vector2i(23, 6), Vector2i(14, 9)])
 forced_enemies = Array[PackedScene]([ExtResource("enemy_0"), ExtResource("enemy_1"), ExtResource("enemy_2")])
@@ -27,3 +26,4 @@ difficulty = 4
 floor_tags = Array[StringName]([&"executive_systems"])
 min_floor = 5
 max_floor = 5
+metadata/design_notes = "obstacles: Mastery: break the shield hub while routing heat, a compile lane and two connected regions."
