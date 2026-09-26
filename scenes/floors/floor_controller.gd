@@ -49,9 +49,10 @@ const SHOP_ROOM_SCENE := preload("res://scenes/shop/shop_room.tscn")
 const SESSION_SCENE := preload("res://scenes/floors/floor_session.tscn")
 const TROPHY_SCENE := preload("res://scenes/pickups/trophy.tscn")
 
-## How many rare items the boss offers, and where they stand relative to the reward point.
-## Spec section 16: choose one of three.
-const BOSS_REWARD_COUNT := 3
+## How many items the boss offers, and where they stand relative to the reward point. The count is
+## the draw's (see `BossRewardDraw`), restated here because the validator, the shop layout and the
+## suites all ask the floor how many stands a boss puts up.
+const BOSS_REWARD_COUNT := BossRewardDraw.COUNT
 
 ## Wide enough for the stands' labels, which is the only thing that decides it: at the 56 pixels this
 ## used to be, three item names written above three stands 56 pixels apart overlapped into something
@@ -772,7 +773,7 @@ func _on_boss_defeated(_boss_node: Node, room: Room) -> void:
 
 ## Stands the offer up in the arena. Split from the draw above because a resumed floor has to put
 ## back a choice that was already drawn: the items are spent out of the run's pool the moment they
-## are offered (`_take_reward`), so drawing a second set would both cost the run three more items
+## are offered (`_draw_boss_reward`), so drawing a second set would both cost the run three more items
 ## and hand the player a different prize than the one they walked away from.
 func _place_boss_reward(room: Room, items: Array[ItemConfig]) -> void:
 	if items.is_empty():
@@ -1009,89 +1010,18 @@ func _release_session() -> void:
 	_boss_encounter = null
 
 
-## Spec section 16's choice of three: rare items by preference, shuffled, and never all bad.
+## Draws the boss's offer (see `BossRewardDraw` for the policy) and spends it: every unique item
+## on the stands is struck off the run the moment it is offered, which is what stops the next floor
+## offering it again. A chip is never struck off — being offered again is what makes it a chip.
 ##
-## This method shipped broken in two ways that compounded into one very visible bug. It walked the
-## pool in *file order* and took the first three eligible entries, so the choice was not a draw at
-## all — every player who reached the first boss was offered the same three items, run after run.
-## And "rare or better" is `rarity >= RARE`, which includes CORRUPTED: the shared pool happens to
-## begin with Blocking I/O, Tech Debt and Legacy Runtime, which are precisely the three items the
-## design calls pure costs. Every first boss in the game handed the player a choice between a
-## weapon that will not fire while moving, permanent enemy growth, and a tripled dash cooldown,
-## with no way to decline. That is not opt-in pressure, it is a toll.
-##
-## Both halves are fixed here. The candidates are shuffled with the floor's own seeded RNG, so the
-## choice varies by run and is still reproducible from `--seed`. And one slot is reserved for an
-## item that gives something back: hindrances remain in the pool and remain offerable, but they can
-## no longer occupy the whole set of stands.
-##
-## Rarity ordering is preserved within each group, so a boss still offers the best the pool has.
-## Repeatable chips are last: they are the guarantee that three stands can always be filled, not a
-## prize a boss should be handing out while unique items remain.
+## Spent here rather than when the player chooses, because the two items left on the stands were
+## still *offered*: the player saw them and passed, exactly as they do an item left lying in a room.
 func _draw_boss_reward() -> Array[ItemConfig]:
-	var rare_gifts: Array[ItemConfig] = []
-	var rare_hindrances: Array[ItemConfig] = []
-	var common_gifts: Array[ItemConfig] = []
-	var common_hindrances: Array[ItemConfig] = []
-	var repeatables: Array[ItemConfig] = []
-
-	for item: ItemConfig in config.get_items():
-		if item == null:
-			continue
-		if item.is_repeatable():
-			repeatables.append(item)
-			continue
-		if item.id in RunManager.offered_item_ids:
-			continue
-		if item.rarity >= ItemConfig.Rarity.RARE:
-			if item.is_hindrance():
-				rare_hindrances.append(item)
-			else:
-				rare_gifts.append(item)
-		elif item.is_hindrance():
-			common_hindrances.append(item)
-		else:
-			common_gifts.append(item)
-
-	for group: Array in [rare_gifts, rare_hindrances, common_gifts, common_hindrances, repeatables]:
-		_shuffle(group)
-
-	# The reserved slot goes first, so that if the pool can only fill one stand it fills it with
-	# something worth taking.
-	var chosen: Array[ItemConfig] = []
-	var beneficial: Array[Array] = [rare_gifts, common_gifts, repeatables]
-	for group: Array in beneficial:
-		if not group.is_empty():
-			_take_reward(chosen, group[0])
-			group.remove_at(0)
-			break
-
-	for group: Array in [rare_gifts, rare_hindrances, common_gifts, common_hindrances, repeatables]:
-		for item: ItemConfig in group:
-			if chosen.size() >= BOSS_REWARD_COUNT:
-				break
-			_take_reward(chosen, item)
-
+	var chosen := BossRewardDraw.draw(config.get_items(), RunManager.offered_item_ids, _reward_rng)
+	for item: ItemConfig in chosen:
+		if not item.is_repeatable():
+			RunManager.offered_item_ids.append(item.id)
 	return chosen
-
-
-## Adds `item` to the offer and spends it, unless it is a chip — a repeatable is never struck off
-## the run, which is the whole of what makes it repeatable.
-func _take_reward(chosen: Array[ItemConfig], item: ItemConfig) -> void:
-	chosen.append(item)
-	if not item.is_repeatable():
-		RunManager.offered_item_ids.append(item.id)
-
-
-## Fisher-Yates against this floor's own RNG, so the boss's choice is decided by the floor seed and
-## nothing else. `Array.shuffle` would use the global generator, which is seeded from the clock and
-## would make one `--seed` stop reproducing the reward it was reported with.
-func _shuffle(items: Array) -> void:
-	for index: int in range(items.size() - 1, 0, -1):
-		var swap := _reward_rng.randi_range(0, index)
-		var held: Variant = items[index]
-		items[index] = items[swap]
-		items[swap] = held
 
 
 func _boss_reward_positions(room: Room) -> Array[Vector2]:

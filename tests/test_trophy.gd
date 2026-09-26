@@ -66,7 +66,7 @@ func run() -> void:
 ## and no item has been struck off the run to put it there.
 ##
 ## The pool check is the half that is easy to lose: the three stands *spend* what they offer
-## (`FloorController._take_reward`), and a finale that drew a choice and then threw it away to put a
+## (`FloorController._draw_boss_reward`), and a finale that drew a choice and then threw it away to put a
 ## trophy up instead would look identical on screen while quietly consuming the last three uniques
 ## in the run.
 func _test_the_last_floor_stands_a_trophy_and_no_stands() -> void:
