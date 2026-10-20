@@ -12,3 +12,6 @@ __pycache__/
 
 # macOS
 .DS_Store
+
+# Working plan, kept beside the repository rather than in it
+/NEXT_STEPS_GAMEPLAN.md
