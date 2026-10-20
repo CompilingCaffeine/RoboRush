@@ -54,14 +54,18 @@ EXPECTED_FILES=(
 REQUIRED_FILES=("index.html" "index.js" "index.wasm" "index.pck" "build-info.json")
 
 # Wavedash accepts a folder or zip up to 1 GB. This is the only hard external limit involved, and
-# it is nowhere near the current 41 MB, which is exactly why it is worth asserting: the failure it
+# it is nowhere near the current 43 MB, which is exactly why it is worth asserting: the failure it
 # guards against is not today's build, it is the one that accidentally includes uncompressed audio.
 HARD_LIMIT_BYTES=$((1024 * 1024 * 1024))
 
 # What the build weighed when this was written. Growth is not a failure — content is supposed to
 # arrive — but growth nobody predicted is worth a line in the log, because the alternative is
 # finding out from a player on a phone.
-BASELINE_TOTAL_BYTES=41500000
+#
+# The total was last moved when art/store/ stopped being exported. It had stood at 41500000 while
+# the store-page covers took the real build to 47.4 MB, so by 2026-09-26 this warning was firing
+# on main with nothing failing. The leak check above is what now makes that growth a failure.
+BASELINE_TOTAL_BYTES=43200000
 BASELINE_WASM_BYTES=39513091
 GROWTH_WARNING_PERCENT=10
 
@@ -127,6 +131,14 @@ check_no_source_leakage() {
       fail "the PCK contains $pattern, which the export is supposed to exclude"
     fi
   done
+
+  # Not source, but the same kind of leak: the store-page covers, which the game never loads,
+  # were 4.2 MB of a 7.6 MB PCK. Matched without res:// on purpose. This pack format names its
+  # entries relative to res://, and an imported image is nothing but entries — its .import remap
+  # and its .ctex — so the prefixed form only ever turned up incidentally, in the UID cache.
+  if LC_ALL=C grep -qaF "art/store/" "$TARGET/index.pck"; then
+    fail "the PCK contains the store-page art in art/store/, which the export is supposed to exclude"
+  fi
 
   # The scripts themselves are compiled into .gdc and remapped, so a readable script body in the
   # pack means an export that did not compile them.
