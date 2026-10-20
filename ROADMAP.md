@@ -1,6 +1,7 @@
 # Robo Rush Roadmap: Improvements, Feature Upgrades, and New Content
 
 - **Status:** Planning proposal, partly implemented. [Progress](#progress) lists what is done and what the owner chose to skip; everything else below is still a proposal.
+- **Next execution plan:** [NEXT_STEPS_GAMEPLAN.md](NEXT_STEPS_GAMEPLAN.md) reviews `768f73f` and sequences the next releases. Use it and Progress when selecting work; the original milestone lists below include tasks already completed or deferred.
 - **Baseline:** `1c450d8` on `main` (2026-09-19). Six floors, six bosses, 16 enemies, 54 items, 52 room templates, and 35 test files.
 - **Authority:** [robo_rush_build_spec.md](robo_rush_build_spec.md) is still the design authority. Where this plan departs from it, the entry says so. The post-boss hazard contract in [SIX_FLOOR_SCALING_GAMEPLAN.md](SIX_FLOOR_SCALING_GAMEPLAN.md) still holds.
 
@@ -49,10 +50,12 @@ This plan comes from reading the code and data, not from playing the game. Every
 
 ## 1. Where the game stands
 
+Content counts and the active-control row were refreshed on 2026-10-02. See Progress for completed engineering work and owner decisions; the detailed proposals below retain their original context.
+
 | Area | Shipped | Notes |
 | --- | --- | --- |
 | Floors | 6 | Help Desk, Development, Data Center, Cloud Operations, Executive Systems, Core Intelligence. Ten rooms each. |
-| Room templates | 52 | Floors 1–2 have **4 combat templates each**. Floors 3–6 have 7–8 each. |
+| Room templates | 60 | Floors 1–2 have **8 combat templates each**. Floors 3–6 have 7 each. |
 | Room types generated | 5 of 9 | START, COMBAT, TREASURE, SHOP, and BOSS. `RoomTemplate.Type` also declares ELITE_COMBAT, CHALLENGE, SECRET, and TRANSITION, but `FloorGenerator.SPECIAL_TYPES` never schedules them. |
 | Enemies | 16 | 11 base designs and 5 "one rung up" variants (Hot Path Runner, Optimizing Compiler, Redundant Firewall, Elder Recursion, Lagging Replica). Floor 4 introduces **no enemy of its own**. |
 | Bosses | 6 | The Scrap King, Runtime Error, Cascade Failure, and Orchestrator are shuffled across Floors 1–4. Executive Override (a Runtime Error rematch) always guards Floor 5. Core Intelligence always guards Floor 6 and wears five **hard-coded** masks. |
@@ -61,7 +64,7 @@ This plan comes from reading the code and data, not from playing the game. Every
 | Pickups | 3 kinds | Scrap, repair cell, and item. Spec §18 lists six. |
 | Status effects | 4 | Chill, freeze, burn, and shock. |
 | Player weapons | 1 | The Rivet Blaster. The three "weapon core" items modify it rather than replace it. |
-| Active items | 0 | `use_active_item` is bound to the right mouse button and left trigger, and the README lists it, but no code reads it. |
+| Active items | 0 | The unused `use_active_item` binding and advertised control were removed (FIX-6). Active items remain deferred until SYS-3. |
 | Modes | 1 | The campaign. Seeds are available only from the command line. The Web build has a fastest-victory leaderboard. |
 | Meta-progression | Records only | `SaveManager.unlocked_items` records every item ever picked up, but nothing reads it. |
 
