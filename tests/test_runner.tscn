@@ -1,4 +1,4 @@
-[gd_scene load_steps=41 format=3]
+[gd_scene load_steps=42 format=3]
 
 [ext_resource type="Script" path="res://tests/test_runner.gd" id="1_runner"]
 [ext_resource type="Script" path="res://tests/test_player_movement.gd" id="2_movement"]
@@ -33,6 +33,7 @@
 [ext_resource type="Script" path="res://tests/test_migration.gd" id="26_migration"]
 [ext_resource type="Script" path="res://tests/test_orchestrator.gd" id="27_orchestrator"]
 [ext_resource type="Script" path="res://tests/test_audio.gd" id="12_audio"]
+[ext_resource type="Script" path="res://tests/test_music.gd" id="39_music"]
 [ext_resource type="Script" path="res://tests/test_gamepad.gd" id="13_gamepad"]
 [ext_resource type="Script" path="res://tests/test_balance.gd" id="14_balance"]
 [ext_resource type="Script" path="res://tests/test_menus.gd" id="15_menus"]
@@ -112,6 +113,9 @@ script = ExtResource("11_save")
 
 [node name="Checkpoint" type="Node" parent="."]
 script = ExtResource("23_checkpoint")
+
+[node name="Music" type="Node" parent="."]
+script = ExtResource("39_music")
 
 [node name="Audio" type="Node" parent="."]
 script = ExtResource("12_audio")

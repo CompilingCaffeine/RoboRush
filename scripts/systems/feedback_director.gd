@@ -200,9 +200,15 @@ func _on_room_entered(type: int, _room_id: int) -> void:
 ## A null theme restores the defaults rather than leaving the previous floor's tracks playing,
 ## so a floor authored without one is silent about music instead of inheriting a soundtrack
 ## from whatever came before it.
+##
+## Both tracks are asked for here as well as set, because the music is rendered the first time it
+## is wanted: the explore loop is needed the moment the opening room is entered, and the boss loop
+## has the whole floor to be ready in.
 func set_floor_theme(theme: FloorTheme) -> void:
 	_explore_music = theme.explore_music if theme != null else DEFAULT_EXPLORE_MUSIC
 	_boss_music = theme.boss_music if theme != null else DEFAULT_BOSS_MUSIC
+	AudioManager.prepare_music(_explore_music)
+	AudioManager.prepare_music(_boss_music)
 
 
 ## Distinct from the item fanfare, because buying something and finding it are different

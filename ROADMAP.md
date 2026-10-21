@@ -406,7 +406,7 @@ Audit against spec §7's feedback list.
 
 ### IMP-11: Adaptive music
 
-`tools/generate_music.py` writes per-floor explore and boss tracks. Generate each explore track as **two stems** (a calm bed and a combat layer) and cross-fade the combat layer in when doors lock and out on clear. Add a low-integrity filter (a low-pass on the music bus while at 1 integrity). `low_integrity.wav` already exists as the one-shot cue.
+`MusicScore` (`scripts/audio/music_score.gd`) defines per-floor explore and boss tracks, and `MusicSynth` renders them when the game first needs them. Render each explore track as **two stems** (a calm bed and a combat layer) and cross-fade the combat layer in when doors lock and out on clear. Add a low-integrity filter (a low-pass on the music bus while at 1 integrity). `low_integrity.wav` already exists as the one-shot cue.
 
 ### IMP-12: Difficulty tiers
 
