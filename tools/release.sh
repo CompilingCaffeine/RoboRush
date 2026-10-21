@@ -60,7 +60,7 @@ TEMPLATES=(
 ## upgraded on purpose, so that an upgrade is a reviewable diff rather than a silent change in
 ## what the next release is built with.
 relock() {
-  local version templates_version sdk_version sdk_commit cli_version pinned_cli_version template_dir
+  local version templates_version sdk_version sdk_commit cli_version pinned_cli_version cli_installer template_dir
   local source_commit emscripten
   template_dir="$(template_root)"
   version="$(engine_version)"
@@ -100,6 +100,13 @@ relock() {
     else
       warn "no Wavedash CLI installed and none recorded: the upload workflow's version gate has nothing to compare against"
     fi
+  fi
+  # The hash of the installer the upload workflow runs for that version. Nothing installed here
+  # can produce it, so it is only ever carried across, and the approval that changes the version
+  # changes it in the same hand edit. Same `|| true`, same reason.
+  cli_installer="$(grep '^wavedash_cli_installer=' "$LOCK_FILE" 2>/dev/null | cut -d= -f2- || true)"
+  if [ -n "$pinned_cli_version" ] && [ "$cli_version" != "$pinned_cli_version" ]; then
+    warn "recorded the installed Wavedash CLI '$cli_version' over the approved '$pinned_cli_version'. wavedash_cli_installer still pins the old installer, so uploads stop until it is updated to match."
   fi
 
   # Upstream publishes no tags, so the commit the vendored tree came from exists nowhere in the
@@ -167,7 +174,13 @@ relock() {
       echo "wavedash_sdk.$file=$(sha256 "$addon_path")"
     done
     if [ -n "$cli_version" ]; then
+      echo
+      echo "# The Wavedash CLI the upload workflow installs: this version, from the installer with this"
+      echo "# sha256. Approving a new one is a hand edit to both lines, made after reviewing it."
       echo "wavedash_cli_version=$cli_version"
+      if [ -n "$cli_installer" ]; then
+        echo "wavedash_cli_installer=$cli_installer"
+      fi
     fi
   } > "$RELOCK_TMP"
 
@@ -315,13 +328,15 @@ main() {
 
   # The suite is part of the release gate: an artifact nobody has tested is not a release
   # candidate, it is a build. Twice, as in the Web build: the editor has every class, so only the
-  # stripped engine can say the Web export still has everything the game uses.
+  # stripped engine can say the Web export still has everything the game uses. Its run leaves out
+  # the timing suite, for the reason given beside ENGINE_NATIVE_SUITE_ARGS.
   note "running the test suite"
   "$GODOT" --headless --fixed-fps 60 res://tests/test_runner.tscn >/dev/null 2>&1 \
     || die "the test suite failed; nothing was built"
   note "running the test suite on the stripped engine"
   "$REPO_ROOT/$ENGINE_NATIVE" --headless --fixed-fps 60 --path "$REPO_ROOT" res://tests/test_runner.tscn \
-    >/dev/null 2>&1 || die "the test suite failed on the stripped engine; nothing was built"
+    "${ENGINE_NATIVE_SUITE_ARGS[@]}" >/dev/null 2>&1 \
+    || die "the test suite failed on the stripped engine; nothing was built"
 
   # The presets are edited in place and put back however this exits, including on failure. The
   # working file is not the artifact, and a release that left a rewritten version behind would

@@ -59,6 +59,16 @@ ENGINE_WEB_TEMPLATE="$ENGINE_DIR/web/web_nothreads_release.zip"
 # shellcheck disable=SC2034  # read by the scripts that source this, not here
 ENGINE_NATIVE="$ENGINE_DIR/native/godot"
 
+# What the suite run on the native engine is given after the scene, which is to leave out the
+# timing suite. That run is there to show the profile still has every class the game uses. The
+# engine is a debug template built without link-time optimisation, it measured about 8% slower than
+# the editor, and its timings describe neither the editor nor the Web template that ships. The
+# Performance budgets are tripwires the editor run already checks; on this engine they only add a
+# second chance to trip on a slow runner, which is how a commit that changed no game code failed
+# with blast queries at 1006us against a 1000us budget.
+# shellcheck disable=SC2034  # read by the scripts that source this, not here
+ENGINE_NATIVE_SUITE_ARGS=(-- --skip=Performance)
+
 # Besides the two lock values, the files that decide what the stripped engine is.
 ENGINE_RECIPE_FILES=(
   "tools/engine/profile.py"

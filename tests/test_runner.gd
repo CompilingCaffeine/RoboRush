@@ -15,9 +15,14 @@ extends Node
 ##
 ##     godot --headless --fixed-fps 60 res://tests/test_runner.tscn -- --suite=Items,Floor
 ##
+## Or run everything except some, the same way:
+##
+##     godot --headless --fixed-fps 60 res://tests/test_runner.tscn -- --skip=Performance
+##
 ## Names are the suite nodes' names as the report prints them, compared without regard to case. A
 ## filtered run says so on its PASS line, so it cannot be mistaken for the whole suite passing, and a
-## filter that matches nothing is a failure rather than a vacuous pass.
+## filter that matches nothing is a failure rather than a vacuous pass. So is a --skip name that is
+## no suite at all, which would otherwise outlive a rename and quietly stop skipping anything.
 ##
 ## Exits 0 only if at least one suite ran, every suite ran at least one check, and no
 ## check failed. The "at least one check" rule is deliberate: a suite that crashes
@@ -93,12 +98,18 @@ func _ready() -> void:
 	_start_frames = Engine.get_physics_frames()
 	var suites: Array[TestCase] = []
 	var failures: PackedStringArray = []
-	var wanted := _requested_suites()
+	var wanted := _suite_names("--suite=")
+	var unwanted := _suite_names("--skip=")
 	var skipped := 0
 
 	for child: Node in get_children():
 		if child is TestCase:
-			if not wanted.is_empty() and child.name.to_lower() not in wanted:
+			var lowered := child.name.to_lower()
+			if lowered in unwanted:
+				unwanted.remove_at(unwanted.find(lowered))
+				skipped += 1
+				continue
+			if not wanted.is_empty() and lowered not in wanted:
 				skipped += 1
 				continue
 			suites.append(child as TestCase)
@@ -108,6 +119,8 @@ func _ready() -> void:
 		# suite missing. Every child of this node is declared in the scene precisely
 		# because it is meant to run.
 		failures.append("%s did not load as a TestCase (compile error in its script?)" % child.name)
+	for name: String in unwanted:
+		failures.append("--skip=%s matched no suite" % name)
 
 	if suites.is_empty():
 		if not wanted.is_empty():
@@ -166,7 +179,7 @@ func _ready() -> void:
 	if failures.is_empty():
 		print("PASS  %d suites, %d checks in %.1fs%s" % [
 			suites.size(), total_checks, elapsed,
-			" (%d suites filtered out by --suite)" % skipped if skipped > 0 else "",
+			" (%d suites filtered out by --suite or --skip)" % skipped if skipped > 0 else "",
 		])
 		_warn_if_paced(elapsed, frames)
 		get_tree().quit(0)
@@ -179,13 +192,14 @@ func _ready() -> void:
 	get_tree().quit(1)
 
 
-## Lower-cased suite names from `--suite=A,B` after the `--` separator. Empty means every suite.
-func _requested_suites() -> PackedStringArray:
+## Lower-cased suite names from `--suite=A,B` or `--skip=A,B` after the `--` separator, as named by
+## `option`. Empty when the option is not given.
+func _suite_names(option: String) -> PackedStringArray:
 	var names := PackedStringArray()
 	for argument: String in OS.get_cmdline_user_args():
-		if not argument.begins_with("--suite="):
+		if not argument.begins_with(option):
 			continue
-		for name: String in argument.trim_prefix("--suite=").split(",", false):
+		for name: String in argument.trim_prefix(option).split(",", false):
 			names.append(name.strip_edges().to_lower())
 	return names
 

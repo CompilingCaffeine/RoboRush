@@ -107,31 +107,49 @@ jobs:
         run: tools/ci/verify_web.sh build/web
 
       - name: Install the Wavedash CLI
-        # Piping an installer to a shell is what Wavedash documents, and it is exactly as
-        # trustworthy as it looks. What makes it acceptable here is the version gate below: the
-        # approved version is recorded in tools/engine.lock, and a new binary cannot be used to
-        # upload until somebody has looked at it and re-recorded it.
+        # The installer for exactly the approved version, from that version's GitHub release, and
+        # only if it is byte-for-byte the installer that was reviewed. It carries the sha256 of each
+        # platform's binary and checks the download against it, so pinning the installer pins the
+        # binary too. What Wavedash documents is piping wavedash.com/cli/install.sh to a shell,
+        # which installs whatever is newest: every Wavedash release then stopped uploads at the
+        # gate below until somebody approved it, and the binary that passed the gate was only
+        # known by the version it claimed.
+        #
+        # Unmanaged, into a directory of its own: no self-updater, no edits to shell profiles, and
+        # one place on PATH for it to be found.
         run: |
           set -euo pipefail
-          curl -fsSL https://wavedash.com/cli/install.sh | sh
-          # Where the installer puts the binary is not documented, so every plausible place is
-          # added and the next step decides whether one of them worked.
-          for candidate in "$HOME/.wavedash/bin" "$HOME/.local/bin" /usr/local/bin; do
-            if [ -d "$candidate" ]; then
-              echo "$candidate" >> "$GITHUB_PATH"
-            fi
-          done
+          approved="$(grep '^wavedash_cli_version=' tools/engine.lock | cut -d= -f2- || true)"
+          pinned="$(grep '^wavedash_cli_installer=' tools/engine.lock | cut -d= -f2- || true)"
+          if [ -z "$approved" ] || [ -z "$pinned" ]; then
+            echo "::error::tools/engine.lock needs both wavedash_cli_version and wavedash_cli_installer"
+            exit 1
+          fi
+          installer="$RUNNER_TEMP/wavedash-installer.sh"
+          curl --proto '=https' --tlsv1.2 -fsSL -o "$installer" \
+            "https://github.com/wvdsh/cli/releases/download/${approved#wavedash }/wavedash-installer.sh"
+          downloaded="$(sha256sum "$installer" | cut -d' ' -f1)"
+          echo "pinned     $pinned"
+          echo "downloaded $downloaded"
+          [ "$pinned" = "$downloaded" ] || {
+            echo "::error::the installer for '$approved' is not the one that was approved. Review it, then record its sha256 as wavedash_cli_installer in tools/engine.lock."
+            exit 1
+          }
+          WAVEDASH_UNMANAGED_INSTALL="$RUNNER_TEMP/wavedash" sh "$installer"
+          echo "$RUNNER_TEMP/wavedash" >> "$GITHUB_PATH"
 
       - name: Check the CLI is the approved version
+        # The installer above already pins the binary. This checks it installed what the lock says
+        # it would, so a lock edit that changed one line and not the other fails here, by name.
         run: |
           set -euo pipefail
           command -v wavedash >/dev/null || { echo "::error::the Wavedash CLI is not on PATH"; exit 1; }
           approved="$(grep '^wavedash_cli_version=' tools/engine.lock | cut -d= -f2-)"
           installed="$(wavedash --version | head -1)"
           echo "approved  $approved"
-          echo "installed $installed"
+          echo "installed $installed ($(command -v wavedash))"
           [ "$approved" = "$installed" ] || {
-            echo "::error::the Wavedash CLI changed from '$approved' to '$installed'. Review the new binary, then re-record it with tools/release.sh --relock."
+            echo "::error::the approved Wavedash CLI is '$approved', but the pinned installer installed '$installed'. wavedash_cli_version and wavedash_cli_installer in tools/engine.lock must describe the same release."
             exit 1
           }
 

@@ -93,6 +93,8 @@ wavedash auth status
 
 Record the approved CLI version. CI must print and verify that version before an upload. If Wavedash does not provide an immutable versioned download, fail CI when the installed version changes so the new binary is reviewed before deployment.
 
+Each CLI release has a versioned installer on GitHub (`https://github.com/wvdsh/cli/releases/download/<version>/wavedash-installer.sh`), and that installer checks the binary it downloads against a sha256 it carries. So CI does not use the latest-version script above. `tools/engine.lock` records the approved version (`wavedash_cli_version`) and the sha256 of its installer (`wavedash_cli_installer`). The upload workflow downloads that installer, refuses it unless the hash matches, and then checks the installed CLI reports the approved version. A new Wavedash release changes nothing until someone reviews it and edits both lines.
+
 Official references:
 
 - <https://docs.wavedash.com/cli/installation>
