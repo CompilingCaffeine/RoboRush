@@ -1,4 +1,4 @@
-[gd_scene load_steps=40 format=3]
+[gd_scene load_steps=41 format=3]
 
 [ext_resource type="Script" path="res://tests/test_runner.gd" id="1_runner"]
 [ext_resource type="Script" path="res://tests/test_player_movement.gd" id="2_movement"]
@@ -39,6 +39,7 @@
 [ext_resource type="Script" path="res://tests/test_bootstrap.gd" id="28_bootstrap"]
 [ext_resource type="Script" path="res://tests/test_cloud_save.gd" id="29_cloud"]
 [ext_resource type="Script" path="res://tests/test_leaderboard.gd" id="34_leaderboard"]
+[ext_resource type="Script" path="res://tests/test_engine_profile.gd" id="38_engine_profile"]
 
 [node name="TestRunner" type="Node"]
 script = ExtResource("1_runner")
@@ -153,6 +154,9 @@ script = ExtResource("29_cloud")
 
 [node name="Leaderboard" type="Node" parent="."]
 script = ExtResource("34_leaderboard")
+
+[node name="EngineProfile" type="Node" parent="."]
+script = ExtResource("38_engine_profile")
 
 [node name="Bootstrap" type="Node" parent="."]
 script = ExtResource("28_bootstrap")

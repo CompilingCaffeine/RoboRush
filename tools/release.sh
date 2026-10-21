@@ -18,9 +18,10 @@
 #     that commit does not describe what shipped.
 #   - Build from a tag that does not exist, or a commit that is not that tag. A version number
 #     that is not anchored to a tag is a version number that can be reused.
-#   - Build with an engine or export templates that differ from the pinned ones. The engine is
-#     part of the artifact — a Godot patch release changes the binary — so an unpinned engine
-#     makes "reproducible" untrue in the one way nobody checks.
+#   - Build with an engine or export templates that differ from the pinned ones, or export the Web
+#     preset with an engine not built from the pinned recipe (tools/engine/). The engine is part of
+#     the artifact — a Godot patch release changes the binary — so an unpinned engine makes
+#     "reproducible" untrue in the one way nobody checks.
 #   - Sign nothing while claiming to. See the signing section: without credentials it says so and
 #     marks the artifacts unsigned rather than shipping them as if they were not.
 #
@@ -43,13 +44,14 @@ source "$REPO_ROOT/tools/ci/lib.sh"
 PRESETS=("macOS" "Windows" "Linux" "Web")
 OUTPUTS=("robo_rush.zip" "robo_rush.exe" "robo_rush.x86_64" "index.html")
 
-# The release templates each preset consumes. Hashed and pinned, because they are as much a part
-# of the artifact as the project's own source is.
+# The stock release templates the desktop presets consume. Hashed and pinned, because they are as
+# much a part of the artifact as the project's own source is. The Web preset is not here: it is
+# exported with the stripped engine tools/engine/build_template.sh builds, which is pinned by its
+# recipe instead (see verify_engine_build in tools/ci/lib.sh).
 TEMPLATES=(
   "macos.zip"
   "windows_release_x86_64.exe"
   "linux_release.x86_64"
-  "web_nothreads_release.zip"
 )
 
 # --- Engine and template pinning ---------------------------------------------------
@@ -59,6 +61,7 @@ TEMPLATES=(
 ## what the next release is built with.
 relock() {
   local version templates_version sdk_version sdk_commit cli_version pinned_cli_version template_dir
+  local source_commit emscripten
   template_dir="$(template_root)"
   version="$(engine_version)"
   # The `|| true` is load-bearing, for the same reason it is on the greps further down: with no
@@ -108,6 +111,23 @@ relock() {
   [ -n "$sdk_commit" ] || die \
     "no wavedash_sdk_commit in $LOCK_FILE. Re-run with: WAVEDASH_SDK_COMMIT=<sha> tools/release.sh --relock"
 
+  # The stripped Web engine's recipe. Neither half can be read off anything installed here — the
+  # engine names only the first nine characters of its commit, and nothing on this machine has to
+  # have Emscripten — so both are carried across a relock the way the SDK commit is, or supplied
+  # when the engine is upgraded. Same `|| true`, same reason.
+  source_commit="${ENGINE_SOURCE_COMMIT:-$(grep '^engine_source_commit=' "$LOCK_FILE" 2>/dev/null | cut -d= -f2- || true)}"
+  emscripten="${EMSCRIPTEN_VERSION:-$(grep '^emscripten_version=' "$LOCK_FILE" 2>/dev/null | cut -d= -f2- || true)}"
+  [ -n "$source_commit" ] || die \
+    "no engine_source_commit in $LOCK_FILE. Re-run with: ENGINE_SOURCE_COMMIT=<full commit of the engine's release tag> tools/release.sh --relock"
+  [ -n "$emscripten" ] || die \
+    "no emscripten_version in $LOCK_FILE. Re-run with: EMSCRIPTEN_VERSION=<the version the stock Web template's banner reports> tools/release.sh --relock"
+  # An upgrade that forgot ENGINE_SOURCE_COMMIT would otherwise carry the old commit forward and pin
+  # a Web engine built from a different Godot than everything else in the release.
+  case "$source_commit" in
+    "${version##*.}"*) ;;
+    *) die "engine_source_commit $source_commit is not the commit of the installed engine (${version##*.}). Re-run with: ENGINE_SOURCE_COMMIT=<full commit of the engine's release tag> tools/release.sh --relock" ;;
+  esac
+
   # Built beside the lock file and moved over it only once every hash has been taken. Writing
   # straight to the lock file truncates it the moment the redirection opens, so a relock run
   # anywhere the full template set is not installed — a machine set up only for the Web build,
@@ -130,6 +150,12 @@ relock() {
       [ -f "$path" ] || die "export template missing: $path"
       echo "template.$template=$(sha256 "$path")"
     done
+    echo
+    echo "# The Web preset runs on an engine compiled for this game (tools/engine/) rather than on"
+    echo "# the stock Web template. tools/engine/build_template.sh builds it from this commit of the"
+    echo "# engine source, with this Emscripten; together with tools/engine/ they are its recipe."
+    echo "engine_source_commit=$source_commit"
+    echo "emscripten_version=$emscripten"
     echo
     echo "# The vendored Wavedash SDK ships inside the web build, so it is part of the artifact"
     echo "# too. Upstream has no tags: the commit is the only durable name for what was copied."
@@ -154,9 +180,10 @@ relock() {
   sed 's/^/  /' "$LOCK_FILE"
 }
 
-## Fails unless the installed engine, every export template and the vendored SDK are
-## byte-for-byte the pinned ones. A release builds all four platforms, so it verifies all four
-## templates; the Web build verifies only the one it uses.
+## Fails unless the installed engine, every stock export template and the vendored SDK are
+## byte-for-byte the pinned ones, and the stripped engine — the Web template and the native copy
+## the suite runs on — was built from the pinned recipe. A release builds all four platforms, so it
+## verifies everything all four use; the Web build verifies only what it uses.
 verify_engine() {
   verify_engine_version
 
@@ -167,6 +194,8 @@ verify_engine() {
   done
   note "export templates $templates_version verified (${#TEMPLATES[@]} hashes)"
 
+  verify_engine_build web "$ENGINE_WEB_TEMPLATE"
+  verify_engine_build native "$ENGINE_NATIVE"
   verify_wavedash_sdk
 }
 
@@ -187,6 +216,21 @@ apply_version() {
   perl -pi -e "s|^application/product_version=.*|application/product_version=\"$windows_version\"|" export_presets.cfg
   perl -pi -e "s|^application/file_version=.*|application/file_version=\"$windows_version\"|" export_presets.cfg
   note "version $semver written into the export presets"
+}
+
+## Points the Web preset at the stripped engine for the length of the release. Godot would
+## otherwise export it with the stock template from the export templates directory, which is
+## 39.5 MB of engine against the stripped one's 22.9. Put back by the same trap as the version.
+apply_web_template() {
+  local template="$REPO_ROOT/$ENGINE_WEB_TEMPLATE"
+  # Through the environment rather than spliced into the expression, so a path with a space or a
+  # character Perl means something by cannot change what the substitution does.
+  WEB_TEMPLATE_PATH="$template" perl -0pi -e \
+    's|(name="Web"\n(?:.*\n)*?\[preset\.\d+\.options\]\n)|$1custom_template/release="$ENV{WEB_TEMPLATE_PATH}"\n|' \
+    export_presets.cfg
+  grep -qxF "custom_template/release=\"$template\"" export_presets.cfg || die \
+    "could not point the Web preset at $template"
+  note "Web preset exported with the stripped engine"
 }
 
 
@@ -270,16 +314,21 @@ main() {
   verify_engine
 
   # The suite is part of the release gate: an artifact nobody has tested is not a release
-  # candidate, it is a build.
+  # candidate, it is a build. Twice, as in the Web build: the editor has every class, so only the
+  # stripped engine can say the Web export still has everything the game uses.
   note "running the test suite"
   "$GODOT" --headless --fixed-fps 60 res://tests/test_runner.tscn >/dev/null 2>&1 \
     || die "the test suite failed; nothing was built"
+  note "running the test suite on the stripped engine"
+  "$REPO_ROOT/$ENGINE_NATIVE" --headless --fixed-fps 60 --path "$REPO_ROOT" res://tests/test_runner.tscn \
+    >/dev/null 2>&1 || die "the test suite failed on the stripped engine; nothing was built"
 
   # The presets are edited in place and put back however this exits, including on failure. The
   # working file is not the artifact, and a release that left a rewritten version behind would
   # make the next developer's diff start with a change they did not make.
   trap 'git checkout -- export_presets.cfg 2>/dev/null || true' EXIT
   apply_version "$semver"
+  apply_web_template
 
   mkdir -p "$output"
   local manifest="$output/manifest.json"
@@ -288,6 +337,7 @@ main() {
   echo "  \"tag\": \"$tag\"," >> "$manifest"
   echo "  \"commit\": \"$commit\"," >> "$manifest"
   echo "  \"engine\": \"$(engine_version)\"," >> "$manifest"
+  echo "  \"web_engine_recipe\": \"$(engine_recipe_key)\"," >> "$manifest"
   echo "  \"built\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"," >> "$manifest"
   echo "  \"artifacts\": [" >> "$manifest"
 
