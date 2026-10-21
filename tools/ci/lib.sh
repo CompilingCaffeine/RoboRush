@@ -10,8 +10,9 @@
 # They live here rather than in tools/release.sh because two tools now need them and a second copy
 # of a verification rule is worse than no verification: the copies drift, both keep passing, and
 # the one that matters is whichever the build happened to call. Sourced by tools/release.sh, which
-# builds every platform from a tag, and by tools/ci/build_web.sh, which builds only the Web export
-# and is the one CI runs on every commit.
+# builds every platform from a tag, by tools/ci/build_web.sh, which builds only the Web export and
+# is the one CI runs on every commit, and by tools/engine/build_template.sh, which builds the
+# stripped engine both of them export the Web preset with.
 #
 # Nothing here has side effects beyond reading files. Anything that writes the lock file, exports,
 # or uploads belongs to the tool that does it.
@@ -43,9 +44,26 @@ warn() { printf '  ! %s\n' "$1" >&2; }
 ## what macOS ships. The output format is the same, which is the only reason this can be one line.
 if command -v sha256sum >/dev/null 2>&1; then
   sha256() { sha256sum "$1" | cut -d' ' -f1; }
+  sha256_stdin() { sha256sum | cut -d' ' -f1; }
 else
   sha256() { shasum -a 256 "$1" | cut -d' ' -f1; }
+  sha256_stdin() { shasum -a 256 | cut -d' ' -f1; }
 fi
+
+# Where tools/engine/build_template.sh leaves the stripped engine. The Web template is what the Web
+# preset is exported with; the native engine is the same feature set compiled for this machine,
+# which the suite runs on to prove the feature set still has everything the game uses.
+ENGINE_DIR="build/engine"
+# shellcheck disable=SC2034  # read by the scripts that source this, not here
+ENGINE_WEB_TEMPLATE="$ENGINE_DIR/web/web_nothreads_release.zip"
+# shellcheck disable=SC2034  # read by the scripts that source this, not here
+ENGINE_NATIVE="$ENGINE_DIR/native/godot"
+
+# Besides the two lock values, the files that decide what the stripped engine is.
+ENGINE_RECIPE_FILES=(
+  "tools/engine/profile.py"
+  "tools/engine/build_template.sh"
+)
 
 
 # --- Where Godot keeps its data ------------------------------------------------------
@@ -94,6 +112,35 @@ wavedash_cli_version() {
   wavedash --version 2>/dev/null | head -1 | tr -d '\n'
 }
 
+## The name the Godot project uses for a release, from the version string the lock file pins.
+## "4.7.1.stable.official.a13da4feb" is how the engine reports itself; "4.7.1-stable" is how the
+## downloads and the source tag are named. Derived rather than written twice, so an engine upgrade
+## is one edit.
+release_tag() {
+  local version
+  version="$(lock_value engine_version)"
+  printf '%s-%s' "$(cut -d. -f1-3 <<<"$version")" "$(cut -d. -f4 <<<"$version")"
+}
+
+## Everything that decides what tools/engine/build_template.sh produces, as one hash: the Godot
+## commit and the Emscripten version from the lock, the feature profile, and the build script.
+## Each build is stamped with the key it was built from, and CI caches builds under it.
+##
+## The lock values are read with `|| true` because a missing key is a normal thing to report here,
+## and grep's exit status under `set -o pipefail` would otherwise end the run before the message
+## that explains it.
+engine_recipe_key() {
+  local commit emscripten
+  commit="$(lock_value engine_source_commit || true)"
+  emscripten="$(lock_value emscripten_version || true)"
+  [ -n "$commit" ] || die "no engine_source_commit in $LOCK_FILE"
+  [ -n "$emscripten" ] || die "no emscripten_version in $LOCK_FILE"
+  {
+    printf 'engine_source_commit=%s\nemscripten_version=%s\n' "$commit" "$emscripten"
+    cat "${ENGINE_RECIPE_FILES[@]}"
+  } | sha256_stdin
+}
+
 
 # --- Verification --------------------------------------------------------------------
 
@@ -108,8 +155,9 @@ verify_engine_version() {
   note "engine $actual"
 }
 
-## Fails unless one export template is byte-for-byte the pinned one. Takes the template's file
-## name, and optionally the directory to look in — the Web build points it at an isolated copy.
+## Fails unless one stock export template is byte-for-byte the pinned one. Takes the template's
+## file name, and optionally the directory to look in. The Web preset does not use a stock
+## template; see verify_engine_build.
 verify_template() {
   local template="$1"
   local dir="${2:-$(template_root)/$(lock_value templates_version)}"
@@ -120,6 +168,25 @@ verify_template() {
   [ -n "$expected" ] || die "$template is not pinned in $LOCK_FILE"
   got="$(sha256 "$path")"
   [ "$expected" = "$got" ] || die "export template $template does not match the pinned hash"
+}
+
+## Fails unless a stripped engine exists and was built from the current recipe. Takes the flavor
+## (web or native) and the path build_template.sh installs it at.
+##
+## A hash of the output cannot be pinned the way the stock templates are, because the output is
+## built here rather than downloaded. What is pinned instead is everything that decides the output,
+## and this checks the engine was made from exactly that: an edit to the profile, the build script,
+## the Godot commit or the Emscripten version makes every engine built before it unusable until it
+## is rebuilt.
+verify_engine_build() {
+  local flavor="$1" path="$2" built current
+  [ -f "$path" ] || die \
+    "no stripped $flavor engine at $path. Build it: tools/engine/build_template.sh $flavor"
+  built="$(cat "$(dirname "$path")/recipe" 2>/dev/null || true)"
+  current="$(engine_recipe_key)"
+  [ "$built" = "$current" ] || die \
+    "the $flavor engine at $path was not built from the current recipe in $LOCK_FILE and tools/engine/. Rebuild it: tools/engine/build_template.sh $flavor"
+  note "stripped $flavor engine verified (recipe ${current:0:12})"
 }
 
 ## Fails unless the vendored SDK is byte-for-byte the pinned one. Vendoring already keeps the

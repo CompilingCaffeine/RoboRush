@@ -93,13 +93,22 @@ godot --headless --export-release "macOS" build/macos/robo_rush.zip
 godot --headless --export-release "Web" build/web/index.html
 ```
 
+The plain Web export above uses Godot's stock Web template. The browser build that ships runs on an engine compiled for this game instead, with everything it does not use switched off in [tools/engine/profile.py](tools/engine/profile.py): 22.9 MB of WebAssembly against the stock 39.5 MB (3.7 MB against 6.9 MB with brotli). Build it once, and again whenever the profile or the pinned engine changes:
+
+```bash
+tools/engine/build_template.sh web      # the Web export template
+tools/engine/build_template.sh native   # the same engine for this machine, which the suite also runs on
+```
+
+Each takes a few minutes. They need git, Python 3 and a C++ compiler; the script fetches the pinned Godot source, SCons and Emscripten itself, into `build/engine/work/`. CI builds both and caches them, so this only matters locally.
+
 For the qualified browser artifact, use:
 
 ```bash
 tools/ci/build_web.sh
 ```
 
-It verifies the pinned toolchain, imports the project, runs the test suite, exports the Web build, and produces a checked artifact in `build/web-artifact/`. Verify an exported Web build independently with:
+It verifies the pinned toolchain and that the stripped engine was built from the current recipe, imports the project, runs the test suite on the editor and again on the stripped engine, exports the Web build, and produces a checked artifact in `build/web-artifact/`. Verify an exported Web build independently with:
 
 ```bash
 tools/ci/verify_web.sh build/web
@@ -113,11 +122,13 @@ Build all release targets from a clean version tag:
 tools/release.sh v0.3.0
 ```
 
-The release script runs tests, verifies the pinned engine and export templates, builds every target into `build/0.3.0/`, and writes checksums and a manifest. After an intentional Godot upgrade, refresh the pins with:
+The release script runs tests, verifies the pinned engine and export templates and the stripped Web engine (build it first, as above), builds every target into `build/0.3.0/`, and writes checksums and a manifest. After an intentional Godot upgrade, refresh the pins with:
 
 ```bash
-tools/release.sh --relock
+ENGINE_SOURCE_COMMIT=<full commit of the new release tag> EMSCRIPTEN_VERSION=<version the stock Web template reports> tools/release.sh --relock
 ```
+
+The two variables are needed only when the engine changes; a relock without them keeps the recorded values.
 
 ## Project notes
 

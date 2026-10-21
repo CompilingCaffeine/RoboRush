@@ -7,7 +7,12 @@ templates_version=4.7.1.stable
 template.macos.zip=f9de131f5ed0210924b9b156aea43b1e20fd720dd97690e151081a65c0937a3e
 template.windows_release_x86_64.exe=76269a403bb832599edeee4432a5b7a7e88c018eb5c9c798dfd8289359b0ec07
 template.linux_release.x86_64=2cb27aee3f7fdf763d0ae16972f6975606959a071f4cd33f6ef1429eb8385049
-template.web_nothreads_release.zip=b7b7d7da29fc6cc2f4934fdd26cc571a40e7af57f716ea3eb7e18da720dae28a
+
+# The Web preset runs on an engine compiled for this game (tools/engine/) rather than on
+# the stock Web template. tools/engine/build_template.sh builds it from this commit of the
+# engine source, with this Emscripten; together with tools/engine/ they are its recipe.
+engine_source_commit=a13da4feb8d8aefc283c3763d33a2f170a18d541
+emscripten_version=4.0.20
 
 # The vendored Wavedash SDK ships inside the web build, so it is part of the artifact
 # too. Upstream has no tags: the commit is the only durable name for what was copied.

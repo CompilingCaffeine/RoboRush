@@ -25,7 +25,59 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  engine:
+    # The stripped engine the Web build is exported with, and the native copy of it the suite runs
+    # on, compiled from the recipe in tools/engine.lock and tools/engine/. Cached under that
+    # recipe's key, so this is a cache hit on every commit that leaves the recipe alone, and a fresh
+    # build of exactly the new recipe on one that changes it — including a pull request that edits
+    # the profile, which then tests the engine it is proposing rather than the one on main.
+    name: engine (${{ matrix.flavor }})
+    runs-on: ubuntu-latest
+    # A cold build compiles the whole engine on a four-core runner. A warm one takes seconds.
+    timeout-minutes: 75
+    strategy:
+      matrix:
+        flavor: [web, native]
+
+    steps:
+      - name: Check out the commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Work out the recipe key
+        id: recipe
+        run: echo "key=$(tools/engine/build_template.sh --recipe-key)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the engine built from this recipe
+        id: cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build/engine/${{ matrix.flavor }}
+          key: engine-${{ matrix.flavor }}-${{ runner.os }}-${{ steps.recipe.outputs.key }}
+
+      - name: Build it
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: tools/engine/build_template.sh ${{ matrix.flavor }}
+
+      - name: Keep the build log when it fails
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: engine-${{ matrix.flavor }}-log-${{ github.sha }}
+          path: build/engine/work/${{ matrix.flavor }}.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Cache it
+        # Saved now rather than when the workflow ends: the build job restores it a moment from
+        # now, and a later failure there is no reason to compile the engine again next time.
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build/engine/${{ matrix.flavor }}
+          key: engine-${{ matrix.flavor }}-${{ runner.os }}-${{ steps.recipe.outputs.key }}
+
   build:
+    needs: engine
     runs-on: ubuntu-latest
     # Generous, because the failure this guards against is a hang rather than a slow build: the
     # whole run takes about five minutes.
@@ -35,14 +87,35 @@ jobs:
       - name: Check out the commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install the pinned engine and Web export template
+      - name: Install the pinned engine
         run: |
           tools/ci/install_godot.sh --prefix "$RUNNER_TEMP/godot-bin"
           echo "$RUNNER_TEMP/godot-bin" >> "$GITHUB_PATH"
 
+      - name: Work out the recipe key
+        id: recipe
+        run: echo "key=$(tools/engine/build_template.sh --recipe-key)" >> "$GITHUB_OUTPUT"
+
+      # The engine job has just built or restored both, so a miss here is a broken workflow rather
+      # than a cold cache, and building without them is not an option.
+      - name: Restore the stripped Web engine
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build/engine/web
+          key: engine-web-${{ runner.os }}-${{ steps.recipe.outputs.key }}
+          fail-on-cache-miss: true
+
+      - name: Restore the stripped native engine
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build/engine/native
+          key: engine-native-${{ runner.os }}-${{ steps.recipe.outputs.key }}
+          fail-on-cache-miss: true
+
       - name: Build
-        # Verifies the pins and the export preset, imports, runs every suite, exports into an empty
-        # directory, checks the artifact contract, and writes build/web-artifact.
+        # Verifies the pins, the stripped engine's recipe and the export preset, imports, runs every
+        # suite on the editor and again on the stripped engine, exports into an empty directory,
+        # checks the artifact contract, and writes build/web-artifact.
         run: tools/ci/build_web.sh
 
       - name: Install a browser to smoke-test with

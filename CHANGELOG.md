@@ -15,6 +15,7 @@ What changed in Robo Rush, written for playtesters. The newest build is at the t
 
 - **Rarity now affects how often items appear.** Common and uncommon items are the usual finds from clearing a room. Rare items are more likely in treasure rooms and shops, and the boss still offers the best it has. Previously every item was equally likely, so rare items were the ones you saw most, especially on the first floor.
 - **The minimap marks the shop and the boss room** once you have been inside them: the shop in blue, the boss room in red with a dark mark in the middle.
+- **The browser version is about half the size to download**, so it starts sooner on a slow connection. It now runs on a copy of the engine built for this game, without the 3D, video, networking and other parts it never used.
 - **The game is about 4 MB smaller to download.** Every build was carrying the store-page artwork, which the game never shows.
 
 ### Removed

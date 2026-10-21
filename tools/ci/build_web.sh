@@ -10,14 +10,22 @@
 # release wrapper. What is shared with it is the part that must not have two answers: what engine,
 # what export template and what vendored SDK are pinned, which lives in tools/ci/lib.sh.
 #
+# The Web template is not Godot's stock one. It is the stripped engine tools/engine/build_template.sh
+# compiles for this game, which has to exist before this runs: in CI the Web CI workflow builds it
+# (or restores it from the cache), and locally `tools/engine/build_template.sh web` and
+# `tools/engine/build_template.sh native` do.
+#
 # What this refuses to do, and why each refusal is worth having:
 #
-#   - Build with an engine, Web template or Wavedash SDK that is not the pinned one. All three end
-#     up inside the artifact and none of them appears in a diff of the game's own source.
+#   - Build with an engine or Wavedash SDK that is not the pinned one, or with a Web template that
+#     was not built from the pinned recipe. All three end up inside the artifact and none of them
+#     appears in a diff of the game's own source.
 #   - Build with the Web preset's threading, GDExtension or PWA settings changed. Those decide
 #     whether the game runs at all on a host that does not send cross-origin isolation headers, and
 #     a change to them is a requalification, not a build.
-#   - Build without running the suite. An artifact nobody has tested is not a build candidate.
+#   - Build without running the suite. An artifact nobody has tested is not a build candidate. It
+#     runs twice: on the editor, and on the stripped native engine, which is the only one of the two
+#     that can notice the game using a class the Web template was built without.
 #   - Export into a directory that already has files in it. Godot writes the files it produces and
 #     leaves everything else alone, so a stale index.wasm from an older export would be uploaded
 #     alongside a current index.pck and the two would disagree in the browser.
@@ -88,6 +96,12 @@ verify_preset() {
   grep -q '^exclude_filter=.*tools/\*' <<<"$section" || die \
     "the $PRESET preset no longer excludes tools/*"
 
+  # A template path in the preset wins over the one this build installs, so a path left there by the
+  # editor would export with whatever file it names and skip every check made on the real one.
+  if grep -qE '^custom_template/release=".+"' <<<"$section"; then
+    die "the $PRESET preset names a custom release template. Clear it: this build supplies the template itself."
+  fi
+
   grep -qxF 'renderer/rendering_method="gl_compatibility"' project.godot || die \
     "the project no longer renders with gl_compatibility, which is the only renderer this Web build is qualified for"
 
@@ -95,19 +109,17 @@ verify_preset() {
 }
 
 ## A copy of Godot's data directory that belongs to this build and nothing else, holding only the
-## template that was just verified.
+## stripped Web template, under the stock template's name so the export picks it up.
 ##
 ## Two things come from this. The suite's user:// writes land in a directory that is deleted
 ## afterwards rather than in the save file of whoever ran the build. And the export cannot
-## silently use some other template that happens to be installed — the only one reachable is the
-## one whose hash was checked.
+## silently use some other template that happens to be installed — the stock one included — because
+## the only one reachable is the one whose recipe was checked.
 isolate_godot_data() {
-  local source_dir templates_version
+  local templates_version expected
   templates_version="$(lock_value templates_version)"
-  source_dir="$(template_root)/$templates_version"
-
-  [ -f "$source_dir/$WEB_TEMPLATE" ] || die \
-    "export template missing: $source_dir/$WEB_TEMPLATE (see export_presets.cfg for how to install)"
+  verify_engine_build web "$ENGINE_WEB_TEMPLATE"
+  expected="$(sha256 "$ENGINE_WEB_TEMPLATE")"
 
   WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/roborush-web.XXXXXX")"
   # Armed the moment there is something to clean up, rather than once the build reaches its first
@@ -124,12 +136,13 @@ isolate_godot_data() {
   local isolated
   isolated="$(template_root "$HOME")/$templates_version"
   mkdir -p "$isolated" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME"
-  cp "$source_dir/$WEB_TEMPLATE" "$isolated/$WEB_TEMPLATE"
+  cp "$ENGINE_WEB_TEMPLATE" "$isolated/$WEB_TEMPLATE"
   printf '%s\n' "$templates_version" > "$isolated/version.txt"
 
   # Re-hashed after the copy rather than trusting cp: this is the file that actually gets used.
-  verify_template "$WEB_TEMPLATE" "$isolated"
-  note "isolated Godot data at $WORK_DIR, holding $WEB_TEMPLATE only"
+  [ "$(sha256 "$isolated/$WEB_TEMPLATE")" = "$expected" ] || die \
+    "the copy of the Web template in $isolated does not match $ENGINE_WEB_TEMPLATE"
+  note "isolated Godot data at $WORK_DIR, holding the stripped $WEB_TEMPLATE only"
 }
 
 
@@ -174,11 +187,25 @@ _import_pass() {
 ## refused write, a cloud that answers with nonsense — and each one prints a diagnostic on the way
 ## past. A build that failed on "ERROR:" would fail on the tests working. What cannot appear is a
 ## FAIL line, a script error, a leak report, or anything other than exactly one terminal PASS.
+##
+## Takes the engine to run on, and the name of the log it writes into the artifact directory. The
+## same rules apply to both runs: the stripped engine has to pass the suite the editor passes.
 run_tests() {
-  note "running the suite"
-  local log="$ARTIFACT_DIR/test.log"
+  local engine="$1" log="$ARTIFACT_DIR/$2"
+  note "running the suite on $engine"
+
+  # Each run starts from the empty user:// a fresh install has, rather than from whatever the run
+  # before it left there. Only ever inside this build's isolated data: the same path anywhere else is
+  # somebody's save file.
+  local user_data
+  user_data="$(dirname "$(template_root)")/app_userdata"
+  case "$user_data" in
+    "$WORK_DIR"/*) rm -rf "$user_data" ;;
+    *) die "refusing to clear $user_data: it is not inside this build's isolated data" ;;
+  esac
+
   local status=0
-  timeout "$TEST_TIMEOUT" "$GODOT" --headless --fixed-fps 60 res://tests/test_runner.tscn \
+  timeout "$TEST_TIMEOUT" "$engine" --headless --fixed-fps 60 --path "$REPO_ROOT" res://tests/test_runner.tscn \
     >"$log" 2>&1 || status=$?
 
   [ "$status" -eq 124 ] && die "the suite exceeded ${TEST_TIMEOUT}s and was stopped. See $log"
@@ -236,10 +263,10 @@ export_web() {
 ## a hosted build that can be asked which commit it is, over HTTP, is the difference between
 ## qualifying Build B and believing you are looking at Build B.
 write_build_info() {
-  python3 - "$OUTPUT_DIR" "$BUILD_ID" "$COMMIT" "$DIRTY" <<'PY'
+  python3 - "$OUTPUT_DIR" "$BUILD_ID" "$COMMIT" "$DIRTY" "$ENGINE_RECIPE" <<'PY'
 import hashlib, json, os, re, sys, time
 
-output_dir, build_id, commit, dirty = sys.argv[1:5]
+output_dir, build_id, commit, dirty, engine_recipe = sys.argv[1:6]
 
 
 def lock(key):
@@ -275,6 +302,10 @@ info = {
     "built": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     "engine": lock("engine_version"),
     "export_templates": lock("templates_version"),
+    # index.wasm is the stripped engine, not the stock template: this is the recipe it was built
+    # from (tools/engine/build_template.sh --recipe-key on the commit above prints the same).
+    "engine_recipe": engine_recipe,
+    "emscripten": lock("emscripten_version"),
     "wavedash_sdk": lock("wavedash_sdk_version"),
     # The two numbers that decide whether a build can read what another build wrote. A rollback
     # compares these before it publishes, which is the whole reason they are in here.
@@ -364,12 +395,14 @@ main() {
   verify_engine_version
   verify_wavedash_sdk
   verify_preset
+  verify_engine_build native "$ENGINE_NATIVE"
+  ENGINE_RECIPE="$(engine_recipe_key)"
+  # Verifies the Web template too, and copies it into the only place the export can reach.
   isolate_godot_data
 
-  # Template verification happens against the isolated copy inside isolate_godot_data, which is the
-  # one the export can actually reach.
   import_project
-  run_tests
+  run_tests "$GODOT" test.log
+  run_tests "$REPO_ROOT/$ENGINE_NATIVE" test-stripped-engine.log
 
   bake_build_id
   export_web
