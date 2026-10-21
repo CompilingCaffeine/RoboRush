@@ -40,6 +40,7 @@ func run() -> void:
 	await _test_a_request_overtaken_before_it_is_ready_starts_nothing()
 	await _test_stopping_while_rendering_keeps_it_stopped()
 	_test_the_track_wanted_now_is_rendered_first()
+	_test_rendering_takes_more_of_a_frame_when_nobody_is_playing()
 	_test_the_mixer_drain_ends_on_the_mixer()
 	_test_a_healthy_output_never_trips_the_watchdog()
 	_test_a_stalled_output_is_noticed_and_reopened()
@@ -407,6 +408,30 @@ func _test_the_track_wanted_now_is_rendered_first() -> void:
 	AudioManager.prepare_music(&"__no_such_track")
 	check(not queue.has(&"__no_such_track"), "an id that is not a track is never queued")
 	AudioManager.stop_music()
+
+
+## The renderer's share of a frame follows the run's clock rather than the game state, which starts
+## as RUN: on the boot screen that would hand the gameplay rate to a screen whose only job is to
+## wait, and the menu loop would still be rendering when the menu opened.
+func _test_rendering_takes_more_of_a_frame_when_nobody_is_playing() -> void:
+	var was_timing := RunManager.is_timing()
+
+	RunManager.set_timing(true)
+	check(
+		AudioManager._render_budget_usec() == AudioManager.MUSIC_RENDER_BUDGET_USEC,
+		"a run being played gives the renderer its small share of the frame",
+	)
+	RunManager.set_timing(false)
+	check(
+		AudioManager._render_budget_usec() == AudioManager.MUSIC_RENDER_IDLE_BUDGET_USEC,
+		"and a game nobody is playing gives it the large one",
+	)
+	check(
+		AudioManager.MUSIC_RENDER_IDLE_BUDGET_USEC > AudioManager.MUSIC_RENDER_BUDGET_USEC,
+		"which is the larger of the two",
+	)
+
+	RunManager.set_timing(was_timing)
 
 
 ## Renders `id` through the manager's own queue, the way the game does, at the front of it.

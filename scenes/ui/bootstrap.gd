@@ -39,6 +39,20 @@ const SAVE_CONFLICT_CARD := preload("res://scenes/ui/save_conflict_card.tscn")
 ## to defer them — the game has no lobbies, no invites, and nothing to set up before they arrive.
 const SDK_CONFIG := {}
 
+## The track the menu opens with (`main_menu.gd`), which this scene starts rendering so that the
+## menu does not open in silence. The music is synthesised in the game, a few milliseconds a frame,
+## and the boot is mostly waiting: frames are what it has to spare. Named here rather than read
+## from the menu's script, because reading it from there would compile that script before this
+## scene's first frame, and the first frame is the one thing this scene must not delay.
+const MENU_MUSIC := &"menu"
+
+## The stages of a boot, in order, as the ready line reports them. `load` is the page opening to the
+## engine starting — the download and the WebAssembly compile — and exists only in a browser.
+## `engine` is the engine starting to this scene: its own setup, every autoload, and this scene.
+## `connect` is everything from here until the platform answers or is given up on, and `save` is
+## reconciling and reading the save.
+const STAGES: Array[StringName] = [&"load", &"engine", &"connect", &"save"]
+
 ## How many times this build has initialized the platform, which must never exceed one. The SDK's
 ## `init` is a once-per-page-load operation — it hands the host page a callback receiver and
 ## mutates the JavaScript-side engine instance — so a second call is not a harmless repeat but a
@@ -58,15 +72,48 @@ signal finished(online: bool)
 ## inside the test runner would replace the runner itself — mid-run, with the results in it.
 var navigation_enabled := true
 
+## Milliseconds each of `STAGES` took, filled in as the boot gets through them. A browser playtest
+## is a URL and its console, so how long a boot took on somebody else's machine and connection is
+## only ever known if the game says so; this is what the ready line says it from.
+var timings: Dictionary[StringName, int] = {}
+
+## The menu, loaded while the platform is connecting. Held until the scene change, which then finds
+## it already in the resource cache.
+var _menu_scene: PackedScene
+
+## When the stage in progress began, in engine milliseconds.
+var _stage_started_msec := 0
+
 @onready var _status: Label = %Status
 
 func _ready() -> void:
+	# The engine's clock started with the engine, so the time on it now is the `engine` stage.
+	_stage_started_msec = Time.get_ticks_msec()
+	timings[&"engine"] = _stage_started_msec
+
 	# The status line has to be on screen before anything is waited for, not after: the whole
 	# point of it is the seconds spent waiting.
 	_set_status("CONNECTING...")
 	await get_tree().process_frame
 
-	var online := await _connect_to_platform()
+	_init_platform()
+
+	# The rest of the boot's own work, done while the platform answers rather than after it, so
+	# that it overlaps the network round trip instead of being added to it. A frame later, because
+	# the frame awaited above resumes this before it is drawn, not after: work here would hold up
+	# the very status line it is meant to happen behind. Measured, that was 20 ms later on screen in
+	# a browser on a fast machine, and 65 ms on one four times slower.
+	await get_tree().process_frame
+	# Rendered a few milliseconds a frame from here, it is ready when the menu opens rather than a
+	# second or more after. See `MENU_MUSIC`.
+	AudioManager.prepare_music(MENU_MUSIC)
+	# The menu is the largest thing left to load before the player sees anything new: about 75 ms
+	# in a browser on a fast machine and 290 ms on one four times slower, all of which used to be
+	# spent after the wait, when it was the only thing the player was waiting for. Off the web there
+	# is nothing to overlap, and the load costs what it always did, just earlier.
+	_menu_scene = load(SceneRouter.MAIN_MENU_SCENE) as PackedScene
+	var online := await _wait_for_platform()
+	_end_stage(&"connect")
 
 	_set_status("SYNCING SAVE..." if online else "LOADING SAVE...")
 
@@ -84,6 +131,11 @@ func _ready() -> void:
 	SaveManager.initialize()
 	if not SaveManager.is_initialized():
 		await SaveManager.initialized
+	_end_stage(&"save")
+	# What the engine's clock cannot see: the time before it started. The page's clock can.
+	var page_age := _page_age_msec()
+	if page_age >= 0:
+		timings[&"load"] = maxi(0, page_age - Time.get_ticks_msec())
 
 	# The one line this build prints whether or not it is a debug build, and the only one. A hosted
 	# playtest is a URL, and the browser console is the only instrument a tester has: this says
@@ -101,11 +153,17 @@ func _ready() -> void:
 	# looks completely normal and is thrown away when the tab closes. That failure is invisible from
 	# inside the game and indistinguishable, to a tester, from the game not saving — so it is stated
 	# here rather than guessed at afterwards.
+	#
+	# And how long it all took, stage by stage, because "it takes a while to load" is the other
+	# report a hosted build gets, and the stages have different fixes: the download is the size
+	# of the build and how it is served, the engine is the engine and the scripts, and the connect
+	# and the save are the platform and the network.
 	var id := build_id()
-	print("Robo Rush %s ready: %s, %s" % [
+	print("Robo Rush %s ready: %s, %s, %s" % [
 		id if not id.is_empty() else "dev",
 		"cloud save" if online else "local save",
 		"user:// persists" if OS.is_userfs_persistent() else "user:// IS NOT PERSISTENT",
+		describe_timings(timings),
 	])
 
 	finished.emit(online)
@@ -122,16 +180,35 @@ static func build_id() -> String:
 	return str(ProjectSettings.get_setting("application/config/version", ""))
 
 
-## Brings up the platform and waits, briefly, to hear back from it. Returns whether the game is
-## running against a live Wavedash session — false means local-only, which is a normal outcome
-## rather than a failure.
-func _connect_to_platform() -> bool:
+## A boot's timings as the ready line states them: the whole of it, then each stage that has a
+## time, in seconds — "2.9 s after the page opened (load 1.6, engine 0.7, connect 0.4, save 0.2)".
+## The stages are contiguous, so they add up to the whole.
+static func describe_timings(stage_msec: Dictionary[StringName, int]) -> String:
+	var parts := PackedStringArray()
+	var total := 0
+	for stage: StringName in STAGES:
+		if stage_msec.has(stage):
+			parts.append("%s %.1f" % [stage, stage_msec[stage] / 1000.0])
+			total += stage_msec[stage]
+	return "%.1f s after %s (%s)" % [
+		total / 1000.0,
+		"the page opened" if stage_msec.has(&"load") else "launch",
+		", ".join(parts),
+	]
+
+
+## Brings up the platform. Returns at once; `_wait_for_platform` is the waiting.
+func _init_platform() -> void:
 	if _sdk_init_calls == 0:
 		_sdk_init_calls += 1
 		# Called on every platform, though it only does anything in a browser: the SDK guards its
 		# own web-only internals, and one unconditional call is one fewer path to be wrong about.
 		WavedashSDK.init(SDK_CONFIG)
 
+
+## Waits, briefly, to hear back from the platform. Returns whether the game is running against a
+## live Wavedash session — false means local-only, which is a normal outcome rather than a failure.
+func _wait_for_platform() -> bool:
 	# Nothing to wait for off the web. There is no host page, no session, and no overlay to
 	# dismiss, so a desktop launch would otherwise spend the timeout below staring at a status
 	# line to learn what the platform already knows.
@@ -178,6 +255,22 @@ func _on_conflict_detected(local: Dictionary, cloud: Dictionary) -> void:
 
 func _set_status(text: String) -> void:
 	_status.text = text
+
+
+## Records how long the stage in progress took, and starts the next one.
+func _end_stage(stage: StringName) -> void:
+	var now := Time.get_ticks_msec()
+	timings[stage] = now - _stage_started_msec
+	_stage_started_msec = now
+
+
+## How long ago the page the engine runs in was opened, in milliseconds, or -1 where there is no
+## page to ask.
+static func _page_age_msec() -> int:
+	if not OS.has_feature("web"):
+		return -1
+	var age: Variant = JavaScriptBridge.eval("performance.now()")
+	return int(age) if age is float or age is int else -1
 
 
 ## Debug builds only. The export is a player's browser tab, and a status line is the only thing

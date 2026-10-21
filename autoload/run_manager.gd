@@ -475,6 +475,13 @@ func set_timing(timing: bool) -> void:
 	_is_timing = timing
 
 
+## Whether the clock is running: a run is open and somebody is playing it. False on the boot
+## screen, the menu, the pause menu and the summary, which makes it the thing to ask before
+## spending a frame on work that could wait.
+func is_timing() -> bool:
+	return _is_timing
+
+
 ## Charges `amount` against the run's enemy scaling, up to the ceiling. Routed through here rather
 ## than added to the field directly so there is one place the bound is applied and one place to
 ## read to find out that there is one.
