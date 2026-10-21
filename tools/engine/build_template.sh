@@ -21,8 +21,13 @@
 #     and so cannot notice the game reaching for one the profile removed. That is the one way a
 #     stripped engine breaks, and without this it breaks in a browser instead of in a test.
 #
-# The recipe is the Godot commit and Emscripten version in tools/engine.lock, the profile, and this
-# script. Each build writes the key of the recipe it came from beside what it built, and
+# The source is Godot's at the pinned commit with the patches in tools/engine/patches applied, and
+# nothing else. They are for what a profile cannot say: SCons options choose which parts of the
+# engine are compiled, and a patch changes how a part that is compiled behaves. Each one says what
+# it changes and why at its top.
+#
+# The recipe is the Godot commit and Emscripten version in tools/engine.lock, the profile, the
+# patches, and this script. Each build writes the key of the recipe it came from beside what it built, and
 # verify_engine_build in tools/ci/lib.sh refuses an engine whose key is not the current one, so an
 # engine built before an edit to any of them cannot be exported with afterwards. CI caches the
 # builds under the same key: a commit that leaves the recipe alone reuses them, and one that changes
@@ -78,6 +83,22 @@ fetch_source() {
   local fetched
   fetched="$(git -C "$source" rev-parse HEAD)"
   [ "$fetched" = "$commit" ] || die "$tag is $fetched, but $LOCK_FILE pins $commit. Refusing to build it."
+}
+
+## Puts the source back to the pinned commit and applies every patch in tools/engine/patches, in
+## name order. Reset first, every time, so the tree is exactly what the recipe says: a patch that
+## has been edited or deleted since the last build is not left behind in it. SCons decides what to
+## rebuild by content as well as timestamp, so a file reset and patched back to what it was is not
+## recompiled.
+apply_patches() {
+  local source="$WORK_DIR/godot" patch
+  git -C "$source" checkout --quiet -- . || die "could not reset the Godot source in $source"
+  for patch in "$REPO_ROOT"/tools/engine/patches/*.patch; do
+    [ -f "$patch" ] || continue
+    git -C "$source" apply --whitespace=nowarn "$patch" \
+      || die "$(basename "$patch") does not apply to the pinned Godot source"
+    note "applied $(basename "$patch")"
+  done
 }
 
 ## SCons at the pinned version, in an environment of its own rather than whatever the machine has.
@@ -223,6 +244,7 @@ main() {
   # into the work directory would resolve against that instead.
   WORK_DIR="$(cd "$WORK_DIR" && pwd)"
   fetch_source
+  apply_patches
   install_scons
   "build_$1"
 }

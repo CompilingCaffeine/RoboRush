@@ -95,7 +95,7 @@ godot --headless --export-release "macOS" build/macos/robo_rush.zip
 godot --headless --export-release "Web" build/web/index.html
 ```
 
-The plain Web export above uses Godot's stock Web template. The browser build that ships runs on an engine compiled for this game instead, with everything it does not use switched off in [tools/engine/profile.py](tools/engine/profile.py): 22.9 MB of WebAssembly against the stock 39.5 MB (3.7 MB against 6.9 MB with brotli). Build it once, and again whenever the profile or the pinned engine changes:
+The plain Web export above uses Godot's stock Web template. The browser build that ships runs on an engine compiled for this game instead, with everything it does not use switched off in [tools/engine/profile.py](tools/engine/profile.py): 22.9 MB of WebAssembly against the stock 39.5 MB (3.7 MB against 6.9 MB with brotli). The few changes a profile cannot make, such as not compiling 3D shaders at startup, are patches to the Godot source in [tools/engine/patches](tools/engine/patches), each explained at its top. Build it once, and again whenever the profile, a patch or the pinned engine changes:
 
 ```bash
 tools/engine/build_template.sh web      # the Web export template

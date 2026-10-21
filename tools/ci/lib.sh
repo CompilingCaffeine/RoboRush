@@ -69,10 +69,12 @@ ENGINE_NATIVE="$ENGINE_DIR/native/godot"
 # shellcheck disable=SC2034  # read by the scripts that source this, not here
 ENGINE_NATIVE_SUITE_ARGS=(-- --skip=Performance)
 
-# Besides the two lock values, the files that decide what the stripped engine is.
+# Besides the two lock values, the files that decide what the stripped engine is: the profile, the
+# build script, and every patch it applies to the Godot source, in the order it applies them.
 ENGINE_RECIPE_FILES=(
   "tools/engine/profile.py"
   "tools/engine/build_template.sh"
+  tools/engine/patches/*.patch
 )
 
 
