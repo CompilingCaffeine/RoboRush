@@ -10,6 +10,11 @@ extends TestCase
 ## Runs headless, where there is no audio device. That is fine — Godot's AudioServer still
 ## reports bus and player state, which is all of this.
 
+## How many frames a track may take to render through the manager's own queue. A track is a few
+## hundred milliseconds of work at a couple of milliseconds a frame, so this is several times what
+## the longest needs and only there so a render that never finishes fails rather than hangs.
+const RENDER_FRAMES_MAX := 2000
+
 ## Restored in _teardown: the suites after this one should not inherit a boss theme.
 var _entry_music: StringName
 
@@ -21,12 +26,20 @@ func run() -> void:
 	_test_every_sound_in_the_library_loads()
 	_test_every_priority_sound_from_the_spec_exists()
 	_test_unknown_ids_are_survivable()
+	# The tracks the checks below play, rendered the way the game renders them. Everything after
+	# this point can then expect a request for either to start at once, as it does in a run.
+	await _render(&"explore")
+	await _render(&"boss")
 	_test_music_loops()
 	await _test_music_keeps_playing()
 	await _test_music_crossfades()
 	await _test_repeating_a_track_does_not_restart_it()
 	await _test_stopping_music_fades_it_out()
 	await _test_stop_all_leaves_nothing_playing()
+	await _test_a_track_still_rendering_starts_when_ready()
+	await _test_a_request_overtaken_before_it_is_ready_starts_nothing()
+	await _test_stopping_while_rendering_keeps_it_stopped()
+	_test_the_track_wanted_now_is_rendered_first()
 	_test_the_mixer_drain_ends_on_the_mixer()
 	_test_a_healthy_output_never_trips_the_watchdog()
 	_test_a_stalled_output_is_noticed_and_reopened()
@@ -132,11 +145,10 @@ func _test_every_sound_in_the_library_loads() -> void:
 			AudioManager._streams.has(id),
 			"sound '%s' loaded from %s" % [id, AudioManager.LIBRARY[id]],
 		)
+	# The music is rendered on demand rather than loaded, so what can be checked up front is that
+	# every track the manager offers has a score to render. `test_music` renders each of them.
 	for id: StringName in AudioManager.MUSIC_LIBRARY:
-		check(
-			AudioManager._music_streams.has(id),
-			"track '%s' loaded from %s" % [id, AudioManager.MUSIC_LIBRARY[id]],
-		)
+		check(MusicScore.track(id) != null, "track '%s' has a score" % id)
 
 
 ## Spec section 22 lists ten priority sounds by name. This is the list, and it is a test
@@ -172,10 +184,11 @@ func _test_unknown_ids_are_survivable() -> void:
 
 
 ## The one that matters most. Every track is a loop, and a WAV whose loop mode is off plays
-## once and leaves the game silent for the rest of the run.
+## once and leaves the game silent for the rest of the run. `test_music` holds every track the
+## synthesiser makes to this; here it is the streams the manager itself ended up with.
 func _test_music_loops() -> void:
-	for id: StringName in AudioManager.MUSIC_LIBRARY:
-		var wav := AudioManager._music_streams[id] as AudioStreamWAV
+	for id: StringName in [&"explore", &"boss"]:
+		var wav: AudioStreamWAV = AudioManager._music_streams.get(id)
 		if not require(wav, "track '%s' is a WAV" % id):
 			continue
 		check(
@@ -308,6 +321,119 @@ func _test_stop_all_leaves_nothing_playing() -> void:
 			still_playing += 1
 	check(still_playing == 0, "stop_all leaves nothing playing (%d still going)" % still_playing)
 	check(AudioManager._music_id.is_empty(), "stop_all forgets the current track")
+
+
+## The music is rendered the first time it is wanted, so a request can arrive before its track
+## exists. What has to hold is that nothing goes quiet waiting for it: the track already playing
+## carries on, and the crossfade happens when the new one is ready, through the same path as ever.
+func _test_a_track_still_rendering_starts_when_ready() -> void:
+	AudioManager.play_music(&"explore")
+	await advance_physics(int(AudioManager.MUSIC_FADE_SECONDS * 60.0) + 20)
+	var playing := AudioManager._music[AudioManager._music_active]
+	_forget(&"dev_boss")
+
+	AudioManager.play_music(&"dev_boss")
+	check(AudioManager._music_id == &"dev_boss", "a track still rendering is the current one at once")
+	check(AudioManager._audible_id == &"explore", "but what is heard is still the last one")
+	check(playing.playing and playing.volume_db > -1.0, "which carries on at full volume")
+	check(
+		"(rendering)" in AudioManager.describe_state(),
+		"and the overlay says why (%s)" % AudioManager.describe_state(),
+	)
+
+	var frames := await _wait_until_ready(&"dev_boss")
+	var incoming := AudioManager._music[AudioManager._music_active]
+	check(AudioManager._audible_id == &"dev_boss", "once rendered (%d frames), the track starts" % frames)
+	check(incoming != playing and incoming.playing, "on the other player")
+	check(incoming.stream == AudioManager._music_streams.get(&"dev_boss"), "playing what was rendered")
+	check(AudioManager._fade < 1.0, "and fading in, rather than cutting")
+
+
+## A request replaced before it is ready must not start late. Walking into the boss room and straight
+## back out is the shape of it: the explore loop is asked for again while the boss loop is still
+## rendering, and the boss loop must not cut in a second later over a room that did not want it.
+func _test_a_request_overtaken_before_it_is_ready_starts_nothing() -> void:
+	AudioManager.play_music(&"explore")
+	await advance_physics(int(AudioManager.MUSIC_FADE_SECONDS * 60.0) + 20)
+	var active := AudioManager._music_active
+	_forget(&"boss")
+
+	AudioManager.play_music(&"boss")
+	AudioManager.play_music(&"explore")
+	check(AudioManager._music_id == &"explore", "the track asked for last is the current one")
+	check(AudioManager._music_active == active, "and the one playing was never swapped out")
+
+	await _wait_until_ready(&"boss")
+	check(AudioManager._audible_id == &"explore", "the overtaken track does not start once it is ready")
+	check(AudioManager._music_active == active, "and the explore loop was not restarted for it")
+
+
+func _test_stopping_while_rendering_keeps_it_stopped() -> void:
+	_forget(&"data_boss")
+	AudioManager.play_music(&"data_boss")
+	AudioManager.stop_music()
+
+	await _wait_until_ready(&"data_boss")
+	await advance_physics(int(AudioManager.MUSIC_FADE_SECONDS * 60.0) + 20)
+
+	check(AudioManager._audible_id.is_empty(), "a track that finishes rendering after a stop does not start")
+	var anything_audible := false
+	for player: AudioStreamPlayer in AudioManager._music:
+		if player.playing and player.volume_db > AudioManager.SILENT_DB:
+			anything_audible = true
+	check(not anything_audible, "and nothing is playing")
+
+
+## The order the queue works in. A floor asks for both of its tracks as it begins, and the one its
+## opening room plays has to be the first one ready.
+func _test_the_track_wanted_now_is_rendered_first() -> void:
+	_forget(&"cloud_boss")
+	_forget(&"core_boss")
+	AudioManager.prepare_music(&"cloud_boss")
+	AudioManager.prepare_music(&"core_boss")
+	var queue := AudioManager._render_queue
+	check(
+		queue.find(&"cloud_boss") < queue.find(&"core_boss"),
+		"tracks asked for ahead are rendered in the order they were asked for",
+	)
+
+	AudioManager.play_music(&"core_boss")
+	check(queue.front() == &"core_boss", "a track wanted now goes to the front of the queue")
+	AudioManager.prepare_music(&"core_boss")
+	check(queue.count(&"core_boss") == 1, "asking for it again does not queue it twice")
+	AudioManager.prepare_music(&"cloud_boss")
+	check(queue.front() == &"core_boss", "and asking ahead for another does not push it back")
+
+	AudioManager.prepare_music(&"__no_such_track")
+	check(not queue.has(&"__no_such_track"), "an id that is not a track is never queued")
+	AudioManager.stop_music()
+
+
+## Renders `id` through the manager's own queue, the way the game does, at the front of it.
+func _render(id: StringName) -> void:
+	AudioManager._queue_render(id, true)
+	await _wait_until_ready(id)
+
+
+## Advances frames until `id` is rendered, and returns how many that took.
+func _wait_until_ready(id: StringName) -> int:
+	var frames := 0
+	while not AudioManager.is_music_ready(id) and frames < RENDER_FRAMES_MAX:
+		await advance_physics(1)
+		frames += 1
+	check(
+		AudioManager.is_music_ready(id),
+		"'%s' renders within %d frames (took %d)" % [id, RENDER_FRAMES_MAX, frames],
+	)
+	return frames
+
+
+## Puts `id` back to not rendered, so a check can watch it being rendered. On the web this would leave
+## the old copy in the browser's audio memory; a test run is never on the web.
+func _forget(id: StringName) -> void:
+	AudioManager._music_streams.erase(id)
+	AudioManager._render_queue.erase(id)
+	AudioManager._render_jobs.erase(id)
 
 
 ## Stopping a stream only marks its playback for deletion; the audio thread releases it on a later

@@ -137,13 +137,18 @@ The two variables are needed only when the engine changes; a relock without them
 - Projectile behaviour is data-driven, so upgrades such as ricochet, splitting, homing, chaining, and explosions compose without item-pair-specific code.
 - Design rationale for data lives in `metadata/design_notes` on the resource, scene node, or sub-resource it explains (the inspector's Metadata section), not in `;` comments: the Godot editor deletes comments from `.tres` and `.tscn` files whenever it saves them. `tools/ci/check_design_notes.py` enforces this.
 - Procedural floor generation uses a connected room graph; treasure, shop, and boss rooms are dead ends so they never block progress.
-- Generated art, audio, music, and UI font assets are committed. Regenerate them only when changing source generators:
+- Generated art, audio, and UI font assets are committed. Regenerate them only when changing source generators:
 
   ```bash
   python3 tools/generate_art.py .
   python3 tools/generate_audio.py .
-  python3 tools/generate_music.py .
   python3 tools/generate_ui_font.py .
+  ```
+
+- The music ships as notes, not audio. `scripts/audio/music_score.gd` holds every track, and `scripts/audio/music_synth.gd` renders each one the first time the game needs it, a couple of milliseconds a frame. To listen to the tracks outside the game, write them out as WAVs:
+
+  ```bash
+  godot --headless --path . --script tools/render_music.gd -- build/music
   ```
 
 - The browser build provides an ascending fastest-victory leaderboard. Desktop builds do not expose hosted leaderboard features.

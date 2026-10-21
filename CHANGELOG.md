@@ -15,6 +15,7 @@ What changed in Robo Rush, written for playtesters. The newest build is at the t
 
 - **Rarity now affects how often items appear.** Common and uncommon items are the usual finds from clearing a room. Rare items are more likely in treasure rooms and shops, and the boss still offers the best it has. Previously every item was equally likely, so rare items were the ones you saw most, especially on the first floor.
 - **The minimap marks the shop and the boss room** once you have been inside them: the shop in blue, the boss room in red with a dark mark in the middle.
+- **The music no longer has to be downloaded.** The game now carries it as notes and plays them through its own synthesiser, which makes the download about 1.4 MB smaller again. It sounds the same. The first time a track is needed it takes a second or two to prepare, so the previous music plays on a little longer before it changes.
 - **The browser version is about half the size to download**, so it starts sooner on a slow connection. It now runs on a copy of the engine built for this game, without the 3D, video, networking and other parts it never used.
 - **The game is about 4 MB smaller to download.** Every build was carrying the store-page artwork, which the game never shows.
 

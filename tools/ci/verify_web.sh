@@ -54,7 +54,7 @@ EXPECTED_FILES=(
 REQUIRED_FILES=("index.html" "index.js" "index.wasm" "index.pck" "build-info.json")
 
 # Wavedash accepts a folder or zip up to 1 GB. This is the only hard external limit involved, and
-# it is nowhere near the current 26.5 MB, which is exactly why it is worth asserting: the failure it
+# it is nowhere near the current 24.4 MB, which is exactly why it is worth asserting: the failure it
 # guards against is not today's build, it is the one that accidentally includes uncompressed audio.
 HARD_LIMIT_BYTES=$((1024 * 1024 * 1024))
 
@@ -62,12 +62,14 @@ HARD_LIMIT_BYTES=$((1024 * 1024 * 1024))
 # arrive — but growth nobody predicted is worth a line in the log, because the alternative is
 # finding out from a player on a phone.
 #
-# Both moved twice in 2026-10. First when art/store/ stopped being exported: the total had stood at
-# 41500000 while the store-page covers took the real build to 47.4 MB, so by 2026-09-26 this warning
-# was firing on main with nothing failing, and the leak check above is what now makes that growth a
-# failure. Then when the Web build moved to the stripped engine, which took index.wasm from
-# 39513091 bytes to the figure below and the whole upload from 43.2 MB to 26.5.
-BASELINE_TOTAL_BYTES=26600000
+# The total moved three times in 2026-10. First when art/store/ stopped being exported: it had stood
+# at 41500000 while the store-page covers took the real build to 47.4 MB, so by 2026-09-26 this
+# warning was firing on main with nothing failing, and the leak check above is what now makes that
+# growth a failure. Then when the Web build moved to the stripped engine, which took index.wasm from
+# 39513091 bytes to the figure below and the whole upload from 43.2 MB to 26.5. Then when the music
+# started shipping as a score rather than as thirteen rendered loops, which took index.pck from
+# 3.3 MB to 1.2 and the upload to 24.4.
+BASELINE_TOTAL_BYTES=24400000
 BASELINE_WASM_BYTES=22908496
 GROWTH_WARNING_PERCENT=10
 

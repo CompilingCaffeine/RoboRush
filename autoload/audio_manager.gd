@@ -15,6 +15,13 @@ extends Node
 ## `play_sfx` with a loop flag. Cutting from the explore loop to the boss loop is jarring
 ## in a way that has nothing to do with the tracks and everything to do with the cut, and
 ## a crossfade needs both playing at once for a moment.
+##
+## The music also does not exist until it is asked for. The game ships it as notes
+## (`MusicScore`) and renders each track the first time it is wanted, a couple of
+## milliseconds a frame (`MusicSynth`), so a track asked for before it is ready starts
+## when it is: whatever was playing carries on until then, and the crossfade happens as
+## usual, a moment later. `prepare_music` asks ahead, which is how a floor's tracks are
+## usually ready before its first room needs them.
 
 const SFX_BUS := &"SFX"
 const MUSIC_BUS := &"Music"
@@ -47,8 +54,8 @@ const LIBRARY := {
 }
 
 ## Spec section 22: chiptune, industrial percussion, fast arcade loops. One track per
-## situation the player can be in for minutes at a time, and *all five* in A minor so a
-## crossfade between any two is a key change nobody notices.
+## situation the player can be in for minutes at a time, and every one of them in A minor so
+## a crossfade between any two is a key change nobody notices.
 ##
 ## That rule is why Development sounds different without being in a different key: its two
 ## loops are told apart by tempo, by an offbeat bass, and by leaning on the flat second rather
@@ -56,22 +63,16 @@ const LIBRARY := {
 ## and it should sound like the same game changing its mind, not like a track ending.
 ##
 ## Which floor gets which pair is `FloorTheme`'s business, not this file's. Nothing here knows
-## what a floor is; it owns the library and the crossfade and nothing else.
-const MUSIC_LIBRARY := {
-	&"menu": "res://audio/music/menu.wav",
-	&"explore": "res://audio/music/explore.wav",
-	&"boss": "res://audio/music/boss.wav",
-	&"dev_explore": "res://audio/music/dev_explore.wav",
-	&"dev_boss": "res://audio/music/dev_boss.wav",
-	&"data_explore": "res://audio/music/data_explore.wav",
-	&"data_boss": "res://audio/music/data_boss.wav",
-	&"cloud_explore": "res://audio/music/cloud_explore.wav",
-	&"cloud_boss": "res://audio/music/cloud_boss.wav",
-	&"exec_explore": "res://audio/music/exec_explore.wav",
-	&"exec_boss": "res://audio/music/exec_boss.wav",
-	&"core_explore": "res://audio/music/core_explore.wav",
-	&"core_boss": "res://audio/music/core_boss.wav",
-}
+## what a floor is; it owns the library and the crossfade and nothing else. The tracks
+## themselves are in `MusicScore`.
+const MUSIC_LIBRARY := MusicScore.TRACK_IDS
+
+## How much of a frame the music renderer may spend, in microseconds. A track is under 10 ms of
+## work per second of music, so at this rate the longest loop, thirty seconds, is ready in under
+## two seconds of frames — measured in a browser, the menu loop starts about a second after it
+## is asked for — and a frame never pays more than this for it: about a seventh of a 60 Hz
+## frame, in exchange for not shipping 2.15 MB of rendered audio.
+const MUSIC_RENDER_BUDGET_USEC := 2500
 
 ## Seconds to crossfade between tracks. Long enough not to read as a cut, short enough that
 ## walking into the boss room feels like it caused something.
@@ -104,14 +105,27 @@ const OUTPUT_STALL_SECONDS := 1.0
 const OUTPUT_RECOVERY_COOLDOWN := 5.0
 
 var _streams: Dictionary[StringName, AudioStream] = {}
-var _music_streams: Dictionary[StringName, AudioStream] = {}
 var _pool: Array[AudioStreamPlayer] = []
 var _next_index := 0
+
+## Every track rendered so far. Kept for the session rather than released when it stops, because
+## on the web a stream is copied into the browser's audio memory the first time it plays and never
+## let go of: a track rendered twice would sit there twice.
+var _music_streams: Dictionary[StringName, AudioStreamWAV] = {}
+
+## Tracks waiting to be rendered, most urgent first, and the render in progress for any that have
+## been started. A render that loses its place to a more urgent one keeps what it has done.
+var _render_queue: Array[StringName] = []
+var _render_jobs: Dictionary[StringName, MusicSynth] = {}
 
 ## Two music players, crossfaded between. `_music_active` indexes whichever is fading *in*.
 var _music: Array[AudioStreamPlayer] = []
 var _music_active := 0
+
+## The track the game asked for, and the one actually on the active player. They differ only while
+## the one asked for is still being rendered.
 var _music_id: StringName = &""
+var _audible_id: StringName = &""
 
 ## 0..1 progress of the current crossfade. Reaches 1 and stays there between changes.
 var _fade := 1.0
@@ -156,22 +170,37 @@ func play_sfx(id: StringName, pitch_variation := 0.0, volume_db := 0.0) -> void:
 ## Crossfades to `id`, or does nothing if it is already the track that is playing. The
 ## no-op case is the important one: this is called on every room entry, and restarting the
 ## explore loop each time the player walks through a door would be worse than no music.
+##
+## A track that has not been rendered yet goes to the front of the queue, and the crossfade
+## starts when it is ready. Until then the music already playing carries on, which is a better
+## thing to hear for a second than silence.
 func play_music(id: StringName) -> void:
 	if id == _music_id:
 		return
-	var stream: AudioStream = _music_streams.get(id)
-	if stream == null:
+	if not MusicScore.has(id):
 		push_warning("AudioManager: unknown music id '%s'." % id)
 		return
 
 	_music_id = id
-	_music_active = 1 - _music_active
-	_fade = 0.0
+	# Asked for again before something else it had been replaced by was ready: it is still playing,
+	# so there is nothing to start.
+	if id == _audible_id:
+		return
+	if _music_streams.has(id):
+		_start_music(id)
+	else:
+		_queue_render(id, true)
 
-	var incoming := _music[_music_active]
-	incoming.stream = stream
-	incoming.volume_db = SILENT_DB
-	incoming.play()
+
+## Renders `id` ahead of being asked for it, behind anything already waiting. Does nothing for a
+## track that is ready or an id that is not one.
+func prepare_music(id: StringName) -> void:
+	if MusicScore.has(id):
+		_queue_render(id, false)
+
+
+func is_music_ready(id: StringName) -> bool:
+	return _music_streams.has(id)
 
 
 ## Fades the music out and leaves it out. Called when a run ends: the victory fanfare and the
@@ -180,6 +209,7 @@ func stop_music() -> void:
 	if _music_id.is_empty():
 		return
 	_music_id = &""
+	_audible_id = &""
 	_fade = 0.0
 	# Swapping to the other player with nothing loaded makes the outgoing track fade out
 	# through exactly the same code path as a normal change, rather than a second one.
@@ -191,7 +221,52 @@ func _process(delta: float) -> void:
 	# Before the fade and outside its early-out, deliberately. The watchdog has to run on every
 	# frame of a session that is *not* changing tracks, which is almost all of them.
 	_step_output_watchdog(delta, AudioServer.get_time_since_last_mix())
+	_step_render()
 	_step_fade(delta)
+
+
+func _start_music(id: StringName) -> void:
+	_audible_id = id
+	_music_active = 1 - _music_active
+	_fade = 0.0
+
+	var incoming := _music[_music_active]
+	incoming.stream = _music_streams[id]
+	incoming.volume_db = SILENT_DB
+	incoming.play()
+
+
+func _queue_render(id: StringName, urgent: bool) -> void:
+	if _music_streams.has(id):
+		return
+	var position := _render_queue.find(id)
+	if position == 0 or (position > 0 and not urgent):
+		return
+	if position > 0:
+		_render_queue.remove_at(position)
+	if urgent:
+		_render_queue.push_front(id)
+	else:
+		_render_queue.push_back(id)
+
+
+## Spends this frame's budget on the most urgent track, and starts it if it finished and is still
+## the one the game wants.
+func _step_render() -> void:
+	if _render_queue.is_empty():
+		return
+	var id := _render_queue[0]
+	var job: MusicSynth = _render_jobs.get(id)
+	if job == null:
+		job = MusicSynth.new(MusicScore.track(id))
+		_render_jobs[id] = job
+	if not job.step(Time.get_ticks_usec() + MUSIC_RENDER_BUDGET_USEC):
+		return
+	_render_queue.pop_front()
+	_render_jobs.erase(id)
+	_music_streams[id] = job.stream
+	if id == _music_id and id != _audible_id:
+		_start_music(id)
 
 
 ## Both music players are driven every frame rather than by a Tween, because a fade that is
@@ -282,6 +357,7 @@ func stop_all() -> void:
 	for player: AudioStreamPlayer in _music:
 		player.stop()
 	_music_id = &""
+	_audible_id = &""
 
 
 func _notification(what: int) -> void:
@@ -334,6 +410,10 @@ func _drain_mixer() -> void:
 func describe_state() -> String:
 	var player := _music[_music_active]
 	var track := String(_music_id) if not _music_id.is_empty() else "none"
+	# A track still being rendered is the one honest reason for the requested track and what is
+	# heard to differ, and it is worth seeing as such rather than as a crossfade that never began.
+	if _music_id != _audible_id and not _music_id.is_empty():
+		track += " (rendering)"
 	var voices := 0
 	for sfx: AudioStreamPlayer in _pool:
 		if sfx.playing:
@@ -403,27 +483,6 @@ func _load_library() -> void:
 			push_warning("AudioManager: failed to load '%s'." % LIBRARY[id])
 			continue
 		_streams[id] = stream
-
-	for id: StringName in MUSIC_LIBRARY:
-		var stream := load(MUSIC_LIBRARY[id]) as AudioStream
-		if stream == null:
-			push_warning("AudioManager: failed to load '%s'." % MUSIC_LIBRARY[id])
-			continue
-		# Set here rather than trusted from the .import file. A loop flag lost in a reimport
-		# turns a twenty-second loop into twenty seconds of music followed by silence, which
-		# is the kind of bug that gets reported as "the music is broken sometimes".
-		#
-		# `loop_end` is a frame index and must be the end of the sample, not 0. A zero-length
-		# loop region is not "loop the whole thing" — the playback hits the end of the loop on
-		# its first mix and goes inactive, so every track was silent from the moment it started.
-		# The importer spells the same idea as -1, but that is wrapped to the length at import
-		# time only; the property itself has no such convenience.
-		var wav := stream as AudioStreamWAV
-		if wav != null:
-			wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
-			wav.loop_begin = 0
-			wav.loop_end = roundi(wav.get_length() * wav.mix_rate)
-		_music_streams[id] = stream
 
 
 func _build_music_players() -> void:
