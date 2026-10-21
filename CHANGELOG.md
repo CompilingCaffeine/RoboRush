@@ -10,12 +10,13 @@ What changed in Robo Rush, written for playtesters. The newest build is at the t
 
 - **Mouse aim.** The robot aims at the mouse pointer when you move it, and holding the left mouse button fires towards it. The arrow keys and the right stick still work; whichever you used last sets the aim. Turn it off in Settings under **Mouse aim** if a trackpad keeps firing by accident. The controls card shows the mouse while the setting is on.
 - **Eight new combat rooms** on the first two floors, four each. The Help Desk gains a queue, a call centre, a waiting room, and a break room. Development gains a sprint board, a code freeze, a merge window, and a stand-up. You will see far fewer repeated rooms on the floors every run starts with.
+- **The browser console says how long the game took to start**, stage by stage: the download, the engine starting, connecting to Wavedash, and loading your save. If the game is slow to start for you, the line that begins "Robo Rush" is the one to send us.
 
 ### Changed
 
 - **Rarity now affects how often items appear.** Common and uncommon items are the usual finds from clearing a room. Rare items are more likely in treasure rooms and shops, and the boss still offers the best it has. Previously every item was equally likely, so rare items were the ones you saw most, especially on the first floor.
 - **The minimap marks the shop and the boss room** once you have been inside them: the shop in blue, the boss room in red with a dark mark in the middle.
-- **The music no longer has to be downloaded.** The game now carries it as notes and plays them through its own synthesiser, which makes the download about 1.4 MB smaller again. It sounds the same. The first time a track is needed it takes a second or two to prepare, so the previous music plays on a little longer before it changes.
+- **The music no longer has to be downloaded.** The game now carries it as notes and plays them through its own synthesiser, which makes the download about 1.4 MB smaller again. It sounds the same. The title music is prepared while the game is connecting, so it plays as soon as the menu opens, and the menu itself opens a little sooner after your save loads. Elsewhere, the first time a track is needed it takes a second or two to prepare, so the previous music plays on a little longer before it changes.
 - **The browser version is about half the size to download**, so it starts sooner on a slow connection. It now runs on a copy of the engine built for this game, without the 3D, video, networking and other parts it never used.
 - **The game is about 4 MB smaller to download.** Every build was carrying the store-page artwork, which the game never shows.
 

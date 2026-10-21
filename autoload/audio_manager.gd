@@ -67,12 +67,19 @@ const LIBRARY := {
 ## themselves are in `MusicScore`.
 const MUSIC_LIBRARY := MusicScore.TRACK_IDS
 
-## How much of a frame the music renderer may spend, in microseconds. A track is under 10 ms of
-## work per second of music, so at this rate the longest loop, thirty seconds, is ready in under
-## two seconds of frames — measured in a browser, the menu loop starts about a second after it
-## is asked for — and a frame never pays more than this for it: about a seventh of a 60 Hz
-## frame, in exchange for not shipping 2.15 MB of rendered audio.
+## How much of a frame the music renderer may spend while a run is being played, in microseconds.
+## A track is under 10 ms of work per second of music, so at this rate the longest loop, thirty
+## seconds, is ready in under two seconds of frames on a fast machine, and a frame of play never
+## pays more than this for it: about a seventh of a 60 Hz frame, in exchange for not shipping
+## 2.15 MB of rendered audio.
 const MUSIC_RENDER_BUDGET_USEC := 2500
+
+## How much it may spend while nobody is playing: the boot screen, the menu, the pause menu and the
+## run summary. Nothing on those screens moves fast enough for a long frame to show, and on two of
+## them the music is what the player is waiting for. At the gameplay rate, the menu loop started
+## about a second and a half after the menu opened in a browser on a fast machine and over three
+## seconds after on one four times slower. About half a 60 Hz frame.
+const MUSIC_RENDER_IDLE_BUDGET_USEC := 8000
 
 ## Seconds to crossfade between tracks. Long enough not to read as a cut, short enough that
 ## walking into the boss room feels like it caused something.
@@ -260,13 +267,20 @@ func _step_render() -> void:
 	if job == null:
 		job = MusicSynth.new(MusicScore.track(id))
 		_render_jobs[id] = job
-	if not job.step(Time.get_ticks_usec() + MUSIC_RENDER_BUDGET_USEC):
+	if not job.step(Time.get_ticks_usec() + _render_budget_usec()):
 		return
 	_render_queue.pop_front()
 	_render_jobs.erase(id)
 	_music_streams[id] = job.stream
 	if id == _music_id and id != _audible_id:
 		_start_music(id)
+
+
+## This frame's share for the renderer. The run's clock is the question to ask rather than the game
+## state, which starts as RUN so that a scene launched on its own is playing: the clock starts only
+## when a run does, and stops for the pause menu and the summary.
+func _render_budget_usec() -> int:
+	return MUSIC_RENDER_BUDGET_USEC if RunManager.is_timing() else MUSIC_RENDER_IDLE_BUDGET_USEC
 
 
 ## Both music players are driven every frame rather than by a Tween, because a fade that is

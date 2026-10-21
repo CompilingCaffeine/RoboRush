@@ -25,6 +25,8 @@ func run() -> void:
 	await _test_boot_finishes_offline_on_a_desktop_build()
 	await _test_the_save_is_loaded_before_the_menu_is_reached()
 	await _test_the_platform_is_initialized_only_once()
+	await _test_the_menu_is_got_ready_while_the_boot_waits()
+	_test_the_ready_line_adds_up()
 
 
 func _teardown() -> void:
@@ -45,6 +47,14 @@ func _test_boot_finishes_offline_on_a_desktop_build() -> void:
 
 	check(not online, "a desktop build boots local-only rather than waiting for a session")
 	check(_boot != null, "and the boot scene survived to finish")
+	for stage: StringName in [&"engine", &"connect", &"save"]:
+		check(_boot.timings.has(stage), "the boot timed its '%s' stage" % stage)
+	check(not _boot.timings.has(&"load"), "and has no page load to time off the web")
+	# The connect stage on a desktop is a frame and a scene load, not the connection timeout.
+	check(
+		_boot.timings.get(&"connect", -1) < 1000,
+		"and spent no time waiting for a platform (%d ms)" % _boot.timings.get(&"connect", -1),
+	)
 
 	await _teardown()
 
@@ -96,6 +106,45 @@ func _test_the_platform_is_initialized_only_once() -> void:
 	)
 
 	await _teardown()
+
+
+## The two things the boot does while it waits, so that the menu is not still being prepared when
+## it opens: its scene is loaded and held for the scene change to find, and its music is rendering.
+func _test_the_menu_is_got_ready_while_the_boot_waits() -> void:
+	await _boot_and_wait()
+
+	check(
+		_boot._menu_scene != null and _boot._menu_scene.resource_path == SceneRouter.MAIN_MENU_SCENE,
+		"the boot loads the menu scene before handing over to it",
+	)
+	check(
+		ResourceLoader.has_cached(SceneRouter.MAIN_MENU_SCENE),
+		"and the scene change will find it already loaded",
+	)
+	check(
+		AudioManager.is_music_ready(Bootstrap.MENU_MUSIC)
+		or AudioManager._render_queue.has(Bootstrap.MENU_MUSIC),
+		"and the menu's music is rendered or rendering",
+	)
+	check(MusicScore.has(Bootstrap.MENU_MUSIC), "which is a track the score has")
+
+	await _teardown()
+
+
+## The stages are reported in boot order whatever order they were recorded in, and add up to the
+## whole that the line leads with.
+func _test_the_ready_line_adds_up() -> void:
+	var desktop: Dictionary[StringName, int] = {&"save": 40, &"engine": 520, &"connect": 130}
+	check(
+		Bootstrap.describe_timings(desktop) == "0.7 s after launch (engine 0.5, connect 0.1, save 0.0)",
+		"a desktop boot is timed from launch (%s)" % Bootstrap.describe_timings(desktop),
+	)
+	var browser: Dictionary[StringName, int] = {&"engine": 700, &"save": 200, &"load": 1600, &"connect": 400}
+	check(
+		Bootstrap.describe_timings(browser)
+		== "2.9 s after the page opened (load 1.6, engine 0.7, connect 0.4, save 0.2)",
+		"and a browser boot from the page opening (%s)" % Bootstrap.describe_timings(browser),
+	)
 
 
 # --- Helpers ------------------------------------------------------------------
