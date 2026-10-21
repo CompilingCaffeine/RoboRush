@@ -67,6 +67,8 @@ To run only some suites while working on them, name them after `--`:
 godot --headless --fixed-fps 60 res://tests/test_runner.tscn -- --suite=Items,Floor
 ```
 
+Or leave some out with `-- --skip=Performance`. The build scripts do this on the stripped engine's run, whose timings don't describe the engine that ships.
+
 Focused campaign checks and the six-floor performance probe are also available:
 
 ```bash

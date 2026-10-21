@@ -328,13 +328,15 @@ main() {
 
   # The suite is part of the release gate: an artifact nobody has tested is not a release
   # candidate, it is a build. Twice, as in the Web build: the editor has every class, so only the
-  # stripped engine can say the Web export still has everything the game uses.
+  # stripped engine can say the Web export still has everything the game uses. Its run leaves out
+  # the timing suite, for the reason given beside ENGINE_NATIVE_SUITE_ARGS.
   note "running the test suite"
   "$GODOT" --headless --fixed-fps 60 res://tests/test_runner.tscn >/dev/null 2>&1 \
     || die "the test suite failed; nothing was built"
   note "running the test suite on the stripped engine"
   "$REPO_ROOT/$ENGINE_NATIVE" --headless --fixed-fps 60 --path "$REPO_ROOT" res://tests/test_runner.tscn \
-    >/dev/null 2>&1 || die "the test suite failed on the stripped engine; nothing was built"
+    "${ENGINE_NATIVE_SUITE_ARGS[@]}" >/dev/null 2>&1 \
+    || die "the test suite failed on the stripped engine; nothing was built"
 
   # The presets are edited in place and put back however this exits, including on failure. The
   # working file is not the artifact, and a release that left a rewritten version behind would

@@ -188,10 +188,12 @@ _import_pass() {
 ## past. A build that failed on "ERROR:" would fail on the tests working. What cannot appear is a
 ## FAIL line, a script error, a leak report, or anything other than exactly one terminal PASS.
 ##
-## Takes the engine to run on, and the name of the log it writes into the artifact directory. The
-## same rules apply to both runs: the stripped engine has to pass the suite the editor passes.
+## Takes the engine to run on, the name of the log it writes into the artifact directory, and
+## anything to pass the runner after the scene. The same rules apply to both runs: the stripped
+## engine has to pass the suite the editor passes, less what ENGINE_NATIVE_SUITE_ARGS leaves out.
 run_tests() {
   local engine="$1" log="$ARTIFACT_DIR/$2"
+  shift 2
   note "running the suite on $engine"
 
   # Each run starts from the empty user:// a fresh install has, rather than from whatever the run
@@ -206,7 +208,7 @@ run_tests() {
 
   local status=0
   timeout "$TEST_TIMEOUT" "$engine" --headless --fixed-fps 60 --path "$REPO_ROOT" res://tests/test_runner.tscn \
-    >"$log" 2>&1 || status=$?
+    "$@" >"$log" 2>&1 || status=$?
 
   [ "$status" -eq 124 ] && die "the suite exceeded ${TEST_TIMEOUT}s and was stopped. See $log"
   [ "$status" -eq 0 ] || die "the suite failed (exit $status). See $log"
@@ -402,7 +404,7 @@ main() {
 
   import_project
   run_tests "$GODOT" test.log
-  run_tests "$REPO_ROOT/$ENGINE_NATIVE" test-stripped-engine.log
+  run_tests "$REPO_ROOT/$ENGINE_NATIVE" test-stripped-engine.log "${ENGINE_NATIVE_SUITE_ARGS[@]}"
 
   bake_build_id
   export_web
