@@ -1,0 +1,81 @@
+Compile only the shaders a 2D-only build draws with
+
+The Compatibility renderer compiles shaders at startup that this game never uses. Three
+constructors bind a shader to warm it up (the 3D scene shader, 3D post-processing and camera feeds),
+and binding a shader version for the first time compiles every one of its variants. The shared copy
+shader has thirteen variants, and most of them serve 3D, cubemaps, texture arrays or XR. In a
+browser this game compiled 23 programs before its first frame, and only the canvas programs and a
+copy variant or two were drawn with.
+
+With 3D disabled (disable_3d=yes, which defines _3D_DISABLED), this patch removes those three
+warm-ups and leaves each variant to compile the first time it is bound, as specializations already
+do. Nothing is switched off: a shader that is used is still compiled, just at first use.
+
+Applied by tools/engine/build_template.sh to the Godot source pinned in tools/engine.lock.
+
+diff --git a/drivers/gles3/effects/feed_effects.cpp b/drivers/gles3/effects/feed_effects.cpp
+index 59f72e0..d0a77bd 100644
+--- a/drivers/gles3/effects/feed_effects.cpp
++++ b/drivers/gles3/effects/feed_effects.cpp
+@@ -48,7 +48,11 @@ FeedEffects::FeedEffects() {
+ 
+ 	feed.shader.initialize();
+ 	feed.shader_version = feed.shader.version_create();
++#ifndef _3D_DISABLED
++	// A warm-up for camera feeds, which a 2D-only build is not expected to draw. Binding compiles on
++	// demand, so one that does still works.
+ 	feed.shader.version_bind_shader(feed.shader_version, FeedShaderGLES3::MODE_DEFAULT);
++#endif
+ 
+ 	{ // Screen Triangle.
+ 		glGenBuffers(1, &screen_triangle);
+diff --git a/drivers/gles3/effects/post_effects.cpp b/drivers/gles3/effects/post_effects.cpp
+index 1f53c2d..eb2c472 100644
+--- a/drivers/gles3/effects/post_effects.cpp
++++ b/drivers/gles3/effects/post_effects.cpp
+@@ -47,7 +47,10 @@ PostEffects::PostEffects() {
+ 
+ 	post.shader.initialize();
+ 	post.shader_version = post.shader.version_create();
++#ifndef _3D_DISABLED
++	// A warm-up for the 3D renderer's post-processing, its only user. Binding compiles on demand.
+ 	post.shader.version_bind_shader(post.shader_version, PostShaderGLES3::MODE_DEFAULT);
++#endif
+ 
+ 	{ // Screen Triangle.
+ 		glGenBuffers(1, &screen_triangle);
+diff --git a/drivers/gles3/rasterizer_scene_gles3.cpp b/drivers/gles3/rasterizer_scene_gles3.cpp
+index bf41012..5781ee5 100644
+--- a/drivers/gles3/rasterizer_scene_gles3.cpp
++++ b/drivers/gles3/rasterizer_scene_gles3.cpp
+@@ -4615,7 +4615,11 @@ RasterizerSceneGLES3::RasterizerSceneGLES3() {
+ 		}
+ 		material_storage->shaders.scene_shader.initialize(global_defines);
+ 		scene_globals.shader_default_version = material_storage->shaders.scene_shader.version_create();
++#ifndef _3D_DISABLED
++		// A warm-up: binding compiles the shader now rather than on the first 3D frame. Without 3D
++		// there is no first 3D frame, and this is the most expensive shader the renderer has.
+ 		material_storage->shaders.scene_shader.version_bind_shader(scene_globals.shader_default_version, SceneShaderGLES3::MODE_COLOR);
++#endif
+ 	}
+ 
+ 	{
+diff --git a/drivers/gles3/shader_gles3.cpp b/drivers/gles3/shader_gles3.cpp
+index 4fe333e..9bc0bb7 100644
+--- a/drivers/gles3/shader_gles3.cpp
++++ b/drivers/gles3/shader_gles3.cpp
+@@ -709,9 +709,14 @@ void ShaderGLES3::_initialize_version(Version *p_version) {
+ 	p_version->variants.reserve(variant_count);
+ 	for (int i = 0; i < variant_count; i++) {
+ 		p_version->variants.push_back(AHashMap<uint64_t, Version::Specialization>());
++#ifndef _3D_DISABLED
+ 		Version::Specialization spec;
+ 		_compile_specialization(spec, i, p_version, specialization_default_mask);
+ 		p_version->variants[i].insert(specialization_default_mask, spec);
++#endif
++		// Without 3D, each variant is left to compile the first time it is bound, as specializations
++		// already are (see _version_bind_shader). Most variants of the shared shaders serve 3D,
++		// cubemaps, texture arrays or XR, and a 2D-only build never binds them.
+ 	}
+ 	if (use_cache) {
+ 		_save_to_cache(p_version);
