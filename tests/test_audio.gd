@@ -46,6 +46,8 @@ func run() -> void:
 	_test_a_stalled_output_is_noticed_and_reopened()
 	await _test_the_watchdog_runs_when_nothing_is_fading()
 	await _test_the_director_plays_the_floors_own_tracks()
+	# Last, because it forgets the explore loop that everything above expects to start at once.
+	await _test_the_title_screen_prepares_the_music_a_run_opens_on()
 
 	_teardown()
 
@@ -432,6 +434,67 @@ func _test_rendering_takes_more_of_a_frame_when_nobody_is_playing() -> void:
 	)
 
 	RunManager.set_timing(was_timing)
+
+
+## The title screen renders the explore loop of the floor a run would open on, so that a run starts
+## on its own music rather than on the menu's. With a run to continue, that floor goes first, since
+## CONTINUE is the entry the menu puts first.
+func _test_the_title_screen_prepares_the_music_a_run_opens_on() -> void:
+	var first := MainMenu.CAMPAIGN.load_theme(0)
+	var later := MainMenu.CAMPAIGN.load_theme(1)
+	if not require(first, "the first floor's theme loads without its floor") \
+			or not require(later, "and so does the second's"):
+		return
+	check(first.explore_music != later.explore_music, "the first two floors open on different loops")
+
+	_forget(first.explore_music)
+	await _open_title_screen()
+	check(
+		AudioManager._render_queue.has(first.explore_music),
+		"the title screen queues the first floor's explore loop ('%s')" % first.explore_music,
+	)
+	var queue := AudioManager._render_queue
+	if queue.has(&"menu"):
+		check(
+			queue.find(&"menu") < queue.find(first.explore_music),
+			"behind the title screen's own track",
+		)
+	await _wait_until_ready(first.explore_music)
+	await _close_title_screen()
+
+	# A saved run on the second floor. Set directly rather than stored, so nothing is written.
+	var saved := SaveManager._checkpoint
+	var checkpoint := RunCheckpoint.new()
+	checkpoint.floor_id = MainMenu.CAMPAIGN.floor_id_at(1)
+	SaveManager._checkpoint = checkpoint
+	_forget(first.explore_music)
+	_forget(later.explore_music)
+	await _open_title_screen()
+	queue = AudioManager._render_queue
+	check(
+		queue.has(later.explore_music) and queue.has(first.explore_music)
+		and queue.find(later.explore_music) < queue.find(first.explore_music),
+		"with a run to continue, its floor's loop is queued ahead of the first floor's (%s)" % [queue],
+	)
+	SaveManager._checkpoint = saved
+	await _wait_until_ready(first.explore_music)
+	await _close_title_screen()
+	AudioManager.stop_music()
+
+
+var _title_screen: MainMenu
+
+
+func _open_title_screen() -> void:
+	_title_screen = load("res://scenes/ui/main_menu.tscn").instantiate()
+	add_child(_title_screen)
+	await advance_physics(1)
+
+
+func _close_title_screen() -> void:
+	_title_screen.queue_free()
+	_title_screen = null
+	await advance_physics(1)
 
 
 ## Renders `id` through the manager's own queue, the way the game does, at the front of it.

@@ -45,6 +45,7 @@ func run() -> void:
 	_test_the_last_boss_cannot_be_fought_early()
 	_test_the_boss_draw_is_a_pure_policy()
 	await _test_direct_start_and_arrival_agree_on_a_floor()
+	_test_the_title_screen_reads_the_campaign_the_game_plays()
 	_clean_up()
 
 
@@ -331,6 +332,14 @@ func _test_the_validator_catches_content_faults() -> void:
 			"not in the library",
 			"a floor asking for music that does not exist",
 		)
+
+	# The title screen renders a floor's music from the theme its entry names, so an entry naming a
+	# theme the floor does not wear prepares the wrong music. The test floors wear the Help Desk's.
+	var second := _write_floor("content_2", &"beta", 2)
+	if not second.is_empty():
+		var wrong_theme := _campaign([[&"alpha", first], [&"beta", second]])
+		wrong_theme.floors[1].theme_path = "res://data/floors/development_theme.tres"
+		_expect_error(wrong_theme, "but its config wears", "an entry naming a theme its floor does not wear")
 
 	var no_boss := _write_floor("content_no_boss", &"beta", 2, func(config: FloorConfig) -> void:
 		config.boss_pool = [] as Array[BossEncounter]
@@ -703,6 +712,23 @@ func _write_floor(
 		return ""
 	_written.append(path)
 	return path
+
+
+## The title screen holds a reference of its own to the campaign, to render the music a run opens
+## on. Read from the game scene's floor rather than restated, so that the day the game plays some
+## other campaign, the title screen is not left preparing this one's music.
+func _test_the_title_screen_reads_the_campaign_the_game_plays() -> void:
+	var state := FLOOR_SCENE.get_state()
+	var played := ""
+	for index: int in state.get_node_property_count(0):
+		if state.get_node_property_name(0, index) == &"campaign":
+			var campaign := state.get_node_property_value(0, index) as RunDefinition
+			played = campaign.resource_path if campaign != null else ""
+	check(
+		played == MainMenu.CAMPAIGN.resource_path,
+		"the title screen reads the campaign the game plays (%s, game plays '%s')"
+		% [MainMenu.CAMPAIGN.resource_path, played],
+	)
 
 
 ## A campaign over `entries`, each `[id, config_path]`. Targets its own length unless told

@@ -48,6 +48,13 @@ const CONTINUE_LABEL := "CONTINUE"
 const FOCUS_MARKER := "> "
 const FOCUS_PADDING := "  "
 
+## The campaign a run plays, read here for one thing: what the floor a run would open on sounds
+## like, so that its music is rendered while the player is on this screen rather than after they
+## leave it. Cheap, because a `RunDefinition` loads none of its floors. Whether a saved run can be
+## played is still `main.gd`'s question, asked of the campaign the game scene holds, and
+## tests/test_audio.gd pins this to that one.
+const CAMPAIGN := preload("res://data/runs/main_campaign.tres")
+
 @onready var _buttons: VBoxContainer = %Buttons
 @onready var _trophy: TextureRect = %Trophy
 @onready var _trophy_label: Label = %TrophyLabel
@@ -77,6 +84,7 @@ func _ready() -> void:
 	_tagline.text = "SHIFT ONE  //  HELP DESK  //  NO OVERTIME AUTHORISED"
 
 	AudioManager.play_music(&"menu")
+	_prepare_run_music()
 
 	_build_buttons()
 	_refresh_records()
@@ -97,6 +105,27 @@ func _ready() -> void:
 		_controls.open()
 	else:
 		_focus_first()
+
+
+## Queues the explore loop of each floor a run could open on from here, behind the menu's own
+## track: the saved run's floor when there is one to continue, then the first floor. The renderer
+## gets the large share of the frame on this screen, so these are usually ready long before the
+## player picks anything. Without them, a run opened on the menu's track still playing while its
+## own was rendered at the small share of the frame a run gets. Measured in a browser from START
+## RUN, the floor's loop began after 2.0 s rather than 0.5 s on a fast machine, and after 5.5 s
+## rather than 2.3 s on one four times slower; what is left is the run's own load.
+##
+## Explore loops only. A floor's boss track is not needed until its last room, and the floor asks
+## for both of its tracks when it starts (`FeedbackDirector.set_floor_theme`).
+func _prepare_run_music() -> void:
+	var floors: Array[int] = []
+	if SaveManager.has_checkpoint():
+		floors.append(CAMPAIGN.index_of(SaveManager.get_checkpoint().floor_id))
+	floors.append(0)
+	for index: int in floors:
+		var theme := CAMPAIGN.load_theme(index)
+		if theme != null:
+			AudioManager.prepare_music(theme.explore_music)
 
 
 func _build_buttons() -> void:

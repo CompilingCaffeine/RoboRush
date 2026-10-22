@@ -103,6 +103,13 @@ func load_floor_by_id(floor_id: StringName) -> FloorConfig:
 	return load_floor(index_of(floor_id))
 
 
+## The theme of the floor at `index`, without loading the floor (see `FloorEntry.theme_path`). Null
+## for an index this campaign does not contain and for an entry that names no theme.
+func load_theme(index: int) -> FloorTheme:
+	var entry := entry_at(index)
+	return entry.load_theme() if entry != null else null
+
+
 ## Starts loading the floor at `index` in the background. Does nothing for an index this campaign
 ## does not contain, which is what makes "preload the next one" safe to call from the last floor.
 ##

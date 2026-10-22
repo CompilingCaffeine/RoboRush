@@ -240,6 +240,7 @@ static func _validate_floor(
 	_validate_floor_population(report, where, config)
 	_validate_floor_rewards(report, where, config)
 	_validate_floor_presentation(report, where, config)
+	_validate_floor_theme_path(report, where, entry, config)
 
 
 static func _validate_floor_rooms(report: Report, where: String, config: FloorConfig) -> void:
@@ -409,6 +410,26 @@ static func _validate_floor_presentation(report: Report, where: String, config: 
 		elif not AudioManager.MUSIC_LIBRARY.has(track):
 			report.error("%s's theme asks for the %s track '%s', which is not in the library."
 				% [where, pair[0], track])
+
+
+## The theme the campaign names for a floor has to be the one the floor wears. The title screen
+## renders a floor's music from the entry's theme without loading the floor, so a path to any other
+## theme renders the wrong music, and nothing would notice until a run opened to the menu's track
+## still playing.
+##
+## A floor that has a theme and no path is only a warning: all it costs is that the title screen
+## cannot prepare its music, and the floor asks for it itself when it starts.
+static func _validate_floor_theme_path(
+	report: Report, where: String, entry: FloorEntry, config: FloorConfig
+) -> void:
+	var worn := config.theme.resource_path if config.theme != null else ""
+	if entry.theme_path.is_empty():
+		if not worn.is_empty():
+			report.warn("%s names no theme_path, so the title screen cannot prepare its music." % where)
+		return
+	if entry.theme_path != worn:
+		report.error("%s names the theme %s, but its config wears %s."
+			% [where, entry.theme_path, worn if not worn.is_empty() else "none"])
 
 
 ## Whether the campaign has enough items to fill every offer it promises.

@@ -7,31 +7,37 @@
 script = ExtResource("2_entry")
 id = &"help_desk"
 config_path = "res://data/floors/floor_1_help_desk.tres"
+theme_path = "res://data/floors/help_desk_theme.tres"
 
 [sub_resource type="Resource" id="Resource_floor_2"]
 script = ExtResource("2_entry")
 id = &"development"
 config_path = "res://data/floors/floor_2_development.tres"
+theme_path = "res://data/floors/development_theme.tres"
 
 [sub_resource type="Resource" id="Resource_floor_3"]
 script = ExtResource("2_entry")
 id = &"data_center"
 config_path = "res://data/floors/floor_3_data_center.tres"
+theme_path = "res://data/floors/data_center_theme.tres"
 
 [sub_resource type="Resource" id="Resource_floor_4"]
 script = ExtResource("2_entry")
 id = &"cloud_ops"
 config_path = "res://data/floors/floor_4_cloud_ops.tres"
+theme_path = "res://data/floors/cloud_ops_theme.tres"
 
 [sub_resource type="Resource" id="Resource_floor_5"]
 script = ExtResource("2_entry")
 id = &"executive_systems"
 config_path = "res://data/floors/floor_5_executive_systems.tres"
+theme_path = "res://data/floors/executive_theme.tres"
 
 [sub_resource type="Resource" id="Resource_floor_6"]
 script = ExtResource("2_entry")
 id = &"core_intelligence"
 config_path = "res://data/floors/floor_6_core_intelligence.tres"
+theme_path = "res://data/floors/core_intelligence_theme.tres"
 
 [resource]
 script = ExtResource("1_run")
