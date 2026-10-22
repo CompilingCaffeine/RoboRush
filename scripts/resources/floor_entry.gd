@@ -22,12 +22,26 @@ extends Resource
 
 ## Where the `FloorConfig` for this floor lives.
 @export_file("*.tres") var config_path: String = ""
+## Where this floor's `FloorTheme` lives: the theme its config wears, named here too so that what a
+## floor sounds like can be known without loading it. The title screen uses it to render the music
+## a run will open on. Loading the Help Desk's config just to read its track's name pulls in 170
+## scenes and textures and takes a fifth of a second; its theme is two textures. Optional, and
+## checked against the config by `CampaignValidator` whenever it is set.
+@export_file("*.tres") var theme_path: String = ""
 
 
 ## Whether a background load has been asked for and not yet collected. Instance state on a resource,
 ## which is unusual and is fine here: it is never exported, never saved, and describes a request in
 ## flight rather than anything about the floor.
 var _preload_requested := false
+
+
+## This floor's theme, loaded on its own, or null if `theme_path` is unset, missing, or holds
+## something else.
+func load_theme() -> FloorTheme:
+	if theme_path.is_empty() or not ResourceLoader.exists(theme_path):
+		return null
+	return load(theme_path) as FloorTheme
 
 
 ## The floor's content, or null if the path is unset, missing, or holds something else.
